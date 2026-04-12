@@ -2,6 +2,7 @@
 @using ApigeeLocalDev.Domain.Entities
 @using ApigeeLocalDev.Domain.Interfaces
 @using ApigeeLocalDev.Application.UseCases
+@inject IWorkspaceRepository WorkspaceRepo
 @inject IPolicyTemplateRepository TemplateRepo
 @inject GeneratePolicyUseCase GeneratePolicy
 @rendermode RenderMode.InteractiveServer
@@ -11,7 +12,7 @@
 <div class="template-grid">
     @foreach (var t in _templates)
     {
-        <div class="template-card @(t == _selected ? "selected" : "")" @onclick="() => Select(t)">
+        <div class="template-card @TemplateCardClass(t)" @onclick="() => Select(t)">
             <span class="template-category">@t.Category</span>
             <div class="template-name">@t.Name</div>
             <p class="template-desc">@t.Description</p>
@@ -23,53 +24,112 @@
 {
     <div class="card policy-gen-form">
         <h3>Generate: @_selected.Name</h3>
+
+        <!-- Destino: workspace + proxy -->
+        <div class="target-section">
+            <label>Workspace
+                <select class="input" @bind="_selectedWorkspace" @bind:after="OnWorkspaceChanged">
+                    <option value="">-- selecione --</option>
+                    @foreach (var ws in _workspaces)
+                    {
+                        <option value="@ws.Name">@ws.Name</option>
+                    }
+                </select>
+            </label>
+
+            @if (_proxies.Count > 0)
+            {
+                <label>API Proxy
+                    <select class="input" @bind="_selectedProxy">
+                        <option value="">-- selecione --</option>
+                        @foreach (var p in _proxies)
+                        {
+                            <option value="@p">@p</option>
+                        }
+                    </select>
+                </label>
+            }
+            else if (!string.IsNullOrEmpty(_selectedWorkspace))
+            {
+                <p class="help-text">Nenhum proxy encontrado neste workspace. Crie um na tela de Workspaces.</p>
+            }
+        </div>
+
+        <!-- Parâmetros do template -->
         <div class="param-form">
             @foreach (var param in _selected.Parameters)
             {
                 <label>@param
-                    <input class="input" value="@GetParam(param)" @onchange="e => SetParam(param, e.Value?.ToString() ?? string.Empty)" />
+                    <input class="input" value="@GetParam(param)"
+                           @onchange="e => SetParam(param, e.Value?.ToString() ?? string.Empty)" />
                 </label>
             }
         </div>
-        <label>Workspace root
-            <input class="input" @bind="_wsRoot" placeholder="C:/dev/apigee-workspaces/my-ws" />
-        </label>
-        <label>Proxy name
-            <input class="input" @bind="_proxyName" placeholder="my-proxy" />
-        </label>
+
         <div class="form-actions">
-            <button class="btn btn-primary" @onclick="Generate">Generate Policy</button>
+            <button class="btn btn-primary" @onclick="Generate"
+                    disabled="@(!CanGenerate)">
+                Generate Policy
+            </button>
         </div>
+
         @if (!string.IsNullOrEmpty(_genMessage))
         {
-            <p class="@(_genError ? "error-text" : "success-text")">@_genMessage</p>
+            <p class="@GenMessageClass">@_genMessage</p>
         }
+
         <pre class="xml-preview">@PreviewXml()</pre>
     </div>
 }
 
 @code {
-    private IReadOnlyList<PolicyTemplate> _templates = [];
+    private IReadOnlyList<PolicyTemplate> _templates  = [];
+    private List<ApigeeWorkspace>         _workspaces = [];
+    private List<string>                  _proxies    = [];
+
     private PolicyTemplate? _selected;
     private Dictionary<string, string> _params = [];
-    private string _wsRoot = string.Empty;
-    private string _proxyName = string.Empty;
-    private string _genMessage = string.Empty;
-    private bool _genError;
+
+    private string _selectedWorkspace = string.Empty;
+    private string _selectedProxy     = string.Empty;
+    private string _genMessage        = string.Empty;
+    private bool   _genError;
+
+    // Helpers sem string literal em atributo
+    private string TemplateCardClass(PolicyTemplate t) =>
+        t == _selected ? "template-card selected" : "template-card";
+    private string GenMessageClass => _genError ? "error-text" : "success-text";
+    private bool   CanGenerate     => _selected is not null
+                                      && !string.IsNullOrEmpty(_selectedWorkspace)
+                                      && !string.IsNullOrEmpty(_selectedProxy);
 
     protected override void OnInitialized()
-        => _templates = TemplateRepo.GetAll();
+    {
+        _templates  = TemplateRepo.GetAll();
+        _workspaces = [.. WorkspaceRepo.ListAll()];
+    }
 
     private void Select(PolicyTemplate t)
     {
-        _selected = t;
-        _params = t.Parameters.ToDictionary(p => p, _ => string.Empty);
+        _selected  = t;
+        _params    = t.Parameters.ToDictionary(p => p, _ => string.Empty);
         _params["PolicyName"] = t.Name + "Policy";
         _genMessage = string.Empty;
     }
 
+    private void OnWorkspaceChanged()
+    {
+        _selectedProxy = string.Empty;
+        _genMessage    = string.Empty;
+
+        var ws = _workspaces.FirstOrDefault(w => w.Name == _selectedWorkspace);
+        _proxies = ws is not null
+            ? [.. WorkspaceRepo.ListApiProxies(ws)]
+            : [];
+    }
+
     private string GetParam(string key) => _params.TryGetValue(key, out var v) ? v : string.Empty;
-    private void SetParam(string key, string value) => _params[key] = value;
+    private void   SetParam(string key, string value) => _params[key] = value;
 
     private string PreviewXml()
         => _selected is null ? string.Empty : TemplateRepo.GeneratePolicyXml(_selected, _params);
@@ -78,17 +138,18 @@
     {
         if (_selected is null) return;
         _genMessage = string.Empty;
-        _genError = false;
+        _genError   = false;
         try
         {
+            var ws = _workspaces.First(w => w.Name == _selectedWorkspace);
             var path = await GeneratePolicy.ExecuteAsync(
-                _wsRoot, _proxyName, "apiproxy/policies", _selected.Name, _params);
-            _genMessage = $"Policy generated at: {path}";
+                ws.RootPath, _selectedProxy, "apiproxy/policies", _selected.Name, _params);
+            _genMessage = $"Policy gerada em: {path}";
         }
         catch (Exception ex)
         {
             _genMessage = ex.Message;
-            _genError = true;
+            _genError   = true;
         }
     }
 }
