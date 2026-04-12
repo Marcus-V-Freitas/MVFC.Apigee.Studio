@@ -9,6 +9,35 @@
     <p class="page-subtitle">Gerencie o container do Apigee Emulator e realize deploys rápidos.</p>
 </div>
 
+<!-- CONTAINER MANAGEMENT -->
+<div class="card emulator-manage">
+    <h3>Container Docker</h3>
+    <p class="help-text">Escolha a imagem e suba/derrube o container local do Apigee Emulator.</p>
+
+    <div class="form-grid">
+        <label>
+            Imagem Docker
+            <input class="input" @bind="_image" list="emulator-images" placeholder="gcr.io/apigee-release/hybrid/apigee-emulator:latest" />
+        </label>
+        <div class="emulator-actions">
+            <button class="btn btn-primary" @onclick="StartContainer" disabled="@_dockerBusy">▶ Start</button>
+            <button class="btn btn-ghost btn-sm btn-danger" @onclick="StopContainer" disabled="@_dockerBusy">■ Stop</button>
+        </div>
+    </div>
+
+    <datalist id="emulator-images">
+        @foreach (var img in _images)
+        {
+            <option value="@img"></option>
+        }
+    </datalist>
+
+    @if (!string.IsNullOrEmpty(_dockerMessage))
+    {
+        <p class="mt-2 @(_dockerError ? "error-text" : "success-text")">@_dockerMessage</p>
+    }
+</div>
+
 <!-- STATUS -->
 <div class="card emulator-status">
     <div class="status-row">
@@ -61,18 +90,90 @@
 @code {
     private bool   _alive;
     private bool   _checking;
-    private string _baseUrl     = string.Empty;
+    private string _baseUrl      = string.Empty;
     private string? _statusError;
-    private string _zipPath     = string.Empty;
-    private string _env         = "local";
+
+    private string _zipPath      = string.Empty;
+    private string _env          = "local";
     private bool   _deploying;
-    private string _message     = string.Empty;
+    private string _message      = string.Empty;
     private bool   _isError;
+
+    private string        _image        = string.Empty;
+    private List<string>  _images       = new();
+    private bool          _dockerBusy;
+    private string        _dockerMessage = string.Empty;
+    private bool          _dockerError;
 
     protected override async Task OnInitializedAsync()
     {
         _baseUrl = Config["ApigeeEmulator:BaseUrl"] ?? "http://localhost:8080";
+        _image   = Config["ApigeeEmulator:Image"] ?? "gcr.io/apigee-release/hybrid/apigee-emulator:latest";
+        await LoadImages();
         await Check();
+    }
+
+    private async Task LoadImages()
+    {
+        try
+        {
+            var list = await EmulatorClient.ListImagesAsync();
+            _images   = [.. list];
+            if (string.IsNullOrWhiteSpace(_image))
+                _image = _images.FirstOrDefault(
+                             i => i.Contains("apigee", StringComparison.OrdinalIgnoreCase))
+                         ?? "gcr.io/apigee-release/hybrid/apigee-emulator:latest";
+        }
+        catch (Exception ex)
+        {
+            _dockerMessage = $"Não foi possível listar imagens: {ex.Message}";
+            _dockerError   = true;
+        }
+    }
+
+    private async Task StartContainer()
+    {
+        if (string.IsNullOrWhiteSpace(_image))
+        {
+            _dockerMessage = "Informe a imagem Docker.";
+            _dockerError   = true;
+            return;
+        }
+
+        _dockerBusy    = true;
+        _dockerMessage = string.Empty;
+        _dockerError   = false;
+        try
+        {
+            await EmulatorClient.StartContainerAsync(_image);
+            _dockerMessage = "✔ Container iniciado.";
+            await Check();
+        }
+        catch (Exception ex)
+        {
+            _dockerMessage = $"✘ Erro ao iniciar: {ex.Message}";
+            _dockerError   = true;
+        }
+        finally { _dockerBusy = false; }
+    }
+
+    private async Task StopContainer()
+    {
+        _dockerBusy    = true;
+        _dockerMessage = string.Empty;
+        _dockerError   = false;
+        try
+        {
+            await EmulatorClient.StopContainerAsync();
+            _dockerMessage = "✔ Container parado.";
+            await Check();
+        }
+        catch (Exception ex)
+        {
+            _dockerMessage = $"✘ Erro ao parar: {ex.Message}";
+            _dockerError   = true;
+        }
+        finally { _dockerBusy = false; }
     }
 
     private async Task Check()
