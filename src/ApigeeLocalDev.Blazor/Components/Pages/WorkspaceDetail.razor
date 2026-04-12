@@ -7,6 +7,7 @@
 @inject DeployToEmulatorUseCase DeployUseCase
 @inject IPolicyTemplateRepository TemplateRepo
 @inject GeneratePolicyUseCase GeneratePolicy
+@inject IJSRuntime JS
 @rendermode RenderMode.InteractiveServer
 
 <h1>@WorkspaceName</h1>
@@ -59,7 +60,10 @@ else
             {
                 <div class="editor-header">
                     <span class="editor-filename">@System.IO.Path.GetFileName(_selectedFile)</span>
-                    <button class="btn btn-primary btn-sm" @onclick="SaveFile">💾 Save</button>
+                    <div class="editor-header-actions">
+                        <button class="btn btn-ghost btn-sm btn-danger" @onclick="DeleteSelectedFile">🗑 Delete</button>
+                        <button class="btn btn-primary btn-sm" @onclick="SaveFile">💾 Save</button>
+                    </div>
                 </div>
                 <textarea class="code-editor" @bind="_fileContent" @bind:event="oninput"></textarea>
             }
@@ -270,6 +274,19 @@ else
     {
         if (_selectedFile is null) return;
         await WorkspaceRepo.SaveFileAsync(_selectedFile, _fileContent);
+    }
+
+    private async Task DeleteSelectedFile()
+    {
+        if (_selectedFile is null || _workspace is null) return;
+        var fileName = System.IO.Path.GetFileName(_selectedFile);
+        var confirm  = await JS.InvokeAsync<bool>("confirm", $"Remover arquivo '{fileName}'?");
+        if (!confirm) return;
+
+        await WorkspaceRepo.DeleteFileAsync(_selectedFile);
+        _selectedFile = null;
+        _fileContent  = string.Empty;
+        _tree         = await WorkspaceRepo.LoadTreeAsync(_workspace);
     }
 
     private void OpenNewItemDialog(bool isDir)
