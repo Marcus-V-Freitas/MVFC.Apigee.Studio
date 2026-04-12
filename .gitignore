@@ -1,0 +1,21 @@
+## .NET / Visual Studio
+bin/
+obj/
+*.user
+*.suo
+.vs/
+*.userprefs
+*.lock.json
+
+## Rider
+.idea/
+
+## VS Code
+.vscode/
+
+## Publish
+publish/
+
+## Runtime
+*.zip
+wwwroot/.publish
