@@ -1,0 +1,94 @@
+@page "/templates"
+@using ApigeeLocalDev.Domain.Entities
+@using ApigeeLocalDev.Domain.Interfaces
+@using ApigeeLocalDev.Application.UseCases
+@inject IPolicyTemplateRepository TemplateRepo
+@inject GeneratePolicyUseCase GeneratePolicy
+@rendermode InteractiveServer
+
+<h1>Policy Templates</h1>
+
+<div class="template-grid">
+    @foreach (var t in _templates)
+    {
+        <div class="template-card @(t == _selected ? "selected" : "")" @onclick="() => Select(t)">
+            <span class="template-category">@t.Category</span>
+            <div class="template-name">@t.Name</div>
+            <p class="template-desc">@t.Description</p>
+        </div>
+    }
+</div>
+
+@if (_selected is not null)
+{
+    <div class="card policy-gen-form">
+        <h3>Generate: @_selected.Name</h3>
+        <div class="param-form">
+            @foreach (var param in _selected.Parameters)
+            {
+                <label>@param
+                    <input class="input" value="@GetParam(param)" @onchange="e => SetParam(param, e.Value?.ToString() ?? "")" />
+                </label>
+            }
+        </div>
+        <label>Workspace root
+            <input class="input" @bind="_wsRoot" placeholder="C:/dev/apigee-workspaces/my-ws" />
+        </label>
+        <label>Proxy name
+            <input class="input" @bind="_proxyName" placeholder="my-proxy" />
+        </label>
+        <div class="form-actions">
+            <button class="btn btn-primary" @onclick="Generate">Generate Policy</button>
+        </div>
+        @if (!string.IsNullOrEmpty(_genMessage))
+        {
+            <p class="@(_genError ? "error-text" : "success-text")">@_genMessage</p>
+        }
+        <pre class="xml-preview">@PreviewXml()</pre>
+    </div>
+}
+
+@code {
+    private IReadOnlyList<PolicyTemplate> _templates = [];
+    private PolicyTemplate? _selected;
+    private Dictionary<string, string> _params = [];
+    private string _wsRoot = string.Empty;
+    private string _proxyName = string.Empty;
+    private string _genMessage = string.Empty;
+    private bool _genError;
+
+    protected override void OnInitialized()
+        => _templates = TemplateRepo.GetAll();
+
+    private void Select(PolicyTemplate t)
+    {
+        _selected = t;
+        _params = t.Parameters.ToDictionary(p => p, _ => string.Empty);
+        _params["PolicyName"] = t.Name + "Policy";
+        _genMessage = string.Empty;
+    }
+
+    private string GetParam(string key) => _params.TryGetValue(key, out var v) ? v : string.Empty;
+    private void SetParam(string key, string value) => _params[key] = value;
+
+    private string PreviewXml()
+        => _selected is null ? string.Empty : TemplateRepo.GeneratePolicyXml(_selected, _params);
+
+    private async Task Generate()
+    {
+        if (_selected is null) return;
+        _genMessage = string.Empty;
+        _genError = false;
+        try
+        {
+            var path = await GeneratePolicy.ExecuteAsync(
+                _wsRoot, _proxyName, "apiproxy/policies", _selected.Name, _params);
+            _genMessage = $"Policy generated at: {path}";
+        }
+        catch (Exception ex)
+        {
+            _genMessage = ex.Message;
+            _genError = true;
+        }
+    }
+}

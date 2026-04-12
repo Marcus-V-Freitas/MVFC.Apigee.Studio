@@ -1,0 +1,35 @@
+@using ApigeeLocalDev.Domain.Entities
+
+<div class="tree-node">
+    @if (Item.Type is WorkspaceItemType.Directory or WorkspaceItemType.ApiProxy or WorkspaceItemType.SharedFlow or WorkspaceItemType.Environment)
+    {
+        <div class="tree-dir" @onclick="ToggleExpand">
+            <span class="tree-caret">@(_expanded ? "▼" : "▶")</span>
+            <span class="tree-dir-name">@Item.Name</span>
+        </div>
+        @if (_expanded)
+        {
+            <div class="tree-children">
+                @foreach (var child in Item.Children)
+                {
+                    <TreeNode Item="child" OnFileSelected="OnFileSelected" />
+                }
+            </div>
+        }
+    }
+    else
+    {
+        <div class="tree-file" @onclick="() => OnFileSelected.InvokeAsync(Item.FullPath)">
+            <span class="tree-file-icon">📄</span> @Item.Name
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public WorkspaceItem Item { get; set; } = default!;
+    [Parameter] public EventCallback<string> OnFileSelected { get; set; }
+
+    private bool _expanded = true;
+
+    private void ToggleExpand() => _expanded = !_expanded;
+}

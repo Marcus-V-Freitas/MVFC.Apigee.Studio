@@ -1,0 +1,113 @@
+@page "/workspace/{WorkspaceName}"
+@using ApigeeLocalDev.Domain.Entities
+@using ApigeeLocalDev.Domain.Interfaces
+@using ApigeeLocalDev.Application.UseCases
+@inject IWorkspaceRepository WorkspaceRepo
+@inject DeployToEmulatorUseCase DeployUseCase
+@rendermode InteractiveServer
+
+<h1>@WorkspaceName</h1>
+
+@if (_workspace is null)
+{
+    <p class="error-text">Workspace not found.</p>
+}
+else
+{
+    <div class="workspace-detail">
+        <aside class="file-tree">
+            <h3>Files</h3>
+            @if (_tree is not null)
+            {
+                <TreeNode Item="_tree" OnFileSelected="LoadFile" />
+            }
+        </aside>
+        <section class="file-editor">
+            @if (_selectedFile is not null)
+            {
+                <div class="editor-header">
+                    <span class="editor-filename">@_selectedFile</span>
+                    <button class="btn btn-primary btn-sm" @onclick="SaveFile">Save</button>
+                </div>
+                <textarea class="code-editor" @bind="_fileContent"></textarea>
+            }
+            else
+            {
+                <div class="empty-state">Select a file to edit.</div>
+            }
+        </section>
+    </div>
+
+    <div class="deploy-panel card">
+        <h3>Deploy to Emulator</h3>
+        <div class="deploy-form">
+            <label>Proxy / Shared Flow name
+                <input class="input" @bind="_deployTarget" placeholder="my-proxy" />
+            </label>
+            <label>Environment
+                <input class="input" @bind="_deployEnv" placeholder="local" />
+            </label>
+            <button class="btn btn-primary" @onclick="Deploy" disabled="@_deploying">@(_deploying ? "Deploying..." : "Deploy")</button>
+        </div>
+        @if (!string.IsNullOrEmpty(_deployMessage))
+        {
+            <p class="@(_deployError ? "error-text" : "success-text")">@_deployMessage</p>
+        }
+    </div>
+}
+
+@code {
+    [Parameter] public string WorkspaceName { get; set; } = string.Empty;
+
+    private ApigeeWorkspace? _workspace;
+    private WorkspaceItem? _tree;
+    private string? _selectedFile;
+    private string _fileContent = string.Empty;
+    private string _deployTarget = string.Empty;
+    private string _deployEnv = "local";
+    private bool _deploying;
+    private string _deployMessage = string.Empty;
+    private bool _deployError;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _workspace = WorkspaceRepo.ListAll().FirstOrDefault(w => w.Name == WorkspaceName);
+        if (_workspace is not null)
+            _tree = await WorkspaceRepo.LoadTreeAsync(_workspace);
+    }
+
+    private async Task LoadFile(string path)
+    {
+        _selectedFile = path;
+        _fileContent = await WorkspaceRepo.ReadFileAsync(path);
+    }
+
+    private async Task SaveFile()
+    {
+        if (_selectedFile is null) return;
+        await WorkspaceRepo.SaveFileAsync(_selectedFile, _fileContent);
+    }
+
+    private async Task Deploy()
+    {
+        if (_workspace is null) return;
+        _deploying = true;
+        _deployMessage = string.Empty;
+        _deployError = false;
+
+        try
+        {
+            await DeployUseCase.ExecuteAsync(_workspace, _deployTarget, _deployEnv);
+            _deployMessage = $"Bundle '{_deployTarget}' deployed to environment '{_deployEnv}' successfully!";
+        }
+        catch (Exception ex)
+        {
+            _deployMessage = $"Deploy failed: {ex.Message}";
+            _deployError = true;
+        }
+        finally
+        {
+            _deploying = false;
+        }
+    }
+}

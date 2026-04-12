@@ -1,0 +1,84 @@
+@page "/"
+@using ApigeeLocalDev.Domain.Entities
+@using ApigeeLocalDev.Domain.Interfaces
+@using ApigeeLocalDev.Application.UseCases
+@inject IWorkspaceRepository WorkspaceRepo
+@inject CreateWorkspaceUseCase CreateWorkspace
+@rendermode InteractiveServer
+
+<h1>Workspaces</h1>
+
+<div class="toolbar">
+    <button class="btn btn-primary" @onclick="() => _showCreate = true">+ New Workspace</button>
+</div>
+
+@if (_showCreate)
+{
+    <div class="create-form card">
+        <h3>New Workspace</h3>
+        <label>Name
+            <input class="input" @bind="_newName" placeholder="my-workspace" />
+        </label>
+        <label>Path (leave blank for default)
+            <input class="input" @bind="_newPath" placeholder="optional absolute path" />
+        </label>
+        <div class="form-actions">
+            <button class="btn btn-primary" @onclick="HandleCreate">Create</button>
+            <button class="btn btn-ghost" @onclick="() => _showCreate = false">Cancel</button>
+        </div>
+        @if (!string.IsNullOrEmpty(_createError))
+        {
+            <p class="error-text">@_createError</p>
+        }
+    </div>
+}
+
+@if (_workspaces.Count == 0)
+{
+    <div class="empty-state">
+        <p>No workspaces found. Create one to get started.</p>
+    </div>
+}
+else
+{
+    <div class="workspace-grid">
+        @foreach (var ws in _workspaces)
+        {
+            <a href="/workspace/@Uri.EscapeDataString(ws.Name)" class="workspace-card">
+                <div class="workspace-card-icon">&#9632;</div>
+                <div>
+                    <div class="workspace-name">@ws.Name</div>
+                    <div class="workspace-path">@ws.RootPath</div>
+                </div>
+            </a>
+        }
+    </div>
+}
+
+@code {
+    private List<ApigeeWorkspace> _workspaces = [];
+    private bool _showCreate;
+    private string _newName = string.Empty;
+    private string _newPath = string.Empty;
+    private string _createError = string.Empty;
+
+    protected override void OnInitialized()
+        => _workspaces = [.. WorkspaceRepo.ListAll()];
+
+    private void HandleCreate()
+    {
+        _createError = string.Empty;
+        try
+        {
+            var ws = CreateWorkspace.Execute(_newName, _newPath);
+            _workspaces.Add(ws);
+            _showCreate = false;
+            _newName = string.Empty;
+            _newPath = string.Empty;
+        }
+        catch (Exception ex)
+        {
+            _createError = ex.Message;
+        }
+    }
+}

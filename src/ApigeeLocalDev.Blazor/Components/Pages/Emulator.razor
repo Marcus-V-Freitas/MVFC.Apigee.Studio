@@ -1,0 +1,75 @@
+@page "/emulator"
+@using ApigeeLocalDev.Domain.Interfaces
+@inject IApigeeEmulatorClient EmulatorClient
+@rendermode InteractiveServer
+
+<h1>Emulator Status</h1>
+
+<div class="card emulator-status">
+    <div class="status-row">
+        <span>Connection status:</span>
+        @if (_checking)
+        {
+            <span class="badge badge-info">Checking...</span>
+        }
+        else
+        {
+            <span class="badge @(_alive ? "badge-success" : "badge-error")">@(_alive ? "Running" : "Offline")</span>
+        }
+        <button class="btn btn-ghost btn-sm" @onclick="Check">Refresh</button>
+    </div>
+    <p class="help-text">Ensure the Apigee Emulator Docker container is running on the configured base URL.</p>
+</div>
+
+<div class="card">
+    <h3>Quick Deploy</h3>
+    <p>Use the Workspace detail page to deploy specific proxies. Or specify paths manually:</p>
+    <label>ZIP file path
+        <input class="input" @bind="_zipPath" placeholder="C:/tmp/my-proxy.zip" />
+    </label>
+    <label>Environment
+        <input class="input" @bind="_env" placeholder="local" />
+    </label>
+    <button class="btn btn-primary" @onclick="QuickDeploy" disabled="@_deploying">@(_deploying ? "Deploying..." : "Deploy ZIP")</button>
+    @if (!string.IsNullOrEmpty(_message))
+    {
+        <p class="@(_isError ? "error-text" : "success-text")">@_message</p>
+    }
+</div>
+
+@code {
+    private bool _alive;
+    private bool _checking;
+    private string _zipPath = string.Empty;
+    private string _env = "local";
+    private bool _deploying;
+    private string _message = string.Empty;
+    private bool _isError;
+
+    protected override async Task OnInitializedAsync() => await Check();
+
+    private async Task Check()
+    {
+        _checking = true;
+        _alive = await EmulatorClient.IsAliveAsync();
+        _checking = false;
+    }
+
+    private async Task QuickDeploy()
+    {
+        _deploying = true;
+        _message = string.Empty;
+        _isError = false;
+        try
+        {
+            await EmulatorClient.DeployBundleAsync(_env, _zipPath);
+            _message = "Deploy successful!";
+        }
+        catch (Exception ex)
+        {
+            _message = $"Error: {ex.Message}";
+            _isError = true;
+        }
+        finally { _deploying = false; }
+    }
+}
