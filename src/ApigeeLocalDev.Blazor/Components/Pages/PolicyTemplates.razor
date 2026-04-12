@@ -4,7 +4,7 @@
 @using ApigeeLocalDev.Application.UseCases
 @inject IPolicyTemplateRepository TemplateRepo
 @inject GeneratePolicyUseCase GeneratePolicy
-@rendermode InteractiveServer
+@rendermode RenderMode.InteractiveServer
 
 <h1>Policy Templates</h1>
 
@@ -27,7 +27,7 @@
             @foreach (var param in _selected.Parameters)
             {
                 <label>@param
-                    <input class="input" value="@GetParam(param)" @onchange="e => SetParam(param, e.Value?.ToString() ?? "")" />
+                    <input class="input" value="@GetParam(param)" @onchange="e => SetParam(param, e.Value?.ToString() ?? string.Empty)" />
                 </label>
             }
         </div>

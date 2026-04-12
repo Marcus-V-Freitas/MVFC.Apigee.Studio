@@ -1,10 +1,11 @@
 @page "/workspace/{WorkspaceName}"
+@using ApigeeLocalDev.Blazor.Components.Shared
 @using ApigeeLocalDev.Domain.Entities
 @using ApigeeLocalDev.Domain.Interfaces
 @using ApigeeLocalDev.Application.UseCases
 @inject IWorkspaceRepository WorkspaceRepo
 @inject DeployToEmulatorUseCase DeployUseCase
-@rendermode InteractiveServer
+@rendermode RenderMode.InteractiveServer
 
 <h1>@WorkspaceName</h1>
 

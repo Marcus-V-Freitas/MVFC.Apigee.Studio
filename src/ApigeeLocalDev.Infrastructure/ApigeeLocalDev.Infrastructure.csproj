@@ -7,4 +7,5 @@
   <ItemGroup>
     <ProjectReference Include="..\ApigeeLocalDev.Domain\ApigeeLocalDev.Domain.csproj" />
   </ItemGroup>
+	
 </Project>

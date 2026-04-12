@@ -1,0 +1,1 @@
+<AssignMessage name="{{PolicyName}}">\n  <AssignTo createNew=\"false\" type=\"request\"/>\n  <Set>\n    <Headers>\n      <Header name=\"X-Custom-Header\">{{HeaderValue}}</Header>\n    </Headers>\n  </Set>\n</AssignMessage>
