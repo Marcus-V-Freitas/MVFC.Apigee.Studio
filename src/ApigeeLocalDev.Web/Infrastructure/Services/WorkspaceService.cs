@@ -44,7 +44,11 @@ public sealed class WorkspaceService : IWorkspaceService
 
     public Task<WorkspaceDetail?> GetWorkspaceDetailAsync(string workspaceName)
     {
-        var workspacePath = Path.Combine(_root, workspaceName);
+        var workspacePath = Path.GetFullPath(Path.Combine(_root, workspaceName));
+        // Guard against path traversal in workspace name
+        if (!workspacePath.StartsWith(_root + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
+            return Task.FromResult<WorkspaceDetail?>(null);
+
         if (!Directory.Exists(workspacePath))
             return Task.FromResult<WorkspaceDetail?>(null);
 

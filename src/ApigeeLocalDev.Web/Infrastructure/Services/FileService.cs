@@ -52,11 +52,13 @@ public sealed class FileService : IFileService
             return null;
 
         var workspacePath = Path.GetFullPath(Path.Combine(_root, workspaceName));
-        var fullPath = Path.GetFullPath(Path.Combine(workspacePath, relativePath));
+        // Guard against path traversal in workspace name
+        if (!workspacePath.StartsWith(_root + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
+            return null;
 
-        // Guard against path traversal
-        if (!fullPath.StartsWith(workspacePath + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase)
-            && !fullPath.Equals(workspacePath, StringComparison.OrdinalIgnoreCase))
+        var fullPath = Path.GetFullPath(Path.Combine(workspacePath, relativePath));
+        // Guard against path traversal in relative file path
+        if (!fullPath.StartsWith(workspacePath + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
             return null;
 
         return fullPath;

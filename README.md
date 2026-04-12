@@ -13,7 +13,7 @@ cd src/ApigeeLocalDev.Web
 dotnet run
 ```
 
-The app listens on `http://localhost:5000` (or the URL printed in the console).
+The app listens on `http://localhost:5214` by default (or the URL printed in the console).
 
 ## Configuration
 
