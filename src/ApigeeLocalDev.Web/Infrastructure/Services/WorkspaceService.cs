@@ -44,11 +44,11 @@ public sealed class WorkspaceService : IWorkspaceService
 
     public Task<WorkspaceDetail?> GetWorkspaceDetailAsync(string workspaceName)
     {
-        var workspacePath = Path.GetFullPath(Path.Combine(_root, workspaceName));
-        // Guard against path traversal in workspace name
-        if (!workspacePath.StartsWith(_root + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
+        // Validate workspace name is a simple directory name with no path separators
+        if (!IsSimpleName(workspaceName))
             return Task.FromResult<WorkspaceDetail?>(null);
 
+        var workspacePath = Path.Combine(_root, workspaceName);
         if (!Directory.Exists(workspacePath))
             return Task.FromResult<WorkspaceDetail?>(null);
 
@@ -88,5 +88,25 @@ public sealed class WorkspaceService : IWorkspaceService
             .OfType<string>()
             .OrderBy(n => n)
             .ToList();
+    }
+
+    /// <summary>
+    /// Returns true if <paramref name="name"/> is a single directory-name component
+    /// (no path separators, no <c>..</c> or <c>.</c> as the whole name).
+    /// </summary>
+    private static bool IsSimpleName(string name)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+            return false;
+
+        // Must not contain any path separator
+        if (name.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0)
+            return false;
+
+        // Reject "." and ".." traversal segments
+        if (name is "." or "..")
+            return false;
+
+        return true;
     }
 }
