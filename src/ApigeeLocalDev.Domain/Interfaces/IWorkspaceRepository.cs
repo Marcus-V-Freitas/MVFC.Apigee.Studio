@@ -6,6 +6,7 @@ public interface IWorkspaceRepository
 {
     IReadOnlyList<ApigeeWorkspace> ListAll();
     ApigeeWorkspace Create(string name, string? customPath, IReadOnlyList<string>? initialProxies = null);
+    void Delete(ApigeeWorkspace workspace);
     Task<WorkspaceItem> LoadTreeAsync(ApigeeWorkspace workspace, CancellationToken ct = default);
     Task<string> ReadFileAsync(string absolutePath, CancellationToken ct = default);
     Task SaveFileAsync(string absolutePath, string content, CancellationToken ct = default);

@@ -34,22 +34,25 @@ public sealed class WorkspaceFileSystemRepository(IConfiguration configuration) 
         Directory.CreateDirectory(Path.Combine(fullPath, "environments"));
 
         if (initialProxies is { Count: > 0 })
-            foreach (var proxyName in initialProxies.Where(p => !string.IsNullOrWhiteSpace(p)))
-                ScaffoldApiProxy(fullPath, proxyName.Trim());
+            foreach (var p in initialProxies.Where(p => !string.IsNullOrWhiteSpace(p)))
+                ScaffoldApiProxy(fullPath, p.Trim());
 
         return new ApigeeWorkspace(name, fullPath);
     }
 
+    public void Delete(ApigeeWorkspace workspace)
+    {
+        if (Directory.Exists(workspace.RootPath))
+            Directory.Delete(workspace.RootPath, recursive: true);
+    }
+
     public IReadOnlyList<string> ListApiProxies(ApigeeWorkspace workspace)
     {
-        var proxiesPath = Path.Combine(workspace.RootPath, "apiproxies");
-        if (!Directory.Exists(proxiesPath)) return [];
-        return Directory
-            .GetDirectories(proxiesPath)
-            .Select(Path.GetFileName)
-            .OfType<string>()
-            .OrderBy(x => x)
-            .ToList();
+        var path = Path.Combine(workspace.RootPath, "apiproxies");
+        if (!Directory.Exists(path)) return [];
+        return Directory.GetDirectories(path)
+            .Select(Path.GetFileName).OfType<string>()
+            .OrderBy(x => x).ToList();
     }
 
     public Task<WorkspaceItem> LoadTreeAsync(ApigeeWorkspace workspace, CancellationToken ct = default)
@@ -77,28 +80,28 @@ public sealed class WorkspaceFileSystemRepository(IConfiguration configuration) 
     public Task<string> BuildBundleZipAsync(
         ApigeeWorkspace workspace, string proxyOrFlowName, CancellationToken ct = default)
     {
-        var sourcePath = Path.Combine(workspace.RootPath, "apiproxies", proxyOrFlowName);
-        if (!Directory.Exists(sourcePath))
-            sourcePath = Path.Combine(workspace.RootPath, "sharedflows", proxyOrFlowName);
-        if (!Directory.Exists(sourcePath))
+        var src = Path.Combine(workspace.RootPath, "apiproxies", proxyOrFlowName);
+        if (!Directory.Exists(src))
+            src = Path.Combine(workspace.RootPath, "sharedflows", proxyOrFlowName);
+        if (!Directory.Exists(src))
             throw new DirectoryNotFoundException(
-                $"Proxy or shared flow '{proxyOrFlowName}' not found in workspace '{workspace.Name}'.");
+                $"Proxy or shared flow '{proxyOrFlowName}' not found.");
 
-        var zipPath = Path.Combine(
-            Path.GetTempPath(), $"{proxyOrFlowName}_{DateTime.UtcNow:yyyyMMddHHmmss}.zip");
-        ZipFile.CreateFromDirectory(sourcePath, zipPath);
-        return Task.FromResult(zipPath);
+        var zip = Path.Combine(Path.GetTempPath(),
+            $"{proxyOrFlowName}_{DateTime.UtcNow:yyyyMMddHHmmss}.zip");
+        ZipFile.CreateFromDirectory(src, zip);
+        return Task.FromResult(zip);
     }
 
     public Task<string> BuildWorkspaceZipAsync(ApigeeWorkspace workspace, CancellationToken ct = default)
     {
-        var zipPath = Path.Combine(
-            Path.GetTempPath(), $"{workspace.Name}_full_{DateTime.UtcNow:yyyyMMddHHmmss}.zip");
-        ZipFile.CreateFromDirectory(workspace.RootPath, zipPath);
-        return Task.FromResult(zipPath);
+        var zip = Path.Combine(Path.GetTempPath(),
+            $"{workspace.Name}_full_{DateTime.UtcNow:yyyyMMddHHmmss}.zip");
+        ZipFile.CreateFromDirectory(workspace.RootPath, zip);
+        return Task.FromResult(zip);
     }
 
-    // ── helpers ───────────────────────────────────────────────────────────────
+    // ─── helpers ──────────────────────────────────────────────────────────────
 
     private static void ScaffoldApiProxy(string workspaceRoot, string proxyName)
     {
@@ -106,7 +109,6 @@ public sealed class WorkspaceFileSystemRepository(IConfiguration configuration) 
         foreach (var sub in ProxySubFolders)
             Directory.CreateDirectory(Path.Combine(baseDir, sub));
 
-        // Com $$$""" cada expressao C# exige {{{expr}}} e o XML com { } literal nao conflita.
         var proxyXml = $$$"""
             <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
             <ProxyEndpoint name="default">
@@ -131,21 +133,19 @@ public sealed class WorkspaceFileSystemRepository(IConfiguration configuration) 
             </TargetEndpoint>
             """;
 
-        File.WriteAllText(
-            Path.Combine(baseDir, "apiproxy", "proxies", "default.xml"), proxyXml);
-        File.WriteAllText(
-            Path.Combine(baseDir, "apiproxy", "targets", "default.xml"), targetXml);
+        File.WriteAllText(Path.Combine(baseDir, "apiproxy", "proxies", "default.xml"), proxyXml);
+        File.WriteAllText(Path.Combine(baseDir, "apiproxy", "targets", "default.xml"), targetXml);
     }
 
     private static WorkspaceItem BuildItem(string path, string rootPath)
     {
-        var relativePath = Path.GetRelativePath(rootPath, path);
-        var name         = Path.GetFileName(path);
+        var rel  = Path.GetRelativePath(rootPath, path);
+        var name = Path.GetFileName(path);
 
         if (File.Exists(path))
-            return new WorkspaceItem(name, path, relativePath, WorkspaceItemType.File, []);
+            return new WorkspaceItem(name, path, rel, WorkspaceItemType.File, []);
 
-        var itemType = Path.GetFileName(path).ToLowerInvariant() switch
+        var itemType = name.ToLowerInvariant() switch
         {
             "apiproxies"   => WorkspaceItemType.ApiProxy,
             "sharedflows"  => WorkspaceItemType.SharedFlow,
@@ -153,13 +153,10 @@ public sealed class WorkspaceFileSystemRepository(IConfiguration configuration) 
             _              => WorkspaceItemType.Directory
         };
 
-        var children = Directory
-            .GetFileSystemEntries(path)
-            .OrderBy(p => File.Exists(p) ? 1 : 0)
-            .ThenBy(p => p)
-            .Select(child => BuildItem(child, rootPath))
-            .ToList();
+        var children = Directory.GetFileSystemEntries(path)
+            .OrderBy(p => File.Exists(p) ? 1 : 0).ThenBy(p => p)
+            .Select(c => BuildItem(c, rootPath)).ToList();
 
-        return new WorkspaceItem(name, path, relativePath, itemType, children);
+        return new WorkspaceItem(name, path, rel, itemType, children);
     }
 }

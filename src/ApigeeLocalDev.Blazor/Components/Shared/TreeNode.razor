@@ -1,18 +1,32 @@
 @using ApigeeLocalDev.Domain.Entities
 
 <div class="tree-node">
-    @if (Item.Type is WorkspaceItemType.Directory or WorkspaceItemType.ApiProxy or WorkspaceItemType.SharedFlow or WorkspaceItemType.Environment)
+    @if (Item.Type is WorkspaceItemType.Directory
+                   or WorkspaceItemType.ApiProxy
+                   or WorkspaceItemType.SharedFlow
+                   or WorkspaceItemType.Environment)
     {
-        <div class="tree-dir" @onclick="ToggleExpand">
-            <span class="tree-caret">@(_expanded ? "▼" : "▶")</span>
-            <span class="tree-dir-name">@Item.Name</span>
+        <div class="tree-dir">
+            <span class="tree-caret" @onclick="ToggleExpand">@(_expanded ? "▼" : "►")</span>
+            <span class="tree-dir-name" @onclick="ToggleExpand">@Item.Name</span>
+
+            @if (QuickAddCategory is not null)
+            {
+                <button class="tree-add-btn"
+                        title="Add @Item.Name item"
+                        @onclick="HandleQuickAdd"
+                        @onclick:stopPropagation>+</button>
+            }
         </div>
+
         @if (_expanded)
         {
             <div class="tree-children">
                 @foreach (var child in Item.Children)
                 {
-                    <TreeNode Item="child" OnFileSelected="OnFileSelected" />
+                    <TreeNode Item="child"
+                              OnFileSelected="OnFileSelected"
+                              OnQuickAdd="OnQuickAdd" />
                 }
             </div>
         }
@@ -26,10 +40,23 @@
 </div>
 
 @code {
-    [Parameter] public WorkspaceItem Item { get; set; } = default!;
-    [Parameter] public EventCallback<string> OnFileSelected { get; set; }
+    // Pastas que merecem o botão "+" contextual
+    private static readonly HashSet<string> QuickAddFolders =
+        new(StringComparer.OrdinalIgnoreCase)
+        { "policies", "apiproxies", "resources", "targets", "proxies" };
+
+    [Parameter] public WorkspaceItem Item       { get; set; } = default!;
+    [Parameter] public EventCallback<string>           OnFileSelected { get; set; }
+    /// <summary>Emite (folderAbsolutePath, folderName) para o pai abrir o modal correto.</summary>
+    [Parameter] public EventCallback<(string Path, string Category)> OnQuickAdd { get; set; }
 
     private bool _expanded = true;
 
+    private string? QuickAddCategory =>
+        QuickAddFolders.Contains(Item.Name) ? Item.Name.ToLowerInvariant() : null;
+
     private void ToggleExpand() => _expanded = !_expanded;
+
+    private Task HandleQuickAdd()
+        => OnQuickAdd.InvokeAsync((Item.FullPath, Item.Name.ToLowerInvariant()));
 }

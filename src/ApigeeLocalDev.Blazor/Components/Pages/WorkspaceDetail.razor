@@ -5,6 +5,8 @@
 @using Microsoft.AspNetCore.Components.Web
 @inject IWorkspaceRepository WorkspaceRepo
 @inject DeployToEmulatorUseCase DeployUseCase
+@inject IPolicyTemplateRepository TemplateRepo
+@inject GeneratePolicyUseCase GeneratePolicy
 @rendermode RenderMode.InteractiveServer
 
 <h1>@WorkspaceName</h1>
@@ -16,6 +18,7 @@
 else
 {
     <div class="workspace-detail">
+        <!-- ÁRVORE -->
         <aside class="file-tree">
             <div class="file-tree-header">
                 <h3>Files</h3>
@@ -44,10 +47,13 @@ else
 
             @if (_tree is not null)
             {
-                <TreeNode Item="_tree" OnFileSelected="LoadFile" />
+                <TreeNode Item="_tree"
+                          OnFileSelected="LoadFile"
+                          OnQuickAdd="OpenQuickAddModal" />
             }
         </aside>
 
+        <!-- EDITOR -->
         <section class="file-editor">
             @if (_selectedFile is not null)
             {
@@ -64,9 +70,68 @@ else
         </section>
     </div>
 
+    <!-- MODAL QUICK ADD -->
+    @if (_quickAddOpen)
+    {
+        <div class="modal-backdrop" @onclick="CloseQuickAdd">
+            <div class="modal-card" @onclick:stopPropagation>
+                <div class="modal-header">
+                    <h3>Adicionar em <code>@_quickAddCategory</code></h3>
+                    <button class="btn btn-ghost btn-sm" @onclick="CloseQuickAdd">✕</button>
+                </div>
+
+                @if (_quickAddCategory == "policies")
+                {
+                    <!-- galeria de templates -->
+                    <div class="template-grid-sm">
+                        @foreach (var t in _allTemplates)
+                        {
+                            <div class="template-card-sm @QuickTemplateClass(t)"
+                                 @onclick="() => SelectQuickTemplate(t)">
+                                <div class="template-name">@t.Name</div>
+                                <span class="template-category">@t.Category</span>
+                            </div>
+                        }
+                    </div>
+
+                    @if (_quickTemplate is not null)
+                    {
+                        <div class="param-form">
+                            @foreach (var p in _quickTemplate.Parameters)
+                            {
+                                <label>@p
+                                    <input class="input" value="@GetQParam(p)"
+                                           @onchange="e => SetQParam(p, e.Value?.ToString() ?? string.Empty)" />
+                                </label>
+                            }
+                        </div>
+                        <button class="btn btn-primary" @onclick="ConfirmQuickPolicy"
+                                disabled="@_quickGenerating">
+                            @(_quickGenerating ? "Gerando..." : "Gerar Política")
+                        </button>
+                    }
+                }
+                else
+                {
+                    <!-- pasta genérica: apenas cria arquivo/subpasta -->
+                    <label>Nome do arquivo
+                        <input class="input" @bind="_quickFileName"
+                               placeholder="meu-recurso.xml" />
+                    </label>
+                    <button class="btn btn-primary" @onclick="ConfirmQuickFile">Criar Arquivo</button>
+                }
+
+                @if (!string.IsNullOrEmpty(_quickMessage))
+                {
+                    <p class="@QuickMessageClass">@_quickMessage</p>
+                }
+            </div>
+        </div>
+    }
+
+    <!-- DEPLOY PANEL -->
     <div class="deploy-panel card">
         <h3>Deploy to Emulator</h3>
-
         <div class="deploy-tabs">
             <button class="@TabClass(DeployModeProxy)" @onclick="SetDeployModeProxy">Proxy / Shared Flow</button>
             <button class="@TabClass(DeployModeFull)" @onclick="SetDeployModeFull">Workspace completo</button>
@@ -111,37 +176,58 @@ else
 
     [Parameter] public string WorkspaceName { get; set; } = string.Empty;
 
+    // workspace state
     private ApigeeWorkspace? _workspace;
     private WorkspaceItem?   _tree;
     private string?          _selectedFile;
-    private string           _fileContent    = string.Empty;
-    private string           _deployTarget   = string.Empty;
-    private string           _deployEnv      = "local";
-    private string           _deployMode     = DeployModeProxy;
-    private bool             _deploying;
-    private string           _deployMessage  = string.Empty;
-    private bool             _deployError;
-    private bool             _showNewItem;
-    private bool             _newItemIsDir;
-    private string           _newItemName    = string.Empty;
-    private string           _newItemError   = string.Empty;
+    private string           _fileContent   = string.Empty;
 
-    // Helpers para evitar string literals em atributos Razor
-    private string NewItemPlaceholder => _newItemIsDir ? "folder-name" : "file.xml";
-    private string DeployMessageClass  => _deployError ? "error-text" : "success-text";
-    private string TabClass(string mode) =>
-        _deployMode == mode ? "btn btn-primary btn-sm" : "btn btn-ghost btn-sm";
+    // new item
+    private bool   _showNewItem;
+    private bool   _newItemIsDir;
+    private string _newItemName  = string.Empty;
+    private string _newItemError = string.Empty;
+
+    // deploy
+    private string _deployTarget  = string.Empty;
+    private string _deployEnv     = "local";
+    private string _deployMode    = DeployModeProxy;
+    private bool   _deploying;
+    private string _deployMessage = string.Empty;
+    private bool   _deployError;
+
+    // quick-add modal
+    private bool   _quickAddOpen     = false;
+    private string _quickAddPath     = string.Empty;
+    private string _quickAddCategory = string.Empty;
+    private IReadOnlyList<ApigeeLocalDev.Domain.Entities.PolicyTemplate> _allTemplates = [];
+    private ApigeeLocalDev.Domain.Entities.PolicyTemplate? _quickTemplate;
+    private Dictionary<string, string> _quickParams  = [];
+    private string _quickFileName    = string.Empty;
+    private string _quickMessage     = string.Empty;
+    private bool   _quickError;
+    private bool   _quickGenerating;
+
+    // helpers
+    private string NewItemPlaceholder  => _newItemIsDir ? "folder-name" : "file.xml";
+    private string DeployMessageClass  => _deployError  ? "error-text"  : "success-text";
+    private string QuickMessageClass   => _quickError   ? "error-text"  : "success-text";
+    private string TabClass(string m)  => _deployMode == m ? "btn btn-primary btn-sm" : "btn btn-ghost btn-sm";
+    private string QuickTemplateClass(ApigeeLocalDev.Domain.Entities.PolicyTemplate t)
+        => t == _quickTemplate ? "template-card-sm selected" : "template-card-sm";
 
     private void SetDeployModeProxy() => _deployMode = DeployModeProxy;
     private void SetDeployModeFull()  => _deployMode = DeployModeFull;
 
     protected override async Task OnInitializedAsync()
     {
-        _workspace = WorkspaceRepo.ListAll().FirstOrDefault(w => w.Name == WorkspaceName);
+        _workspace    = WorkspaceRepo.ListAll().FirstOrDefault(w => w.Name == WorkspaceName);
+        _allTemplates = TemplateRepo.GetAll();
         if (_workspace is not null)
             _tree = await WorkspaceRepo.LoadTreeAsync(_workspace);
     }
 
+    // ── file tree ───────────────────────────────────────────────────────────────
     private async Task LoadFile(string path)
     {
         _selectedFile = path;
@@ -156,10 +242,9 @@ else
 
     private void OpenNewItemDialog(bool isDir)
     {
-        _newItemIsDir  = isDir;
-        _newItemName   = string.Empty;
-        _newItemError  = string.Empty;
-        _showNewItem   = true;
+        _newItemIsDir = isDir;
+        _newItemName  = _newItemError = string.Empty;
+        _showNewItem  = true;
     }
 
     private async Task HandleNewItemKey(KeyboardEventArgs e)
@@ -171,37 +256,98 @@ else
     private async Task ConfirmNewItem()
     {
         _newItemError = string.Empty;
-        if (string.IsNullOrWhiteSpace(_newItemName))
-        {
-            _newItemError = "Informe um nome.";
-            return;
-        }
+        if (string.IsNullOrWhiteSpace(_newItemName)) { _newItemError = "Informe um nome."; return; }
         if (_workspace is null) return;
 
         var basePath = _selectedFile is not null
             ? Path.GetDirectoryName(_selectedFile)!
             : _workspace.RootPath;
-
         var fullPath = Path.Combine(basePath, _newItemName);
-
         try
         {
-            if (_newItemIsDir)
-                await WorkspaceRepo.CreateDirectoryAsync(fullPath);
-            else
-            {
-                await WorkspaceRepo.CreateFileAsync(fullPath);
-                await LoadFile(fullPath);
-            }
+            if (_newItemIsDir) await WorkspaceRepo.CreateDirectoryAsync(fullPath);
+            else { await WorkspaceRepo.CreateFileAsync(fullPath); await LoadFile(fullPath); }
             _showNewItem = false;
             _tree = await WorkspaceRepo.LoadTreeAsync(_workspace);
         }
-        catch (Exception ex)
-        {
-            _newItemError = ex.Message;
-        }
+        catch (Exception ex) { _newItemError = ex.Message; }
     }
 
+    // ── quick-add modal ───────────────────────────────────────────────────────
+    private void OpenQuickAddModal((string Path, string Category) args)
+    {
+        _quickAddPath     = args.Path;
+        _quickAddCategory = args.Category;
+        _quickTemplate    = null;
+        _quickParams      = [];
+        _quickFileName    = string.Empty;
+        _quickMessage     = string.Empty;
+        _quickError       = false;
+        _quickAddOpen     = true;
+    }
+
+    private void CloseQuickAdd() => _quickAddOpen = false;
+
+    private void SelectQuickTemplate(ApigeeLocalDev.Domain.Entities.PolicyTemplate t)
+    {
+        _quickTemplate = t;
+        _quickParams   = t.Parameters.ToDictionary(p => p, _ => string.Empty);
+        if (_quickParams.ContainsKey("PolicyName")) _quickParams["PolicyName"] = t.Name + "Policy";
+    }
+
+    private string GetQParam(string k) => _quickParams.TryGetValue(k, out var v) ? v : string.Empty;
+    private void   SetQParam(string k, string v) => _quickParams[k] = v;
+
+    private async Task ConfirmQuickPolicy()
+    {
+        if (_quickTemplate is null || _workspace is null) return;
+        _quickGenerating = true;
+        _quickMessage    = string.Empty;
+        _quickError      = false;
+        try
+        {
+            // Descobre o proxyName a partir do path da pasta policies
+            // ex: .../apiproxies/my-proxy/apiproxy/policies  ->  my-proxy
+            var proxyName = ResolveProxyName(_quickAddPath);
+            var path = await GeneratePolicy.ExecuteAsync(
+                _workspace.RootPath, proxyName, "apiproxy/policies",
+                _quickTemplate.Name, _quickParams);
+            _quickMessage = $"Criado: {Path.GetFileName(path)}";
+            _tree = await WorkspaceRepo.LoadTreeAsync(_workspace);
+        }
+        catch (Exception ex) { _quickMessage = ex.Message; _quickError = true; }
+        finally { _quickGenerating = false; }
+    }
+
+    private async Task ConfirmQuickFile()
+    {
+        if (string.IsNullOrWhiteSpace(_quickFileName) || _workspace is null) return;
+        _quickMessage = string.Empty;
+        _quickError   = false;
+        try
+        {
+            var fullPath = Path.Combine(_quickAddPath, _quickFileName);
+            await WorkspaceRepo.CreateFileAsync(fullPath);
+            await LoadFile(fullPath);
+            _quickAddOpen = false;
+            _tree = await WorkspaceRepo.LoadTreeAsync(_workspace);
+        }
+        catch (Exception ex) { _quickMessage = ex.Message; _quickError = true; }
+    }
+
+    /// Sobe na hierarquia de pastas para encontrar o nome do proxy.
+    /// .../apiproxies/{proxyName}/... -> proxyName
+    private static string ResolveProxyName(string folderPath)
+    {
+        var parts = folderPath.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        for (var i = 0; i < parts.Length - 1; i++)
+            if (parts[i].Equals("apiproxies", StringComparison.OrdinalIgnoreCase))
+                return parts[i + 1];
+        // fallback: usa o nome imediato da pasta
+        return Path.GetFileName(folderPath);
+    }
+
+    // ── deploy ──────────────────────────────────────────────────────────────────
     private async Task DeployProxy()
     {
         if (_workspace is null) return;
@@ -216,19 +362,9 @@ else
 
     private async Task RunDeploy(Func<Task> action)
     {
-        _deploying     = true;
-        _deployMessage = string.Empty;
-        _deployError   = false;
-        try
-        {
-            await action();
-            _deployMessage = "Deploy realizado com sucesso!";
-        }
-        catch (Exception ex)
-        {
-            _deployMessage = $"Deploy falhou: {ex.Message}";
-            _deployError   = true;
-        }
+        _deploying = true; _deployMessage = string.Empty; _deployError = false;
+        try   { await action(); _deployMessage = "Deploy realizado com sucesso!"; }
+        catch (Exception ex) { _deployMessage = $"Deploy falhou: {ex.Message}"; _deployError = true; }
         finally { _deploying = false; }
     }
 }

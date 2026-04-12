@@ -17,13 +17,10 @@
 {
     <div class="create-form card">
         <h3>New Workspace</h3>
-
         <label>Name
             <input class="input" @bind="_newName" placeholder="my-workspace" />
         </label>
-
-        <label>
-            Path
+        <label>Path
             <input class="input" @bind="_newPath" placeholder="Deixe vazio para usar WorkspacesRoot/name" />
             <span class="help-text">Se preenchido, cria a estrutura nesta pasta exata.</span>
         </label>
@@ -34,12 +31,12 @@
                 <button class="btn btn-ghost btn-sm" @onclick="AddProxyEntry">+ Add Proxy</button>
             </div>
             <span class="help-text">Cada proxy terá a estrutura completa: apiproxy/, policies/, proxies/, targets/.</span>
-
             @for (var i = 0; i < _proxyEntries.Count; i++)
             {
                 var idx = i;
                 <div class="proxy-entry">
-                    <input class="input" value="@_proxyEntries[idx]"
+                    <input class="input"
+                           value="@_proxyEntries[idx]"
                            @onchange="e => _proxyEntries[idx] = e.Value?.ToString() ?? string.Empty"
                            placeholder="nome-do-proxy" />
                     <button class="btn btn-ghost btn-sm" @onclick="() => RemoveProxyEntry(idx)">✕</button>
@@ -51,11 +48,25 @@
             <button class="btn btn-primary" @onclick="HandleCreate">Create</button>
             <button class="btn btn-ghost" @onclick="CloseCreateForm">Cancel</button>
         </div>
-
         @if (!string.IsNullOrEmpty(_createError))
         {
             <p class="error-text">@_createError</p>
         }
+    </div>
+}
+
+<!-- CONFIRM DELETE MODAL -->
+@if (_pendingDelete is not null)
+{
+    <div class="modal-backdrop" @onclick="CancelDelete">
+        <div class="modal-card" @onclick:stopPropagation>
+            <h3>⚠️ Remover workspace?</h3>
+            <p>Isso excluirá permanentemente a pasta <strong>@_pendingDelete.RootPath</strong> e todo o seu conteúdo.</p>
+            <div class="form-actions">
+                <button class="btn btn-error" @onclick="ConfirmDelete">Sim, remover</button>
+                <button class="btn btn-ghost" @onclick="CancelDelete">Cancelar</button>
+            </div>
+        </div>
     </div>
 }
 
@@ -70,13 +81,19 @@ else
     <div class="workspace-grid">
         @foreach (var ws in _workspaces)
         {
-            <a href="/workspace/@Uri.EscapeDataString(ws.Name)" class="workspace-card">
-                <div class="workspace-card-icon">&#9632;</div>
-                <div>
-                    <div class="workspace-name">@ws.Name</div>
-                    <div class="workspace-path">@ws.RootPath</div>
-                </div>
-            </a>
+            var captured = ws;
+            <div class="workspace-card">
+                <a href="/workspace/@Uri.EscapeDataString(ws.Name)" class="workspace-card-link">
+                    <div class="workspace-card-icon">&#9632;</div>
+                    <div>
+                        <div class="workspace-name">@ws.Name</div>
+                        <div class="workspace-path">@ws.RootPath</div>
+                    </div>
+                </a>
+                <button class="btn btn-ghost btn-sm workspace-delete-btn"
+                        title="Remover workspace"
+                        @onclick="() => AskDelete(captured)">🗑️</button>
+            </div>
         }
     </div>
 }
@@ -88,26 +105,20 @@ else
     private string _newPath     = string.Empty;
     private string _createError = string.Empty;
     private List<string> _proxyEntries = [];
+    private ApigeeWorkspace? _pendingDelete;
 
     protected override void OnInitialized()
         => _workspaces = [.. WorkspaceRepo.ListAll()];
 
     private void OpenCreateForm()
     {
-        _showCreate   = true;
-        _newName      = string.Empty;
-        _newPath      = string.Empty;
-        _createError  = string.Empty;
+        _showCreate = true; _newName = _newPath = _createError = string.Empty;
         _proxyEntries = [];
     }
 
-    private void CloseCreateForm()
-    {
-        _showCreate  = false;
-        _createError = string.Empty;
-    }
+    private void CloseCreateForm() { _showCreate = false; _createError = string.Empty; }
 
-    private void AddProxyEntry()    => _proxyEntries.Add(string.Empty);
+    private void AddProxyEntry()           => _proxyEntries.Add(string.Empty);
     private void RemoveProxyEntry(int idx) => _proxyEntries.RemoveAt(idx);
 
     private void HandleCreate()
@@ -121,9 +132,17 @@ else
             _workspaces.Add(ws);
             CloseCreateForm();
         }
-        catch (Exception ex)
-        {
-            _createError = ex.Message;
-        }
+        catch (Exception ex) { _createError = ex.Message; }
+    }
+
+    private void AskDelete(ApigeeWorkspace ws)    => _pendingDelete = ws;
+    private void CancelDelete()                   => _pendingDelete = null;
+
+    private void ConfirmDelete()
+    {
+        if (_pendingDelete is null) return;
+        WorkspaceRepo.Delete(_pendingDelete);
+        _workspaces.Remove(_pendingDelete);
+        _pendingDelete = null;
     }
 }
