@@ -7,18 +7,16 @@ namespace ApigeeLocalDev.Infrastructure.Repositories;
 
 public sealed class WorkspaceFileSystemRepository(IConfiguration configuration) : IWorkspaceRepository
 {
-    // Subpastas padrão criadas dentro de cada proxy/shared flow
     private static readonly string[] ProxySubFolders =
         ["apiproxy", "apiproxy/policies", "apiproxy/proxies", "apiproxy/targets", "apiproxy/resources"];
 
     private string WorkspacesRoot =>
-        configuration["WorkspacesRoot"] ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "apigee-workspaces");
+        configuration["WorkspacesRoot"] ?? Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "apigee-workspaces");
 
     public IReadOnlyList<ApigeeWorkspace> ListAll()
     {
-        if (!Directory.Exists(WorkspacesRoot))
-            return [];
-
+        if (!Directory.Exists(WorkspacesRoot)) return [];
         return Directory
             .GetDirectories(WorkspacesRoot)
             .Select(d => new ApigeeWorkspace(Path.GetFileName(d), d))
@@ -46,14 +44,16 @@ public sealed class WorkspaceFileSystemRepository(IConfiguration configuration) 
     {
         var proxiesPath = Path.Combine(workspace.RootPath, "apiproxies");
         if (!Directory.Exists(proxiesPath)) return [];
-        return Directory.GetDirectories(proxiesPath).Select(Path.GetFileName).OfType<string>().OrderBy(x => x).ToList();
+        return Directory
+            .GetDirectories(proxiesPath)
+            .Select(Path.GetFileName)
+            .OfType<string>()
+            .OrderBy(x => x)
+            .ToList();
     }
 
     public Task<WorkspaceItem> LoadTreeAsync(ApigeeWorkspace workspace, CancellationToken ct = default)
-    {
-        var root = BuildItem(workspace.RootPath, workspace.RootPath);
-        return Task.FromResult(root);
-    }
+        => Task.FromResult(BuildItem(workspace.RootPath, workspace.RootPath));
 
     public Task<string> ReadFileAsync(string absolutePath, CancellationToken ct = default)
         => File.ReadAllTextAsync(absolutePath, ct);
@@ -74,28 +74,31 @@ public sealed class WorkspaceFileSystemRepository(IConfiguration configuration) 
         return Task.CompletedTask;
     }
 
-    public Task<string> BuildBundleZipAsync(ApigeeWorkspace workspace, string proxyOrFlowName, CancellationToken ct = default)
+    public Task<string> BuildBundleZipAsync(
+        ApigeeWorkspace workspace, string proxyOrFlowName, CancellationToken ct = default)
     {
         var sourcePath = Path.Combine(workspace.RootPath, "apiproxies", proxyOrFlowName);
         if (!Directory.Exists(sourcePath))
             sourcePath = Path.Combine(workspace.RootPath, "sharedflows", proxyOrFlowName);
-
         if (!Directory.Exists(sourcePath))
-            throw new DirectoryNotFoundException($"Proxy or shared flow '{proxyOrFlowName}' not found in workspace '{workspace.Name}'.");
+            throw new DirectoryNotFoundException(
+                $"Proxy or shared flow '{proxyOrFlowName}' not found in workspace '{workspace.Name}'.");
 
-        var zipPath = Path.Combine(Path.GetTempPath(), $"{proxyOrFlowName}_{DateTime.UtcNow:yyyyMMddHHmmss}.zip");
+        var zipPath = Path.Combine(
+            Path.GetTempPath(), $"{proxyOrFlowName}_{DateTime.UtcNow:yyyyMMddHHmmss}.zip");
         ZipFile.CreateFromDirectory(sourcePath, zipPath);
         return Task.FromResult(zipPath);
     }
 
     public Task<string> BuildWorkspaceZipAsync(ApigeeWorkspace workspace, CancellationToken ct = default)
     {
-        var zipPath = Path.Combine(Path.GetTempPath(), $"{workspace.Name}_full_{DateTime.UtcNow:yyyyMMddHHmmss}.zip");
+        var zipPath = Path.Combine(
+            Path.GetTempPath(), $"{workspace.Name}_full_{DateTime.UtcNow:yyyyMMddHHmmss}.zip");
         ZipFile.CreateFromDirectory(workspace.RootPath, zipPath);
         return Task.FromResult(zipPath);
     }
 
-    // ── helpers ──────────────────────────────────────────────────────────────
+    // ── helpers ───────────────────────────────────────────────────────────────
 
     private static void ScaffoldApiProxy(string workspaceRoot, string proxyName)
     {
@@ -103,41 +106,46 @@ public sealed class WorkspaceFileSystemRepository(IConfiguration configuration) 
         foreach (var sub in ProxySubFolders)
             Directory.CreateDirectory(Path.Combine(baseDir, sub));
 
-        // ProxyEndpoint padrão
-        var proxyXml = $"""<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<ProxyEndpoint name="default">
-    <Description>{proxyName} proxy endpoint</Description>
-    <HTTPProxyConnection>
-        <BasePath>/{proxyName}</BasePath>
-        <VirtualHost>default</VirtualHost>
-    </HTTPProxyConnection>
-    <RouteRule name="default">
-        <TargetEndpoint>default</TargetEndpoint>
-    </RouteRule>
-</ProxyEndpoint>""";
+        // Com $$$""" cada expressao C# exige {{{expr}}} e o XML com { } literal nao conflita.
+        var proxyXml = $$$"""
+            <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+            <ProxyEndpoint name="default">
+                <Description>{{{proxyName}}} proxy endpoint</Description>
+                <HTTPProxyConnection>
+                    <BasePath>/{{{proxyName}}}</BasePath>
+                    <VirtualHost>default</VirtualHost>
+                </HTTPProxyConnection>
+                <RouteRule name="default">
+                    <TargetEndpoint>default</TargetEndpoint>
+                </RouteRule>
+            </ProxyEndpoint>
+            """;
 
-        var targetXml = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<TargetEndpoint name="default">
-    <Description>Default target endpoint</Description>
-    <HTTPTargetConnection>
-        <URL>https://httpbin.org/anything</URL>
-    </HTTPTargetConnection>
-</TargetEndpoint>""";
+        var targetXml = """
+            <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+            <TargetEndpoint name="default">
+                <Description>Default target endpoint</Description>
+                <HTTPTargetConnection>
+                    <URL>https://httpbin.org/anything</URL>
+                </HTTPTargetConnection>
+            </TargetEndpoint>
+            """;
 
-        File.WriteAllText(Path.Combine(baseDir, "apiproxy", "proxies", "default.xml"), proxyXml);
-        File.WriteAllText(Path.Combine(baseDir, "apiproxy", "targets", "default.xml"), targetXml);
+        File.WriteAllText(
+            Path.Combine(baseDir, "apiproxy", "proxies", "default.xml"), proxyXml);
+        File.WriteAllText(
+            Path.Combine(baseDir, "apiproxy", "targets", "default.xml"), targetXml);
     }
 
     private static WorkspaceItem BuildItem(string path, string rootPath)
     {
         var relativePath = Path.GetRelativePath(rootPath, path);
-        var name = Path.GetFileName(path);
+        var name         = Path.GetFileName(path);
 
         if (File.Exists(path))
             return new WorkspaceItem(name, path, relativePath, WorkspaceItemType.File, []);
 
-        var dirName = Path.GetFileName(path).ToLowerInvariant();
-        var itemType = dirName switch
+        var itemType = Path.GetFileName(path).ToLowerInvariant() switch
         {
             "apiproxies"   => WorkspaceItemType.ApiProxy,
             "sharedflows"  => WorkspaceItemType.SharedFlow,
