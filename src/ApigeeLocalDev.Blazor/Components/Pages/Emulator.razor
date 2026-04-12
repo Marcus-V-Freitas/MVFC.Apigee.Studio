@@ -1,6 +1,7 @@
 @page "/emulator"
 @using ApigeeLocalDev.Domain.Interfaces
 @inject IApigeeEmulatorClient EmulatorClient
+@inject IConfiguration Config
 @rendermode RenderMode.InteractiveServer
 
 <div class="page-header">
@@ -68,11 +69,9 @@
     private string _message     = string.Empty;
     private bool   _isError;
 
-    [Inject] private IConfiguration? Config { get; set; }
-
     protected override async Task OnInitializedAsync()
     {
-        _baseUrl = Config?["ApigeeEmulator:BaseUrl"] ?? "http://localhost:8080";
+        _baseUrl = Config["ApigeeEmulator:BaseUrl"] ?? "http://localhost:8080";
         await Check();
     }
 

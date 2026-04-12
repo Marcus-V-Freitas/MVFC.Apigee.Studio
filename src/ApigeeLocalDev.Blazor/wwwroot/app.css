@@ -1,3 +1,4 @@
+@import "css/drawer.css";
 /* ============================================================
    Apigee Local Dev — Blazor Server
    Design: dark IDE-like aesthetic (surfaces, teal accent)
@@ -363,3 +364,19 @@ label .input { margin-top: var(--space-1); }
 
 .create-form { max-width: 480px; margin-bottom: var(--space-6); }
 .policy-gen-form { margin-top: var(--space-6); }
+
+/* ─── Emulator page details ─────────────────────────────────── */
+.page-header { margin-bottom: var(--space-6); }
+.page-subtitle { font-size: var(--text-sm); color: var(--color-text-muted); margin-top: var(--space-2); }
+
+.status-label { display: flex; align-items: center; gap: var(--space-2); }
+.status-dot { width: 8px; height: 8px; border-radius: 9999px; background: var(--color-error); }
+.dot-green { background: var(--color-success); }
+.dot-red { background: var(--color-error); }
+
+.form-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) minmax(0, 0.75fr);
+  gap: var(--space-4);
+  margin-bottom: var(--space-4);
+}

@@ -155,14 +155,16 @@ else
                 }
                 else
                 {
-                    <!-- pasta genérica: só cria arquivo -->
+                    <!-- pasta genérica / apiproxies -->
                     <div class="drawer-body drawer-body--single">
                         <label>
-                            Nome do arquivo
+                            @(_quickAddCategory == "apiproxies" ? "Nome da API (proxy)" : "Nome do arquivo")
                             <input class="input" @bind="_quickFileName"
-                                   placeholder="meu-recurso.xml" />
+                                   placeholder="@(_quickAddCategory == "apiproxies" ? "minha-api" : "meu-recurso.xml")" />
                         </label>
-                        <button class="btn btn-primary" @onclick="ConfirmQuickFile">Criar Arquivo</button>
+                        <button class="btn btn-primary" @onclick="ConfirmQuickFile">
+                            @(_quickAddCategory == "apiproxies" ? "Criar API" : "Criar Arquivo")
+                        </button>
                         @if (!string.IsNullOrEmpty(_quickMessage))
                         {
                             <p class="mt-2 @QuickMessageClass">@_quickMessage</p>
@@ -362,13 +364,54 @@ else
         _quickError   = false;
         try
         {
-            var fullPath = Path.Combine(_quickAddPath, _quickFileName);
-            await WorkspaceRepo.CreateFileAsync(fullPath);
-            await LoadFile(fullPath);
-            _quickAddOpen = false;
-            _tree = await WorkspaceRepo.LoadTreeAsync(_workspace);
+            if (string.Equals(_quickAddCategory, "apiproxies", StringComparison.OrdinalIgnoreCase))
+            {
+                await CreateApiProxySkeletonAsync();
+            }
+            else
+            {
+                var fullPath = Path.Combine(_quickAddPath, _quickFileName);
+                await WorkspaceRepo.CreateFileAsync(fullPath);
+                await LoadFile(fullPath);
+                _quickAddOpen = false;
+                _tree = await WorkspaceRepo.LoadTreeAsync(_workspace);
+            }
         }
         catch (Exception ex) { _quickMessage = $"✘ {ex.Message}"; _quickError = true; }
+    }
+
+    private async Task CreateApiProxySkeletonAsync()
+    {
+        if (_workspace is null) return;
+
+        var name = _quickFileName.Trim();
+        if (string.IsNullOrWhiteSpace(name))
+            throw new InvalidOperationException("Informe o nome da API.");
+
+        var proxyRoot    = Path.Combine(_quickAddPath, name);
+        var apiproxyDir  = Path.Combine(proxyRoot, "apiproxy");
+        var policiesDir  = Path.Combine(apiproxyDir, "policies");
+        var proxiesDir   = Path.Combine(apiproxyDir, "proxies");
+        var resourcesDir = Path.Combine(apiproxyDir, "resources");
+        var targetsDir   = Path.Combine(apiproxyDir, "targets");
+
+        await WorkspaceRepo.CreateDirectoryAsync(apiproxyDir);
+        await WorkspaceRepo.CreateDirectoryAsync(policiesDir);
+        await WorkspaceRepo.CreateDirectoryAsync(proxiesDir);
+        await WorkspaceRepo.CreateDirectoryAsync(resourcesDir);
+        await WorkspaceRepo.CreateDirectoryAsync(targetsDir);
+
+        var proxyXmlPath = Path.Combine(apiproxyDir, "proxy.xml");
+        var xml = $"""<APIProxy name=\"{name}\">
+  <Description>{name}</Description>
+  <Revision>1</Revision>
+</APIProxy>
+""";
+        await WorkspaceRepo.SaveFileAsync(proxyXmlPath, xml);
+
+        await LoadFile(proxyXmlPath);
+        _quickAddOpen = false;
+        _tree = await WorkspaceRepo.LoadTreeAsync(_workspace);
     }
 
     // ── deploy ─────────────────────────────────────────────────────────────────
