@@ -16,13 +16,12 @@
 else
 {
     <div class="workspace-detail">
-        <!-- ÁRVORE DE ARQUIVOS -->
         <aside class="file-tree">
             <div class="file-tree-header">
                 <h3>Files</h3>
                 <div class="file-tree-actions">
-                    <button class="btn btn-ghost btn-sm" title="New File" @onclick="() => OpenNewItemDialog(false)">+ File</button>
-                    <button class="btn btn-ghost btn-sm" title="New Folder" @onclick="() => OpenNewItemDialog(true)">+ Folder</button>
+                    <button class="btn btn-ghost btn-sm" @onclick="() => OpenNewItemDialog(false)">+ File</button>
+                    <button class="btn btn-ghost btn-sm" @onclick="() => OpenNewItemDialog(true)">+ Folder</button>
                 </div>
             </div>
 
@@ -30,7 +29,7 @@ else
             {
                 <div class="new-item-form">
                     <input class="input" @bind="_newItemName"
-                           placeholder="@(_newItemIsDir ? "folder-name" : "file.xml")"
+                           placeholder="@NewItemPlaceholder"
                            @onkeydown="HandleNewItemKey" />
                     <div class="form-actions">
                         <button class="btn btn-primary btn-sm" @onclick="ConfirmNewItem">OK</button>
@@ -49,7 +48,6 @@ else
             }
         </aside>
 
-        <!-- EDITOR -->
         <section class="file-editor">
             @if (_selectedFile is not null)
             {
@@ -66,18 +64,15 @@ else
         </section>
     </div>
 
-    <!-- DEPLOY PANEL -->
     <div class="deploy-panel card">
         <h3>Deploy to Emulator</h3>
 
         <div class="deploy-tabs">
-            <button class="btn @(_deployMode == "proxy" ? "btn-primary" : "btn-ghost") btn-sm"
-                    @onclick="() => _deployMode = &quot;proxy&quot;">Proxy / Shared Flow</button>
-            <button class="btn @(_deployMode == "full" ? "btn-primary" : "btn-ghost") btn-sm"
-                    @onclick="() => _deployMode = &quot;full&quot;">Workspace completo</button>
+            <button class="@TabClass(DeployModeProxy)" @onclick="SetDeployModeProxy">Proxy / Shared Flow</button>
+            <button class="@TabClass(DeployModeFull)" @onclick="SetDeployModeFull">Workspace completo</button>
         </div>
 
-        @if (_deployMode == "proxy")
+        @if (_deployMode == DeployModeProxy)
         {
             <div class="deploy-form">
                 <label>Proxy / Shared Flow name
@@ -105,31 +100,40 @@ else
 
         @if (!string.IsNullOrEmpty(_deployMessage))
         {
-            <p class="@(_deployError ? "error-text" : "success-text")">@_deployMessage</p>
+            <p class="@DeployMessageClass">@_deployMessage</p>
         }
     </div>
 }
 
 @code {
+    private const string DeployModeProxy = "proxy";
+    private const string DeployModeFull  = "full";
+
     [Parameter] public string WorkspaceName { get; set; } = string.Empty;
 
     private ApigeeWorkspace? _workspace;
-    private WorkspaceItem? _tree;
-    private string? _selectedFile;
-    private string _fileContent = string.Empty;
+    private WorkspaceItem?   _tree;
+    private string?          _selectedFile;
+    private string           _fileContent    = string.Empty;
+    private string           _deployTarget   = string.Empty;
+    private string           _deployEnv      = "local";
+    private string           _deployMode     = DeployModeProxy;
+    private bool             _deploying;
+    private string           _deployMessage  = string.Empty;
+    private bool             _deployError;
+    private bool             _showNewItem;
+    private bool             _newItemIsDir;
+    private string           _newItemName    = string.Empty;
+    private string           _newItemError   = string.Empty;
 
-    private string _deployTarget = string.Empty;
-    private string _deployEnv = "local";
-    private string _deployMode = "proxy";
-    private bool _deploying;
-    private string _deployMessage = string.Empty;
-    private bool _deployError;
+    // Helpers para evitar string literals em atributos Razor
+    private string NewItemPlaceholder => _newItemIsDir ? "folder-name" : "file.xml";
+    private string DeployMessageClass  => _deployError ? "error-text" : "success-text";
+    private string TabClass(string mode) =>
+        _deployMode == mode ? "btn btn-primary btn-sm" : "btn btn-ghost btn-sm";
 
-    // New item
-    private bool _showNewItem;
-    private bool _newItemIsDir;
-    private string _newItemName = string.Empty;
-    private string _newItemError = string.Empty;
+    private void SetDeployModeProxy() => _deployMode = DeployModeProxy;
+    private void SetDeployModeFull()  => _deployMode = DeployModeFull;
 
     protected override async Task OnInitializedAsync()
     {
@@ -141,27 +145,26 @@ else
     private async Task LoadFile(string path)
     {
         _selectedFile = path;
-        _fileContent = await WorkspaceRepo.ReadFileAsync(path);
+        _fileContent  = await WorkspaceRepo.ReadFileAsync(path);
     }
 
     private async Task SaveFile()
     {
         if (_selectedFile is null) return;
         await WorkspaceRepo.SaveFileAsync(_selectedFile, _fileContent);
-        _deployMessage = string.Empty;
     }
 
     private void OpenNewItemDialog(bool isDir)
     {
-        _newItemIsDir = isDir;
-        _newItemName = string.Empty;
-        _newItemError = string.Empty;
-        _showNewItem = true;
+        _newItemIsDir  = isDir;
+        _newItemName   = string.Empty;
+        _newItemError  = string.Empty;
+        _showNewItem   = true;
     }
 
     private async Task HandleNewItemKey(KeyboardEventArgs e)
     {
-        if (e.Key == "Enter") await ConfirmNewItem();
+        if (e.Key == "Enter")  await ConfirmNewItem();
         if (e.Key == "Escape") _showNewItem = false;
     }
 
@@ -173,10 +176,8 @@ else
             _newItemError = "Informe um nome.";
             return;
         }
-
         if (_workspace is null) return;
 
-        // Cria relativo à raiz do workspace (ou ao arquivo selecionado se houver)
         var basePath = _selectedFile is not null
             ? Path.GetDirectoryName(_selectedFile)!
             : _workspace.RootPath;
@@ -192,9 +193,7 @@ else
                 await WorkspaceRepo.CreateFileAsync(fullPath);
                 await LoadFile(fullPath);
             }
-
             _showNewItem = false;
-            // Recarrega árvore
             _tree = await WorkspaceRepo.LoadTreeAsync(_workspace);
         }
         catch (Exception ex)
@@ -206,22 +205,20 @@ else
     private async Task DeployProxy()
     {
         if (_workspace is null) return;
-        await RunDeploy(async () =>
-            await DeployUseCase.ExecuteAsync(_workspace, _deployTarget, _deployEnv));
+        await RunDeploy(() => DeployUseCase.ExecuteAsync(_workspace, _deployTarget, _deployEnv));
     }
 
     private async Task DeployFull()
     {
         if (_workspace is null) return;
-        await RunDeploy(async () =>
-            await DeployUseCase.ExecuteFullAsync(_workspace, _deployEnv));
+        await RunDeploy(() => DeployUseCase.ExecuteFullAsync(_workspace, _deployEnv));
     }
 
     private async Task RunDeploy(Func<Task> action)
     {
-        _deploying = true;
+        _deploying     = true;
         _deployMessage = string.Empty;
-        _deployError = false;
+        _deployError   = false;
         try
         {
             await action();
@@ -230,7 +227,7 @@ else
         catch (Exception ex)
         {
             _deployMessage = $"Deploy falhou: {ex.Message}";
-            _deployError = true;
+            _deployError   = true;
         }
         finally { _deploying = false; }
     }
