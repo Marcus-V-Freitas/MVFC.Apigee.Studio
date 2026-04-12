@@ -3,71 +3,113 @@
 @inject IApigeeEmulatorClient EmulatorClient
 @rendermode RenderMode.InteractiveServer
 
-<h1>Emulator Status</h1>
-
-<div class="card emulator-status">
-    <div class="status-row">
-        <span>Connection status:</span>
-        @if (_checking)
-        {
-            <span class="badge badge-info">Checking...</span>
-        }
-        else
-        {
-            <span class="badge @(_alive ? "badge-success" : "badge-error")">@(_alive ? "Running" : "Offline")</span>
-        }
-        <button class="btn btn-ghost btn-sm" @onclick="Check">Refresh</button>
-    </div>
-    <p class="help-text">Ensure the Apigee Emulator Docker container is running on the configured base URL.</p>
+<div class="page-header">
+    <h1>Emulator</h1>
+    <p class="page-subtitle">Gerencie o container do Apigee Emulator e realize deploys rápidos.</p>
 </div>
 
+<!-- STATUS -->
+<div class="card emulator-status">
+    <div class="status-row">
+        <div class="status-label">
+            <span class="status-dot @(_alive ? "dot-green" : "dot-red")"></span>
+            <span>@(_checking ? "Verificando..." : (_alive ? "Emulator online" : "Emulator offline"))</span>
+        </div>
+        <button class="btn btn-ghost btn-sm" @onclick="Check" disabled="@_checking">↻ Refresh</button>
+    </div>
+
+    @if (_statusError is not null)
+    {
+        <p class="help-text error-text">@_statusError</p>
+    }
+    else
+    {
+        <p class="help-text">
+            Base URL: <code>@_baseUrl</code> &mdash;
+            certifique-se de que o container Docker está rodando.
+        </p>
+    }
+</div>
+
+<!-- QUICK DEPLOY -->
 <div class="card">
     <h3>Quick Deploy</h3>
-    <p>Use the Workspace detail page to deploy specific proxies. Or specify paths manually:</p>
-    <label>ZIP file path
-        <input class="input" @bind="_zipPath" placeholder="C:/tmp/my-proxy.zip" />
-    </label>
-    <label>Environment
-        <input class="input" @bind="_env" placeholder="local" />
-    </label>
-    <button class="btn btn-primary" @onclick="QuickDeploy" disabled="@_deploying">@(_deploying ? "Deploying..." : "Deploy ZIP")</button>
+    <p class="help-text">Informe o caminho de um ZIP e o ambiente alvo para fazer deploy direto no emulator.</p>
+
+    <div class="form-grid">
+        <label>
+            ZIP file path
+            <input class="input" @bind="_zipPath" placeholder="C:/tmp/my-proxy.zip" />
+        </label>
+        <label>
+            Environment
+            <input class="input" @bind="_env" placeholder="local" />
+        </label>
+    </div>
+
+    <button class="btn btn-primary" @onclick="QuickDeploy" disabled="@(_deploying || !_alive)">
+        @(_deploying ? "Deploying..." : "Deploy ZIP")
+    </button>
+
     @if (!string.IsNullOrEmpty(_message))
     {
-        <p class="@(_isError ? "error-text" : "success-text")">@_message</p>
+        <p class="mt-2 @(_isError ? "error-text" : "success-text")">@_message</p>
     }
 </div>
 
 @code {
-    private bool _alive;
-    private bool _checking;
-    private string _zipPath = string.Empty;
-    private string _env = "local";
-    private bool _deploying;
-    private string _message = string.Empty;
-    private bool _isError;
+    private bool   _alive;
+    private bool   _checking;
+    private string _baseUrl     = string.Empty;
+    private string? _statusError;
+    private string _zipPath     = string.Empty;
+    private string _env         = "local";
+    private bool   _deploying;
+    private string _message     = string.Empty;
+    private bool   _isError;
 
-    protected override async Task OnInitializedAsync() => await Check();
+    [Inject] private IConfiguration? Config { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        _baseUrl = Config?["ApigeeEmulator:BaseUrl"] ?? "http://localhost:8080";
+        await Check();
+    }
 
     private async Task Check()
     {
-        _checking = true;
-        _alive = await EmulatorClient.IsAliveAsync();
-        _checking = false;
+        _checking    = true;
+        _statusError = null;
+        try
+        {
+            _alive = await EmulatorClient.IsAliveAsync();
+        }
+        catch (Exception ex)
+        {
+            _alive       = false;
+            _statusError = $"Não foi possível conectar: {ex.Message}";
+        }
+        finally
+        {
+            _checking = false;
+        }
     }
 
     private async Task QuickDeploy()
     {
+        if (string.IsNullOrWhiteSpace(_zipPath)) { _message = "Informe o caminho do ZIP."; _isError = true; return; }
+
         _deploying = true;
-        _message = string.Empty;
-        _isError = false;
+        _message   = string.Empty;
+        _isError   = false;
         try
         {
             await EmulatorClient.DeployBundleAsync(_env, _zipPath);
-            _message = "Deploy successful!";
+            _message = "✔ Deploy realizado com sucesso!";
         }
         catch (Exception ex)
         {
-            _message = $"Error: {ex.Message}";
+            _message = $"✘ Erro: {ex.Message}";
             _isError = true;
         }
         finally { _deploying = false; }

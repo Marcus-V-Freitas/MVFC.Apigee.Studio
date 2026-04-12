@@ -1,0 +1,141 @@
+/* ══════════════════════════════════════════════════
+   Quick-Add Drawer
+   ══════════════════════════════════════════════════ */
+
+.modal-drawer {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-lg);
+    width: min(860px, 95vw);
+    max-height: 80vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.modal-path {
+    font-size: var(--text-xs);
+    color: var(--color-text-muted);
+    font-family: monospace;
+    margin-top: var(--space-1);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 480px;
+}
+
+/* body do drawer: dois painéis lado a lado */
+.drawer-body {
+    display: grid;
+    grid-template-columns: 240px 1fr;
+    flex: 1;
+    overflow: hidden;
+}
+
+.drawer-body--single {
+    grid-template-columns: 1fr;
+    padding: var(--space-6);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+}
+
+/* painel esquerdo — lista de templates */
+.drawer-list {
+    border-right: 1px solid var(--color-border);
+    overflow-y: auto;
+    padding: var(--space-2) 0;
+}
+
+.drawer-group {
+    margin-bottom: var(--space-2);
+}
+
+.drawer-group-label {
+    display: block;
+    padding: var(--space-2) var(--space-4);
+    font-size: var(--text-xs);
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--color-text-faint);
+    user-select: none;
+}
+
+.drawer-item {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    text-align: left;
+    padding: var(--space-2) var(--space-4);
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    border-radius: 0;
+    transition: background var(--transition-interactive);
+    gap: var(--space-1);
+}
+
+.drawer-item:hover {
+    background: var(--color-surface-offset);
+}
+
+.drawer-item--active {
+    background: var(--color-primary-highlight) !important;
+}
+
+.drawer-item-name {
+    font-size: var(--text-sm);
+    font-weight: 500;
+    color: var(--color-text);
+}
+
+.drawer-item-desc {
+    font-size: var(--text-xs);
+    color: var(--color-text-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* painel direito — formulário de parâmetros */
+.drawer-form {
+    overflow-y: auto;
+    padding: var(--space-6);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+}
+
+.drawer-form h4 {
+    font-size: var(--text-lg);
+    font-weight: 600;
+    color: var(--color-text);
+}
+
+.drawer-empty {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    color: var(--color-text-faint);
+    font-size: var(--text-sm);
+}
+
+.param-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+}
+
+.param-list label {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+    font-size: var(--text-sm);
+    color: var(--color-text-muted);
+    font-weight: 500;
+}
+
+.mt-2 { margin-top: var(--space-2); }
