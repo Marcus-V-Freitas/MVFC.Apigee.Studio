@@ -7,12 +7,21 @@ public interface IWorkspaceRepository
     IReadOnlyList<ApigeeWorkspace> ListAll();
     ApigeeWorkspace Create(string name, string? customPath, IReadOnlyList<string>? initialProxies = null);
     void Delete(ApigeeWorkspace workspace);
+
     Task<WorkspaceItem> LoadTreeAsync(ApigeeWorkspace workspace, CancellationToken ct = default);
+
     Task<string> ReadFileAsync(string absolutePath, CancellationToken ct = default);
     Task SaveFileAsync(string absolutePath, string content, CancellationToken ct = default);
     Task CreateFileAsync(string absolutePath, CancellationToken ct = default);
     Task CreateDirectoryAsync(string absolutePath, CancellationToken ct = default);
+
+    /// <summary>
+    /// Remove um arquivo do workspace, se existir.
+    /// </summary>
+    Task DeleteFileAsync(string absolutePath, CancellationToken ct = default);
+
     Task<string> BuildBundleZipAsync(ApigeeWorkspace workspace, string proxyOrFlowName, CancellationToken ct = default);
     Task<string> BuildWorkspaceZipAsync(ApigeeWorkspace workspace, CancellationToken ct = default);
+
     IReadOnlyList<string> ListApiProxies(ApigeeWorkspace workspace);
 }
