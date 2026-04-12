@@ -77,6 +77,13 @@ public sealed class WorkspaceFileSystemRepository(IConfiguration configuration) 
         return Task.CompletedTask;
     }
 
+    public Task DeleteFileAsync(string absolutePath, CancellationToken ct = default)
+    {
+        if (File.Exists(absolutePath))
+            File.Delete(absolutePath);
+        return Task.CompletedTask;
+    }
+
     public Task<string> BuildBundleZipAsync(
         ApigeeWorkspace workspace, string proxyOrFlowName, CancellationToken ct = default)
     {
