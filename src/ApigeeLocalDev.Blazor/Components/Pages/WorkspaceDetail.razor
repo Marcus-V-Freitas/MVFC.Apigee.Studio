@@ -58,7 +58,7 @@ else
             @if (_selectedFile is not null)
             {
                 <div class="editor-header">
-                    <span class="editor-filename">@Path.GetFileName(_selectedFile)</span>
+                    <span class="editor-filename">@System.IO.Path.GetFileName(_selectedFile)</span>
                     <button class="btn btn-primary btn-sm" @onclick="SaveFile">💾 Save</button>
                 </div>
                 <textarea class="code-editor" @bind="_fileContent" @bind:event="oninput"></textarea>
@@ -70,15 +70,12 @@ else
         </section>
     </div>
 
-    <!-- ═══════════════════════════════════════════════════════════
-         MODAL QUICK ADD — drawer dois painéis
-         ══════════════════════════════════════════════════════════ -->
+    <!-- MODAL QUICK ADD -->
     @if (_quickAddOpen)
     {
         <div class="modal-backdrop" @onclick="CloseQuickAdd">
             <div class="modal-drawer" @onclick:stopPropagation>
 
-                <!-- cabeçalho -->
                 <div class="modal-header">
                     <div>
                         <h3>Adicionar em <code>@_quickAddCategory</code></h3>
@@ -89,10 +86,7 @@ else
 
                 @if (_quickAddCategory == "policies")
                 {
-                    <!-- ── DOIS PAINÉIS: lista | formulário ── -->
                     <div class="drawer-body">
-
-                        <!-- painel esquerdo: lista agrupada por categoria -->
                         <div class="drawer-list">
                             @foreach (var group in _allTemplates.GroupBy(t => t.Category))
                             {
@@ -100,7 +94,8 @@ else
                                     <span class="drawer-group-label">@group.Key</span>
                                     @foreach (var t in group)
                                     {
-                                        <button class="drawer-item @(t == _quickTemplate ? "drawer-item--active" : "")"
+                                        var isActive = t == _quickTemplate;
+                                        <button class="@(isActive ? "drawer-item drawer-item--active" : "drawer-item")"
                                                 @onclick="() => SelectQuickTemplate(t)">
                                             <span class="drawer-item-name">@t.Name</span>
                                             @if (!string.IsNullOrEmpty(t.Description))
@@ -113,7 +108,6 @@ else
                             }
                         </div>
 
-                        <!-- painel direito: parâmetros -->
                         <div class="drawer-form">
                             @if (_quickTemplate is null)
                             {
@@ -155,16 +149,16 @@ else
                 }
                 else
                 {
-                    <!-- pasta genérica / apiproxies -->
+                    var labelText       = _quickAddCategory == "apiproxies" ? "Nome da API (proxy)" : "Nome do arquivo";
+                    var placeholderText = _quickAddCategory == "apiproxies" ? "minha-api" : "meu-recurso.xml";
+                    var btnText         = _quickAddCategory == "apiproxies" ? "Criar API" : "Criar Arquivo";
+
                     <div class="drawer-body drawer-body--single">
                         <label>
-                            @(_quickAddCategory == "apiproxies" ? "Nome da API (proxy)" : "Nome do arquivo")
-                            <input class="input" @bind="_quickFileName"
-                                   placeholder="@(_quickAddCategory == "apiproxies" ? "minha-api" : "meu-recurso.xml")" />
+                            @labelText
+                            <input class="input" @bind="_quickFileName" placeholder="@placeholderText" />
                         </label>
-                        <button class="btn btn-primary" @onclick="ConfirmQuickFile">
-                            @(_quickAddCategory == "apiproxies" ? "Criar API" : "Criar Arquivo")
-                        </button>
+                        <button class="btn btn-primary" @onclick="ConfirmQuickFile">@btnText</button>
                         @if (!string.IsNullOrEmpty(_quickMessage))
                         {
                             <p class="mt-2 @QuickMessageClass">@_quickMessage</p>
@@ -298,9 +292,9 @@ else
         if (_workspace is null) return;
 
         var basePath = _selectedFile is not null
-            ? Path.GetDirectoryName(_selectedFile)!
+            ? System.IO.Path.GetDirectoryName(_selectedFile)!
             : _workspace.RootPath;
-        var fullPath = Path.Combine(basePath, _newItemName);
+        var fullPath = System.IO.Path.Combine(basePath, _newItemName);
         try
         {
             if (_newItemIsDir) await WorkspaceRepo.CreateDirectoryAsync(fullPath);
@@ -311,7 +305,6 @@ else
         catch (Exception ex) { _newItemError = ex.Message; }
     }
 
-    // ── quick-add ──────────────────────────────────────────────────────────────
     private void OpenQuickAddModal((string Path, string Category) args)
     {
         _quickAddPath     = args.Path;
@@ -344,13 +337,12 @@ else
         _quickError      = false;
         try
         {
-            // _quickAddPath já é o caminho absoluto da pasta policies — usa direto
             var path = await GeneratePolicy.ExecuteAtPathAsync(
                 _quickAddPath,
                 _quickTemplate.Name,
                 _quickParams);
 
-            _quickMessage = $"✔ Criado: {Path.GetFileName(path)}";
+            _quickMessage = $"✔ Criado: {System.IO.Path.GetFileName(path)}";
             _tree = await WorkspaceRepo.LoadTreeAsync(_workspace);
         }
         catch (Exception ex) { _quickMessage = $"✘ {ex.Message}"; _quickError = true; }
@@ -370,7 +362,7 @@ else
             }
             else
             {
-                var fullPath = Path.Combine(_quickAddPath, _quickFileName);
+                var fullPath = System.IO.Path.Combine(_quickAddPath, _quickFileName);
                 await WorkspaceRepo.CreateFileAsync(fullPath);
                 await LoadFile(fullPath);
                 _quickAddOpen = false;
@@ -388,12 +380,12 @@ else
         if (string.IsNullOrWhiteSpace(name))
             throw new InvalidOperationException("Informe o nome da API.");
 
-        var proxyRoot    = Path.Combine(_quickAddPath, name);
-        var apiproxyDir  = Path.Combine(proxyRoot, "apiproxy");
-        var policiesDir  = Path.Combine(apiproxyDir, "policies");
-        var proxiesDir   = Path.Combine(apiproxyDir, "proxies");
-        var resourcesDir = Path.Combine(apiproxyDir, "resources");
-        var targetsDir   = Path.Combine(apiproxyDir, "targets");
+        var proxyRoot    = System.IO.Path.Combine(_quickAddPath, name);
+        var apiproxyDir  = System.IO.Path.Combine(proxyRoot, "apiproxy");
+        var policiesDir  = System.IO.Path.Combine(apiproxyDir, "policies");
+        var proxiesDir   = System.IO.Path.Combine(apiproxyDir, "proxies");
+        var resourcesDir = System.IO.Path.Combine(apiproxyDir, "resources");
+        var targetsDir   = System.IO.Path.Combine(apiproxyDir, "targets");
 
         await WorkspaceRepo.CreateDirectoryAsync(apiproxyDir);
         await WorkspaceRepo.CreateDirectoryAsync(policiesDir);
@@ -401,12 +393,8 @@ else
         await WorkspaceRepo.CreateDirectoryAsync(resourcesDir);
         await WorkspaceRepo.CreateDirectoryAsync(targetsDir);
 
-        var proxyXmlPath = Path.Combine(apiproxyDir, "proxy.xml");
-        var xml = $"""<APIProxy name=\"{name}\">
-  <Description>{name}</Description>
-  <Revision>1</Revision>
-</APIProxy>
-""";
+        var proxyXmlPath = System.IO.Path.Combine(apiproxyDir, "proxy.xml");
+        var xml = $"<APIProxy name=\"{name}\">\n  <Description>{name}</Description>\n  <Revision>1</Revision>\n</APIProxy>\n";
         await WorkspaceRepo.SaveFileAsync(proxyXmlPath, xml);
 
         await LoadFile(proxyXmlPath);
@@ -414,7 +402,6 @@ else
         _tree = await WorkspaceRepo.LoadTreeAsync(_workspace);
     }
 
-    // ── deploy ─────────────────────────────────────────────────────────────────
     private async Task DeployProxy()
     {
         if (_workspace is null) return;
