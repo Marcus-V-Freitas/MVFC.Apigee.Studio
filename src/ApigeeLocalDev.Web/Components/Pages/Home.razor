@@ -1,0 +1,41 @@
+﻿@page "/"
+@rendermode InteractiveServer
+
+@inject IWorkspaceService WorkspaceService
+
+<PageTitle>Apigee Local Dev — Workspaces</PageTitle>
+
+<h1>Apigee Local Dev</h1>
+<h2>Workspaces</h2>
+
+@if (_loading)
+{
+    <p><em>Loading…</em></p>
+}
+else if (_workspaces.Count == 0)
+{
+    <p>No workspaces found. Check that <code>Workspaces:WorkspacesRoot</code> is configured and contains at least one subfolder.</p>
+}
+else
+{
+    <ul>
+        @foreach (var ws in _workspaces)
+        {
+            <li>
+                <a href="/workspace/@Uri.EscapeDataString(ws.Name)">@ws.Name</a>
+            </li>
+        }
+    </ul>
+}
+
+@code {
+    private bool _loading = true;
+    private IReadOnlyList<Workspace> _workspaces = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        _workspaces = await WorkspaceService.ListWorkspacesAsync();
+        _loading = false;
+    }
+}
+

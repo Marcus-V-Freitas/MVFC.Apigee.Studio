@@ -1,0 +1,93 @@
+@page "/workspace/{WorkspaceName}"
+@rendermode InteractiveServer
+
+@inject IWorkspaceService WorkspaceService
+
+<PageTitle>Workspace — @WorkspaceName</PageTitle>
+
+<p><a href="/">← Back to Workspaces</a></p>
+<h2>Workspace: @WorkspaceName</h2>
+
+@if (_loading)
+{
+    <p><em>Loading…</em></p>
+}
+else if (_detail is null)
+{
+    <p class="alert">Workspace not found.</p>
+}
+else
+{
+    <section>
+        <h3>API Proxies</h3>
+        @if (_detail.ApiProxies.Count == 0)
+        {
+            <p><em>No apiproxies folder or empty.</em></p>
+        }
+        else
+        {
+            <ul>@foreach (var p in _detail.ApiProxies) { <li>@p</li> }</ul>
+        }
+    </section>
+
+    <section>
+        <h3>Shared Flows</h3>
+        @if (_detail.SharedFlows.Count == 0)
+        {
+            <p><em>No sharedflows folder or empty.</em></p>
+        }
+        else
+        {
+            <ul>@foreach (var sf in _detail.SharedFlows) { <li>@sf</li> }</ul>
+        }
+    </section>
+
+    <section>
+        <h3>Environments</h3>
+        @if (_detail.Environments.Count == 0)
+        {
+            <p><em>No environments folder or empty.</em></p>
+        }
+        else
+        {
+            <ul>@foreach (var env in _detail.Environments) { <li>@env</li> }</ul>
+        }
+    </section>
+
+    <section>
+        <h3>Editable Files</h3>
+        @if (_detail.EditableFiles.Count == 0)
+        {
+            <p><em>No XML/JSON/YAML files found.</em></p>
+        }
+        else
+        {
+            <ul>
+                @foreach (var file in _detail.EditableFiles)
+                {
+                    <li>
+                        <a href="/workspace/@Uri.EscapeDataString(WorkspaceName)/file/@Uri.EscapeDataString(file)">@file</a>
+                    </li>
+                }
+            </ul>
+        }
+    </section>
+
+    <section>
+        <h3>Deploy</h3>
+        <a href="/workspace/@Uri.EscapeDataString(WorkspaceName)/deploy">Deploy to Emulator →</a>
+    </section>
+}
+
+@code {
+    [Parameter] public string WorkspaceName { get; set; } = string.Empty;
+
+    private bool _loading = true;
+    private WorkspaceDetail? _detail;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _detail = await WorkspaceService.GetWorkspaceDetailAsync(WorkspaceName);
+        _loading = false;
+    }
+}

@@ -1,0 +1,75 @@
+@page "/workspace/{WorkspaceName}/deploy"
+@rendermode InteractiveServer
+
+@inject IApigeeEmulatorClient EmulatorClient
+@inject IConfiguration Configuration
+
+<PageTitle>Deploy — @WorkspaceName</PageTitle>
+
+<p><a href="/workspace/@Uri.EscapeDataString(WorkspaceName)">← Back to @WorkspaceName</a></p>
+<h2>Deploy to Apigee Emulator</h2>
+
+<div>
+    <label>
+        Environment:
+        <input type="text" @bind="_environment" style="margin-left:.5rem;" />
+    </label>
+</div>
+<br />
+<div>
+    <label>
+        ZIP path:
+        <input type="text" @bind="_zipPath" style="margin-left:.5rem;width:30rem;" />
+    </label>
+</div>
+<br />
+<button @onclick="DeployAsync" disabled="@_deploying">@(_deploying ? "Deploying…" : "Deploy")</button>
+
+@if (_message is not null)
+{
+    <p class="@_messageClass" style="margin-top:1rem;">@_message</p>
+}
+
+@code {
+    [Parameter] public string WorkspaceName { get; set; } = string.Empty;
+
+    private string _environment = "test";
+    private string _zipPath = string.Empty;
+    private bool _deploying;
+    private string? _message;
+    private string _messageClass = "success";
+
+    protected override void OnInitialized()
+    {
+        _zipPath = Configuration["TestBundles:SampleZipPath"] ?? string.Empty;
+    }
+
+    private async Task DeployAsync()
+    {
+        _deploying = true;
+        _message = null;
+        try
+        {
+            var success = await EmulatorClient.DeployAsync(_environment, _zipPath);
+            if (success)
+            {
+                _message = $"✅ Deployed successfully to environment '{_environment}'.";
+                _messageClass = "success";
+            }
+            else
+            {
+                _message = $"❌ Deployment failed for environment '{_environment}'. Check logs for details.";
+                _messageClass = "error";
+            }
+        }
+        catch (Exception ex)
+        {
+            _message = $"❌ Error: {ex.Message}";
+            _messageClass = "error";
+        }
+        finally
+        {
+            _deploying = false;
+        }
+    }
+}

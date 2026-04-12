@@ -1,0 +1,71 @@
+@page "/workspace/{WorkspaceName}/file/{*FilePath}"
+@rendermode InteractiveServer
+
+@inject IFileService FileService
+
+<PageTitle>Edit — @FilePath</PageTitle>
+
+<p><a href="/workspace/@Uri.EscapeDataString(WorkspaceName)">← Back to @WorkspaceName</a></p>
+<h2>File: @FilePath</h2>
+
+@if (_loading)
+{
+    <p><em>Loading…</em></p>
+}
+else if (_file is null)
+{
+    <p class="alert">File not found or not editable.</p>
+}
+else
+{
+    <div>
+        <textarea rows="30" style="width:100%;font-family:monospace;" @bind="_file.Content"></textarea>
+    </div>
+    <br />
+    <button @onclick="SaveAsync" disabled="@_saving">@(_saving ? "Saving…" : "Save")</button>
+
+    @if (_message is not null)
+    {
+        <p class="@_messageClass">@_message</p>
+    }
+}
+
+@code {
+    [Parameter] public string WorkspaceName { get; set; } = string.Empty;
+    [Parameter] public string FilePath { get; set; } = string.Empty;
+
+    private bool _loading = true;
+    private bool _saving;
+    private TextFile? _file;
+    private string? _message;
+    private string _messageClass = "success";
+
+    protected override async Task OnInitializedAsync()
+    {
+        _file = await FileService.ReadFileAsync(WorkspaceName, FilePath);
+        _loading = false;
+    }
+
+    private async Task SaveAsync()
+    {
+        if (_file is null) return;
+
+        _saving = true;
+        _message = null;
+        try
+        {
+            await FileService.SaveFileAsync(WorkspaceName, FilePath, _file.Content);
+            _message = "File saved successfully.";
+            _messageClass = "success";
+        }
+        catch (Exception ex)
+        {
+            _message = $"Error saving file: {ex.Message}";
+            _messageClass = "error";
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+}

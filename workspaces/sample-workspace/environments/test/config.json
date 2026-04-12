@@ -1,0 +1,7 @@
+{
+  "name": "test",
+  "description": "Test environment configuration",
+  "properties": {
+    "target.host": "https://httpbin.org"
+  }
+}
