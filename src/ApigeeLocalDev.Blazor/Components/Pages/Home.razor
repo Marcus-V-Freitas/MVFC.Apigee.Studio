@@ -2,6 +2,7 @@
 @using ApigeeLocalDev.Domain.Entities
 @using ApigeeLocalDev.Domain.Interfaces
 @using ApigeeLocalDev.Application.UseCases
+@using Microsoft.AspNetCore.Components.Web
 @inject IWorkspaceRepository WorkspaceRepo
 @inject CreateWorkspaceUseCase CreateWorkspace
 @rendermode RenderMode.InteractiveServer
@@ -19,12 +20,14 @@
         <label>Name
             <input class="input" @bind="_newName" placeholder="my-workspace" />
         </label>
-        <label>Path (leave blank for default)
-            <input class="input" @bind="_newPath" placeholder="optional absolute path" />
+        <label>
+            Path
+            <input class="input" @bind="_newPath" placeholder="Deixe vazio para usar WorkspacesRoot/name" />
+            <span class="help-text">Se preenchido, cria a estrutura nesta pasta exata.</span>
         </label>
         <div class="form-actions">
             <button class="btn btn-primary" @onclick="HandleCreate">Create</button>
-            <button class="btn btn-ghost" @onclick="() => _showCreate = false">Cancel</button>
+            <button class="btn btn-ghost" @onclick="() => { _showCreate = false; _createError = string.Empty; }">Cancel</button>
         </div>
         @if (!string.IsNullOrEmpty(_createError))
         {
@@ -36,7 +39,7 @@
 @if (_workspaces.Count == 0)
 {
     <div class="empty-state">
-        <p>No workspaces found. Create one to get started.</p>
+        <p>Nenhum workspace encontrado. Crie um para começar.</p>
     </div>
 }
 else
@@ -70,7 +73,8 @@ else
         _createError = string.Empty;
         try
         {
-            var ws = CreateWorkspace.Execute(_newName, _newPath);
+            var customPath = string.IsNullOrWhiteSpace(_newPath) ? null : _newPath;
+            var ws = CreateWorkspace.Execute(_newName, customPath);
             _workspaces.Add(ws);
             _showCreate = false;
             _newName = string.Empty;

@@ -5,14 +5,11 @@ namespace ApigeeLocalDev.Application.UseCases;
 
 public sealed class CreateWorkspaceUseCase(IWorkspaceRepository repository)
 {
-    public ApigeeWorkspace Execute(string name, string path)
+    public ApigeeWorkspace Execute(string name, string? customPath)
     {
         if (string.IsNullOrWhiteSpace(name))
             throw new ArgumentException("Workspace name cannot be empty.", nameof(name));
 
-        if (!Directory.Exists(path))
-            Directory.CreateDirectory(path);
-
-        return repository.Create(name, path);
+        return repository.Create(name, customPath);
     }
 }

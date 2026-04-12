@@ -21,9 +21,14 @@ public sealed class WorkspaceFileSystemRepository(IConfiguration configuration) 
             .ToList();
     }
 
-    public ApigeeWorkspace Create(string name, string path)
+    // Se customPath for preenchido, usa ele como raiz do workspace.
+    // Caso contrário, cria dentro de WorkspacesRoot/name.
+    public ApigeeWorkspace Create(string name, string? customPath)
     {
-        var fullPath = Path.Combine(WorkspacesRoot, name);
+        var fullPath = !string.IsNullOrWhiteSpace(customPath)
+            ? customPath.Trim()
+            : Path.Combine(WorkspacesRoot, name);
+
         Directory.CreateDirectory(Path.Combine(fullPath, "apiproxies"));
         Directory.CreateDirectory(Path.Combine(fullPath, "sharedflows"));
         Directory.CreateDirectory(Path.Combine(fullPath, "environments"));
@@ -42,6 +47,20 @@ public sealed class WorkspaceFileSystemRepository(IConfiguration configuration) 
     public Task SaveFileAsync(string absolutePath, string content, CancellationToken ct = default)
         => File.WriteAllTextAsync(absolutePath, content, ct);
 
+    public async Task CreateFileAsync(string absolutePath, CancellationToken ct = default)
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(absolutePath)!);
+        if (!File.Exists(absolutePath))
+            await File.WriteAllTextAsync(absolutePath, string.Empty, ct);
+    }
+
+    public Task CreateDirectoryAsync(string absolutePath, CancellationToken ct = default)
+    {
+        Directory.CreateDirectory(absolutePath);
+        return Task.CompletedTask;
+    }
+
+    // Zipa um proxy ou shared flow específico
     public Task<string> BuildBundleZipAsync(ApigeeWorkspace workspace, string proxyOrFlowName, CancellationToken ct = default)
     {
         var sourcePath = Path.Combine(workspace.RootPath, "apiproxies", proxyOrFlowName);
@@ -56,22 +75,26 @@ public sealed class WorkspaceFileSystemRepository(IConfiguration configuration) 
         return Task.FromResult(zipPath);
     }
 
+    // Zipa o workspace inteiro (todos os proxies, sharedflows e environments)
+    public Task<string> BuildWorkspaceZipAsync(ApigeeWorkspace workspace, CancellationToken ct = default)
+    {
+        var zipPath = Path.Combine(Path.GetTempPath(), $"{workspace.Name}_full_{DateTime.UtcNow:yyyyMMddHHmmss}.zip");
+        ZipFile.CreateFromDirectory(workspace.RootPath, zipPath);
+        return Task.FromResult(zipPath);
+    }
+
     private static WorkspaceItem BuildItem(string path, string rootPath)
     {
         var relativePath = Path.GetRelativePath(rootPath, path);
         var name = Path.GetFileName(path);
 
         if (File.Exists(path))
-        {
-            var ext = Path.GetExtension(path).ToLowerInvariant();
-            var type = ext is ".xml" or ".json" or ".yaml" or ".yml" ? WorkspaceItemType.File : WorkspaceItemType.File;
-            return new WorkspaceItem(name, path, relativePath, type, []);
-        }
+            return new WorkspaceItem(name, path, relativePath, WorkspaceItemType.File, []);
 
         var dirName = Path.GetFileName(path).ToLowerInvariant();
         var itemType = dirName switch
         {
-            "apiproxies" => WorkspaceItemType.ApiProxy,
+            "apiproxies"  => WorkspaceItemType.ApiProxy,
             "sharedflows" => WorkspaceItemType.SharedFlow,
             "environments" => WorkspaceItemType.Environment,
             _ => WorkspaceItemType.Directory

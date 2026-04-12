@@ -1,8 +1,8 @@
 @page "/workspace/{WorkspaceName}"
-@using ApigeeLocalDev.Blazor.Components.Shared
 @using ApigeeLocalDev.Domain.Entities
 @using ApigeeLocalDev.Domain.Interfaces
 @using ApigeeLocalDev.Application.UseCases
+@using Microsoft.AspNetCore.Components.Web
 @inject IWorkspaceRepository WorkspaceRepo
 @inject DeployToEmulatorUseCase DeployUseCase
 @rendermode RenderMode.InteractiveServer
@@ -11,45 +11,98 @@
 
 @if (_workspace is null)
 {
-    <p class="error-text">Workspace not found.</p>
+    <p class="error-text">Workspace não encontrado.</p>
 }
 else
 {
     <div class="workspace-detail">
+        <!-- ÁRVORE DE ARQUIVOS -->
         <aside class="file-tree">
-            <h3>Files</h3>
+            <div class="file-tree-header">
+                <h3>Files</h3>
+                <div class="file-tree-actions">
+                    <button class="btn btn-ghost btn-sm" title="New File" @onclick="() => OpenNewItemDialog(false)">+ File</button>
+                    <button class="btn btn-ghost btn-sm" title="New Folder" @onclick="() => OpenNewItemDialog(true)">+ Folder</button>
+                </div>
+            </div>
+
+            @if (_showNewItem)
+            {
+                <div class="new-item-form">
+                    <input class="input" @bind="_newItemName"
+                           placeholder="@(_newItemIsDir ? "folder-name" : "file.xml")"
+                           @onkeydown="HandleNewItemKey" />
+                    <div class="form-actions">
+                        <button class="btn btn-primary btn-sm" @onclick="ConfirmNewItem">OK</button>
+                        <button class="btn btn-ghost btn-sm" @onclick="() => _showNewItem = false">✕</button>
+                    </div>
+                    @if (!string.IsNullOrEmpty(_newItemError))
+                    {
+                        <p class="error-text">@_newItemError</p>
+                    }
+                </div>
+            }
+
             @if (_tree is not null)
             {
                 <TreeNode Item="_tree" OnFileSelected="LoadFile" />
             }
         </aside>
+
+        <!-- EDITOR -->
         <section class="file-editor">
             @if (_selectedFile is not null)
             {
                 <div class="editor-header">
-                    <span class="editor-filename">@_selectedFile</span>
-                    <button class="btn btn-primary btn-sm" @onclick="SaveFile">Save</button>
+                    <span class="editor-filename">@Path.GetFileName(_selectedFile)</span>
+                    <button class="btn btn-primary btn-sm" @onclick="SaveFile">💾 Save</button>
                 </div>
-                <textarea class="code-editor" @bind="_fileContent"></textarea>
+                <textarea class="code-editor" @bind="_fileContent" @bind:event="oninput"></textarea>
             }
             else
             {
-                <div class="empty-state">Select a file to edit.</div>
+                <div class="empty-state">Selecione ou crie um arquivo para editar.</div>
             }
         </section>
     </div>
 
+    <!-- DEPLOY PANEL -->
     <div class="deploy-panel card">
         <h3>Deploy to Emulator</h3>
-        <div class="deploy-form">
-            <label>Proxy / Shared Flow name
-                <input class="input" @bind="_deployTarget" placeholder="my-proxy" />
-            </label>
-            <label>Environment
-                <input class="input" @bind="_deployEnv" placeholder="local" />
-            </label>
-            <button class="btn btn-primary" @onclick="Deploy" disabled="@_deploying">@(_deploying ? "Deploying..." : "Deploy")</button>
+
+        <div class="deploy-tabs">
+            <button class="btn @(_deployMode == "proxy" ? "btn-primary" : "btn-ghost") btn-sm"
+                    @onclick="() => _deployMode = &quot;proxy&quot;">Proxy / Shared Flow</button>
+            <button class="btn @(_deployMode == "full" ? "btn-primary" : "btn-ghost") btn-sm"
+                    @onclick="() => _deployMode = &quot;full&quot;">Workspace completo</button>
         </div>
+
+        @if (_deployMode == "proxy")
+        {
+            <div class="deploy-form">
+                <label>Proxy / Shared Flow name
+                    <input class="input" @bind="_deployTarget" placeholder="my-proxy" />
+                </label>
+                <label>Environment
+                    <input class="input" @bind="_deployEnv" placeholder="local" />
+                </label>
+                <button class="btn btn-primary" @onclick="DeployProxy" disabled="@_deploying">
+                    @(_deploying ? "Deploying..." : "Deploy")
+                </button>
+            </div>
+        }
+        else
+        {
+            <div class="deploy-form">
+                <label>Environment
+                    <input class="input" @bind="_deployEnv" placeholder="local" />
+                </label>
+                <button class="btn btn-primary" @onclick="DeployFull" disabled="@_deploying">
+                    @(_deploying ? "Deploying..." : "Deploy workspace completo")
+                </button>
+            </div>
+        }
+
         @if (!string.IsNullOrEmpty(_deployMessage))
         {
             <p class="@(_deployError ? "error-text" : "success-text")">@_deployMessage</p>
@@ -64,11 +117,19 @@ else
     private WorkspaceItem? _tree;
     private string? _selectedFile;
     private string _fileContent = string.Empty;
+
     private string _deployTarget = string.Empty;
     private string _deployEnv = "local";
+    private string _deployMode = "proxy";
     private bool _deploying;
     private string _deployMessage = string.Empty;
     private bool _deployError;
+
+    // New item
+    private bool _showNewItem;
+    private bool _newItemIsDir;
+    private string _newItemName = string.Empty;
+    private string _newItemError = string.Empty;
 
     protected override async Task OnInitializedAsync()
     {
@@ -87,28 +148,90 @@ else
     {
         if (_selectedFile is null) return;
         await WorkspaceRepo.SaveFileAsync(_selectedFile, _fileContent);
+        _deployMessage = string.Empty;
     }
 
-    private async Task Deploy()
+    private void OpenNewItemDialog(bool isDir)
     {
+        _newItemIsDir = isDir;
+        _newItemName = string.Empty;
+        _newItemError = string.Empty;
+        _showNewItem = true;
+    }
+
+    private async Task HandleNewItemKey(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter") await ConfirmNewItem();
+        if (e.Key == "Escape") _showNewItem = false;
+    }
+
+    private async Task ConfirmNewItem()
+    {
+        _newItemError = string.Empty;
+        if (string.IsNullOrWhiteSpace(_newItemName))
+        {
+            _newItemError = "Informe um nome.";
+            return;
+        }
+
         if (_workspace is null) return;
-        _deploying = true;
-        _deployMessage = string.Empty;
-        _deployError = false;
+
+        // Cria relativo à raiz do workspace (ou ao arquivo selecionado se houver)
+        var basePath = _selectedFile is not null
+            ? Path.GetDirectoryName(_selectedFile)!
+            : _workspace.RootPath;
+
+        var fullPath = Path.Combine(basePath, _newItemName);
 
         try
         {
-            await DeployUseCase.ExecuteAsync(_workspace, _deployTarget, _deployEnv);
-            _deployMessage = $"Bundle '{_deployTarget}' deployed to environment '{_deployEnv}' successfully!";
+            if (_newItemIsDir)
+                await WorkspaceRepo.CreateDirectoryAsync(fullPath);
+            else
+            {
+                await WorkspaceRepo.CreateFileAsync(fullPath);
+                await LoadFile(fullPath);
+            }
+
+            _showNewItem = false;
+            // Recarrega árvore
+            _tree = await WorkspaceRepo.LoadTreeAsync(_workspace);
         }
         catch (Exception ex)
         {
-            _deployMessage = $"Deploy failed: {ex.Message}";
+            _newItemError = ex.Message;
+        }
+    }
+
+    private async Task DeployProxy()
+    {
+        if (_workspace is null) return;
+        await RunDeploy(async () =>
+            await DeployUseCase.ExecuteAsync(_workspace, _deployTarget, _deployEnv));
+    }
+
+    private async Task DeployFull()
+    {
+        if (_workspace is null) return;
+        await RunDeploy(async () =>
+            await DeployUseCase.ExecuteFullAsync(_workspace, _deployEnv));
+    }
+
+    private async Task RunDeploy(Func<Task> action)
+    {
+        _deploying = true;
+        _deployMessage = string.Empty;
+        _deployError = false;
+        try
+        {
+            await action();
+            _deployMessage = "Deploy realizado com sucesso!";
+        }
+        catch (Exception ex)
+        {
+            _deployMessage = $"Deploy falhou: {ex.Message}";
             _deployError = true;
         }
-        finally
-        {
-            _deploying = false;
-        }
+        finally { _deploying = false; }
     }
 }

@@ -5,9 +5,12 @@ namespace ApigeeLocalDev.Domain.Interfaces;
 public interface IWorkspaceRepository
 {
     IReadOnlyList<ApigeeWorkspace> ListAll();
-    ApigeeWorkspace Create(string name, string path);
+    ApigeeWorkspace Create(string name, string? customPath);
     Task<WorkspaceItem> LoadTreeAsync(ApigeeWorkspace workspace, CancellationToken ct = default);
     Task<string> ReadFileAsync(string absolutePath, CancellationToken ct = default);
     Task SaveFileAsync(string absolutePath, string content, CancellationToken ct = default);
+    Task CreateFileAsync(string absolutePath, CancellationToken ct = default);
+    Task CreateDirectoryAsync(string absolutePath, CancellationToken ct = default);
     Task<string> BuildBundleZipAsync(ApigeeWorkspace workspace, string proxyOrFlowName, CancellationToken ct = default);
+    Task<string> BuildWorkspaceZipAsync(ApigeeWorkspace workspace, CancellationToken ct = default);
 }
