@@ -1,4 +1,6 @@
 using System.IO.Compression;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using ApigeeLocalDev.Domain.Entities;
 using ApigeeLocalDev.Domain.Interfaces;
 using Microsoft.Extensions.Configuration;
@@ -9,6 +11,13 @@ public sealed class WorkspaceFileSystemRepository(IConfiguration configuration) 
 {
     private static readonly string[] ProxySubFolders =
         ["apiproxy", "apiproxy/policies", "apiproxy/proxies", "apiproxy/targets", "apiproxy/resources"];
+
+    private static readonly JsonSerializerOptions JsonOpts = new()
+    {
+        WriteIndented        = true,
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
+    };
 
     private string WorkspacesRoot =>
         configuration["WorkspacesRoot"] ?? Path.Combine(
@@ -76,11 +85,29 @@ public sealed class WorkspaceFileSystemRepository(IConfiguration configuration) 
 
     // ── environment ────────────────────────────────────────────────────────
 
-    public Task EnsureEnvironmentAsync(ApigeeWorkspace workspace, string envName, CancellationToken ct = default)
+    /// <summary>
+    /// Garante que environments/{envName}/ exista e que deployments.json
+    /// liste TODOS os proxies e shared flows presentes no workspace.
+    ///
+    /// O emulator lê deployments.json para saber o que deployar no ambiente.
+    /// Sem esse arquivo (ou com lista vazia) retorna NoValidProxiesFound.
+    /// </summary>
+    public async Task EnsureEnvironmentAsync(
+        ApigeeWorkspace workspace, string envName, CancellationToken ct = default)
     {
         var envPath = Path.Combine(ApigeeRoot(workspace), "environments", envName);
         Directory.CreateDirectory(envPath);
-        return Task.CompletedTask;
+
+        var proxies     = ListApiProxies(workspace);
+        var sharedFlows = ListSharedFlows(workspace);
+
+        var deployments = new DeploymentsJson(
+            Proxies:     proxies.ToList(),
+            SharedFlows: sharedFlows.ToList());
+
+        var json = JsonSerializer.Serialize(deployments, JsonOpts);
+        await File.WriteAllTextAsync(
+            Path.Combine(envPath, "deployments.json"), json, ct);
     }
 
     // ── árvore e arquivos ────────────────────────────────────────────────────
@@ -144,8 +171,8 @@ public sealed class WorkspaceFileSystemRepository(IConfiguration configuration) 
     /// <summary>
     /// Gera ZIP do workspace completo a partir de workspace.RootPath,
     /// preservando a estrutura src/main/apigee/... exigida pelo emulator.
-    /// Pastas vazias são incluídas via entry de placeholder para que o
-    /// emulator reconheça environments/{envName}/ mesmo sem arquivos dentro.
+    /// Deve ser chamado DEPOIS de EnsureEnvironmentAsync, que garante
+    /// que deployments.json já está no disco antes de zipar.
     /// </summary>
     public Task<string> BuildWorkspaceZipAsync(ApigeeWorkspace workspace, CancellationToken ct = default)
     {
@@ -171,10 +198,6 @@ public sealed class WorkspaceFileSystemRepository(IConfiguration configuration) 
         }
     }
 
-    /// <summary>
-    /// Igual ao anterior mas inclui pastas vazias como entries terminadas em '/'.
-    /// Necessário para que environments/{env}/ apareça no ZIP mesmo sem arquivos.
-    /// </summary>
     private static void AddDirectoryToZipIncludingEmpty(ZipArchive archive, string sourceDir, string zipRoot)
     {
         foreach (var file in Directory.EnumerateFiles(sourceDir, "*", SearchOption.AllDirectories))
@@ -185,7 +208,7 @@ public sealed class WorkspaceFileSystemRepository(IConfiguration configuration) 
             archive.CreateEntryFromFile(file, entryName, CompressionLevel.Optimal);
         }
 
-        // Inclui pastas vazias
+        // Inclui pastas vazias (exceto as que já têm arquivos)
         foreach (var dir in Directory.EnumerateDirectories(sourceDir, "*", SearchOption.AllDirectories))
         {
             if (!Directory.EnumerateFileSystemEntries(dir).Any())
@@ -251,4 +274,10 @@ public sealed class WorkspaceFileSystemRepository(IConfiguration configuration) 
 
         return new WorkspaceItem(name, path, rel, itemType, children);
     }
+
+    // ── DTOs internos ─────────────────────────────────────────────────────────
+
+    private sealed record DeploymentsJson(
+        [property: JsonPropertyName("proxies")]     List<string> Proxies,
+        [property: JsonPropertyName("sharedFlows")] List<string> SharedFlows);
 }
