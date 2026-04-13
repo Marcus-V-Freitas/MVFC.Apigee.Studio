@@ -15,13 +15,21 @@ public sealed class ApigeeEmulatorClient(
     {
         await using var fs = File.OpenRead(zipFilePath);
         using var content = new StreamContent(fs);
-        content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/zip");
+        // O Apigee Emulator espera octet-stream, nao application/zip
+        content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/octet-stream");
 
         var url = $"/v1/emulator/deploy?environment={Uri.EscapeDataString(environment)}";
         logger.LogInformation("Deploying bundle from {ZipPath} to environment {Env}", zipFilePath, environment);
 
         using var response = await http.PostAsync(url, content, ct);
-        response.EnsureSuccessStatusCode();
+
+        if (!response.IsSuccessStatusCode)
+        {
+            var body = await response.Content.ReadAsStringAsync(ct);
+            logger.LogError("Deploy failed {Status}: {Body}", response.StatusCode, body);
+            throw new HttpRequestException(
+                $"Deploy falhou ({(int)response.StatusCode} {response.StatusCode}): {body}");
+        }
 
         logger.LogInformation("Deploy successful: {StatusCode}", response.StatusCode);
     }
@@ -30,7 +38,9 @@ public sealed class ApigeeEmulatorClient(
     {
         try
         {
-            using var response = await http.GetAsync("/v1/emulator/status", ct);
+            // O Apigee Emulator nao expoe /v1/emulator/status.
+            // GET / retorna 200 quando o processo esta pronto.
+            using var response = await http.GetAsync("/", ct);
             return response.IsSuccessStatusCode;
         }
         catch
@@ -44,7 +54,6 @@ public sealed class ApigeeEmulatorClient(
         if (string.IsNullOrWhiteSpace(image))
             throw new ArgumentException("Docker image must be provided.", nameof(image));
 
-        // Garante que não existe um container antigo com o mesmo nome.
         await RunDockerAsync($"rm -f {DefaultContainerName}", ct, ignoreErrors: true);
 
         var args = $"run -d --name {DefaultContainerName} -p 8080:8080 {image}";
@@ -75,12 +84,12 @@ public sealed class ApigeeEmulatorClient(
     {
         var psi = new ProcessStartInfo
         {
-            FileName = "docker",
-            Arguments = arguments,
+            FileName               = "docker",
+            Arguments              = arguments,
             RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false,
-            CreateNoWindow = true
+            RedirectStandardError  = true,
+            UseShellExecute        = false,
+            CreateNoWindow         = true
         };
 
         using var proc = new Process { StartInfo = psi, EnableRaisingEvents = false };
