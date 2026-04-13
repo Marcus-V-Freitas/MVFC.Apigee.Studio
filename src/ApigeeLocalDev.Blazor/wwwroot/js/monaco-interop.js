@@ -31,7 +31,6 @@ window.monacoInterop = (function () {
     }
 
     function _registerApigeeXmlCompletions(monaco) {
-        // Apigee-specific XML snippet completions (ProxyEndpoint, TargetEndpoint, common policies)
         monaco.languages.registerCompletionItemProvider('xml', {
             triggerCharacters: ['<'],
             provideCompletionItems(model, position) {
@@ -325,7 +324,6 @@ window.monacoInterop = (function () {
     }
 
     function _registerApigeeJsonCompletions(monaco) {
-        // deployments.json, flowhooks.json, targetservers.json completions
         monaco.languages.registerCompletionItemProvider('json', {
             triggerCharacters: ['"', '{'],
             provideCompletionItems(model, position) {
@@ -382,14 +380,24 @@ window.monacoInterop = (function () {
         });
     }
 
-    // Public API exposed to Blazor via IJSRuntime
+    // Aguarda o container ter clientHeight > 0 antes de criar o editor.
+    // O Monaco lê clientHeight no momento do create — se for 0, o editor
+    // fica com altura 0 e automaticLayout nunca corrige isso.
+    function _waitForHeight(container, cb, attempts) {
+        attempts = attempts || 0;
+        if (container.clientHeight > 0 || attempts >= 20) {
+            cb();
+        } else {
+            requestAnimationFrame(function () {
+                _waitForHeight(container, cb, attempts + 1);
+            });
+        }
+    }
+
     return {
-        // Creates (or recreates) a Monaco editor in the given container element.
-        // filePath is used only to detect language — never read as a URL.
         create(elementId, initialContent, filePath) {
             _configureLoader();
 
-            // Destroy previous instance if any (e.g. different file opened)
             if (_editors[elementId]) {
                 _editors[elementId].dispose();
                 delete _editors[elementId];
@@ -404,62 +412,60 @@ window.monacoInterop = (function () {
                 _registerApigeeXmlCompletions(monaco);
                 _registerApigeeJsonCompletions(monaco);
 
-                const editor = monaco.editor.create(container, {
-                    value:             initialContent || '',
-                    language:          language,
-                    theme:             'vs-dark',
-                    automaticLayout:   true,
-                    fontSize:          13,
-                    fontFamily:        '"JetBrains Mono", "Fira Code", monospace',
-                    fontLigatures:     true,
-                    minimap:           { enabled: false },
-                    scrollBeyondLastLine: false,
-                    wordWrap:          'off',
-                    tabSize:           4,
-                    insertSpaces:      true,
-                    formatOnType:      true,
-                    formatOnPaste:     true,
-                    suggestOnTriggerCharacters: true,
-                    quickSuggestions:  { other: true, comments: false, strings: true },
-                    acceptSuggestionOnEnter: 'on',
-                    renderLineHighlight: 'line',
-                    bracketPairColorization: { enabled: true },
-                    guides: { bracketPairs: true, indentation: true },
+                // Espera o container ter altura real antes de instanciar
+                _waitForHeight(container, function () {
+                    const editor = monaco.editor.create(container, {
+                        value:             initialContent || '',
+                        language:          language,
+                        theme:             'vs-dark',
+                        automaticLayout:   true,
+                        fontSize:          13,
+                        fontFamily:        '"JetBrains Mono", "Fira Code", monospace',
+                        fontLigatures:     true,
+                        minimap:           { enabled: false },
+                        scrollBeyondLastLine: false,
+                        wordWrap:          'off',
+                        tabSize:           4,
+                        insertSpaces:      true,
+                        formatOnType:      true,
+                        formatOnPaste:     true,
+                        suggestOnTriggerCharacters: true,
+                        quickSuggestions:  { other: true, comments: false, strings: true },
+                        acceptSuggestionOnEnter: 'on',
+                        renderLineHighlight: 'line',
+                        bracketPairColorization: { enabled: true },
+                        guides: { bracketPairs: true, indentation: true },
+                    });
+
+                    editor.addCommand(
+                        monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS,
+                        function () {
+                            container.dispatchEvent(new CustomEvent('monaco-save', { bubbles: true }));
+                        }
+                    );
+
+                    _editors[elementId] = editor;
                 });
-
-                // Ctrl+S shortcut — dispatches a custom DOM event that Blazor listens to
-                editor.addCommand(
-                    monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS,
-                    function () {
-                        container.dispatchEvent(new CustomEvent('monaco-save', { bubbles: true }));
-                    }
-                );
-
-                _editors[elementId] = editor;
             });
         },
 
-        // Returns current editor content to Blazor
         getValue(elementId) {
             const ed = _editors[elementId];
             return ed ? ed.getValue() : '';
         },
 
-        // Sets content programmatically (e.g. when a new file is opened)
         setValue(elementId, content, filePath) {
             const ed = _editors[elementId];
             if (!ed) return;
-            // Update language model if file type changed
             const language = _detectLanguage(filePath);
             require(['vs/editor/editor.main'], function (monaco) {
                 const model = ed.getModel();
                 if (model) monaco.editor.setModelLanguage(model, language);
                 ed.setValue(content || '');
-                ed.revealLine(1); // scroll to top
+                ed.revealLine(1);
             });
         },
 
-        // Dispose when Blazor component is destroyed
         dispose(elementId) {
             const ed = _editors[elementId];
             if (ed) {
@@ -468,7 +474,6 @@ window.monacoInterop = (function () {
             }
         },
 
-        // Format current document (equivalent to Alt+Shift+F)
         formatDocument(elementId) {
             const ed = _editors[elementId];
             if (ed) ed.getAction('editor.action.formatDocument').run();
