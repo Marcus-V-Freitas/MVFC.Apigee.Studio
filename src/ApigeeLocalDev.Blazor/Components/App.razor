@@ -5,11 +5,24 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Apigee Local Dev</title>
     <base href="/" />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300..700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="app.css" />
     <HeadOutlet />
 </head>
 <body>
     <Routes />
+    <script src="https://unpkg.com/lucide@latest"></script>
     <script src="_framework/blazor.web.js"></script>
+    <script>
+        // Init Lucide icons after Blazor renders
+        function initLucide() {
+            if (typeof lucide !== 'undefined') lucide.createIcons();
+        }
+        document.addEventListener('DOMContentLoaded', initLucide);
+        // Re-run after Blazor enhanced navigation
+        document.addEventListener('enhancedload', initLucide);
+    </script>
 </body>
 </html>

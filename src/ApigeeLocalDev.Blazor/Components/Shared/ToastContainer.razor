@@ -1,0 +1,70 @@
+@using ApigeeLocalDev.Blazor.Services
+@implements IDisposable
+@inject ToastService Toast
+@rendermode RenderMode.InteractiveServer
+
+<div class="toast-container" aria-live="polite" aria-atomic="false">
+    @foreach (var t in _toasts)
+    {
+        <div class="toast toast--@t.Level.ToString().ToLower() @(t.Exiting ? "toast--exit" : "toast--enter")">
+            <i data-lucide="@IconFor(t.Level)" class="toast-icon"></i>
+            <span class="toast-message">@t.Message</span>
+            <button class="toast-close" @onclick="() => Dismiss(t)" aria-label="Fechar">
+                <i data-lucide="x"></i>
+            </button>
+        </div>
+    }
+</div>
+
+@code {
+    private readonly List<ToastEntry> _toasts = [];
+
+    private sealed class ToastEntry(Guid Id, string Message, ToastLevel Level)
+    {
+        public Guid Id { get; } = Id;
+        public string Message { get; } = Message;
+        public ToastLevel Level { get; } = Level;
+        public bool Exiting { get; set; }
+    }
+
+    protected override void OnInitialized()
+        => Toast.OnShow += HandleToast;
+
+    private async void HandleToast(ToastMessage msg)
+    {
+        var entry = new ToastEntry(msg.Id, msg.Message, msg.Level);
+        _toasts.Add(entry);
+        await InvokeAsync(StateHasChanged);
+        await Task.Delay(50);
+        await InvokeAsync(() => { lucide(); StateHasChanged(); });
+
+        await Task.Delay(3800);
+        entry.Exiting = true;
+        await InvokeAsync(StateHasChanged);
+        await Task.Delay(350);
+        _toasts.Remove(entry);
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task Dismiss(ToastEntry entry)
+    {
+        entry.Exiting = true;
+        StateHasChanged();
+        await Task.Delay(350);
+        _toasts.Remove(entry);
+    }
+
+    private static string IconFor(ToastLevel l) => l switch
+    {
+        ToastLevel.Success => "circle-check",
+        ToastLevel.Error   => "circle-x",
+        ToastLevel.Warning => "triangle-alert",
+        _                  => "info"
+    };
+
+    // re-init Lucide after render
+    [Inject] IJSRuntime JS { get; set; } = default!;
+    private void lucide() { _ = JS.InvokeVoidAsync("initLucide"); }
+
+    public void Dispose() => Toast.OnShow -= HandleToast;
+}
