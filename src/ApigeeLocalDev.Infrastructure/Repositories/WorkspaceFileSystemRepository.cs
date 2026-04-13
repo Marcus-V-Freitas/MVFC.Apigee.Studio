@@ -1,6 +1,8 @@
 using System.IO.Compression;
 using System.Text;
 using System.Text.Json;
+using System.Xml;
+using System.Xml.Linq;
 using ApigeeLocalDev.Domain.Entities;
 using ApigeeLocalDev.Domain.Interfaces;
 using Microsoft.Extensions.Configuration;
@@ -12,6 +14,14 @@ public sealed class WorkspaceFileSystemRepository(IConfiguration configuration) 
     private static readonly string[] ProxySubFolders =
         ["apiproxy", "apiproxy/policies", "apiproxy/proxies", "apiproxy/targets", "apiproxy/resources"];
 
+    private static readonly XmlWriterSettings XmlSettings = new()
+    {
+        Indent             = true,
+        IndentChars        = "    ",
+        Encoding           = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false),
+        OmitXmlDeclaration = false,
+    };
+
     private string WorkspacesRoot =>
         configuration["WorkspacesRoot"] ?? Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "apigee-workspaces");
@@ -19,7 +29,7 @@ public sealed class WorkspaceFileSystemRepository(IConfiguration configuration) 
     private static string ApigeeRoot(ApigeeWorkspace workspace)
         => Path.Combine(workspace.RootPath, "src", "main", "apigee");
 
-    // ── lista ─────────────────────────────────────────────────────────────────
+    // ── lista ──────────────────────────────────────────────────────────────
 
     public IReadOnlyList<ApigeeWorkspace> ListAll()
     {
@@ -48,7 +58,7 @@ public sealed class WorkspaceFileSystemRepository(IConfiguration configuration) 
             .OrderBy(x => x).ToList();
     }
 
-    // ── CRUD ──────────────────────────────────────────────────────────────────
+    // ── CRUD ────────────────────────────────────────────────────────────────
 
     public ApigeeWorkspace Create(string name, string? customPath, IReadOnlyList<string>? initialProxies = null)
     {
@@ -77,13 +87,6 @@ public sealed class WorkspaceFileSystemRepository(IConfiguration configuration) 
 
     // ── environment ───────────────────────────────────────────────────────────
 
-    /// <summary>
-    /// Cria environments/{envName}/ e grava deployments.json.
-    ///
-    /// O emulator retorna 500 quando sharedFlows está presente com valor vazio.
-    /// Por isso usamos Utf8JsonWriter diretamente: a chave sharedFlows só
-    /// é emitida quando há pelo menos um shared flow no workspace.
-    /// </summary>
     public async Task EnsureEnvironmentAsync(
         ApigeeWorkspace workspace, string envName, CancellationToken ct = default)
     {
@@ -97,10 +100,6 @@ public sealed class WorkspaceFileSystemRepository(IConfiguration configuration) 
         await File.WriteAllTextAsync(Path.Combine(envPath, "deployments.json"), json, Encoding.UTF8, ct);
     }
 
-    /// <summary>
-    /// Constrói o JSON de deployments.json manualmente.
-    /// sharedFlows é omitido quando vazio — o emulator não aceita array vazio.
-    /// </summary>
     private static string BuildDeploymentsJson(List<string> proxies, List<string> sharedFlows)
     {
         using var ms     = new MemoryStream();
@@ -112,7 +111,6 @@ public sealed class WorkspaceFileSystemRepository(IConfiguration configuration) 
         foreach (var p in proxies) writer.WriteStringValue(p);
         writer.WriteEndArray();
 
-        // sharedFlows só emitido quando não vazio
         if (sharedFlows.Count > 0)
         {
             writer.WriteStartArray("sharedFlows");
@@ -126,7 +124,7 @@ public sealed class WorkspaceFileSystemRepository(IConfiguration configuration) 
         return Encoding.UTF8.GetString(ms.ToArray());
     }
 
-    // ── árvore e arquivos ────────────────────────────────────────────────────
+    // ── árvore e arquivos ───────────────────────────────────────────────────
 
     public Task<WorkspaceItem> LoadTreeAsync(ApigeeWorkspace workspace, CancellationToken ct = default)
         => Task.FromResult(BuildItem(workspace.RootPath, workspace.RootPath));
@@ -157,7 +155,7 @@ public sealed class WorkspaceFileSystemRepository(IConfiguration configuration) 
         return Task.CompletedTask;
     }
 
-    // ── ZIP helpers ───────────────────────────────────────────────────────────
+    // ── ZIP helpers ───────────────────────────────────────────────────────
 
     public Task<string> BuildBundleZipAsync(
         ApigeeWorkspace workspace, string proxyOrFlowName, CancellationToken ct = default)
@@ -195,7 +193,7 @@ public sealed class WorkspaceFileSystemRepository(IConfiguration configuration) 
         return Task.FromResult(zip);
     }
 
-    // ── privados ──────────────────────────────────────────────────────────────
+    // ── privados ────────────────────────────────────────────────────────────
 
     private static void AddDirectoryToZip(ZipArchive archive, string sourceDir, string zipRoot)
     {
@@ -227,38 +225,47 @@ public sealed class WorkspaceFileSystemRepository(IConfiguration configuration) 
         }
     }
 
+    /// <summary>
+    /// Cria a estrutura de pastas de um API proxy e gera os XMLs via XDocument,
+    /// evitando qualquer problema com raw string literals interpoladas e aspas.
+    /// </summary>
     private static void ScaffoldApiProxy(string apigeeRoot, string proxyName)
     {
         var baseDir = Path.Combine(apigeeRoot, "apiproxies", proxyName);
         foreach (var sub in ProxySubFolders)
             Directory.CreateDirectory(Path.Combine(baseDir, sub));
 
-        File.WriteAllText(
-            Path.Combine(baseDir, "apiproxy", "proxies", "default.xml"),
-            $"""<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<ProxyEndpoint name="default">
-    <Description>{proxyName} proxy endpoint</Description>
-    <HTTPProxyConnection>
-        <BasePath>/{proxyName}</BasePath>
-        <VirtualHost>default</VirtualHost>
-    </HTTPProxyConnection>
-    <RouteRule name="default">
-        <TargetEndpoint>default</TargetEndpoint>
-    </RouteRule>
-</ProxyEndpoint>
-""");
+        // ── ProxyEndpoint (default.xml) ──────────────────────────────────────
+        var proxyEndpoint = new XDocument(
+            new XDeclaration("1.0", "UTF-8", "yes"),
+            new XElement("ProxyEndpoint",
+                new XAttribute("name", "default"),
+                new XElement("Description", $"{proxyName} proxy endpoint"),
+                new XElement("HTTPProxyConnection",
+                    new XElement("BasePath", $"/{proxyName}"),
+                    new XElement("VirtualHost", "default")),
+                new XElement("RouteRule",
+                    new XAttribute("name", "default"),
+                    new XElement("TargetEndpoint", "default"))));
 
-        File.WriteAllText(
-            Path.Combine(baseDir, "apiproxy", "targets", "default.xml"),
-            """
-<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<TargetEndpoint name="default">
-    <Description>Default target endpoint</Description>
-    <HTTPTargetConnection>
-        <URL>https://httpbin.org/anything</URL>
-    </HTTPTargetConnection>
-</TargetEndpoint>
-""");
+        SaveXml(proxyEndpoint, Path.Combine(baseDir, "apiproxy", "proxies", "default.xml"));
+
+        // ── TargetEndpoint (default.xml) ─────────────────────────────────────
+        var targetEndpoint = new XDocument(
+            new XDeclaration("1.0", "UTF-8", "yes"),
+            new XElement("TargetEndpoint",
+                new XAttribute("name", "default"),
+                new XElement("Description", "Default target endpoint"),
+                new XElement("HTTPTargetConnection",
+                    new XElement("URL", "https://httpbin.org/anything"))));
+
+        SaveXml(targetEndpoint, Path.Combine(baseDir, "apiproxy", "targets", "default.xml"));
+    }
+
+    private static void SaveXml(XDocument doc, string path)
+    {
+        using var writer = XmlWriter.Create(path, XmlSettings);
+        doc.Save(writer);
     }
 
     private static WorkspaceItem BuildItem(string path, string rootPath)
