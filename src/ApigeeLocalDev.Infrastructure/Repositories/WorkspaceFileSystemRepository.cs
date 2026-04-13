@@ -10,6 +10,9 @@ public sealed class WorkspaceFileSystemRepository(IConfiguration configuration) 
     private static readonly string[] ProxySubFolders =
         ["apiproxy", "apiproxy/policies", "apiproxy/proxies", "apiproxy/targets", "apiproxy/resources"];
 
+    // Prefixo exigido pelo Apigee Emulator dentro do ZIP
+    private const string EmulatorZipRoot = "src/main/apigee";
+
     private string WorkspacesRoot =>
         configuration["WorkspacesRoot"] ?? Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "apigee-workspaces");
@@ -84,31 +87,89 @@ public sealed class WorkspaceFileSystemRepository(IConfiguration configuration) 
         return Task.CompletedTask;
     }
 
+    /// <summary>
+    /// Empacota um proxy ou shared flow individual no formato exigido pelo emulator:
+    ///   src/main/apigee/apiproxies/{name}/apiproxy/...
+    /// </summary>
     public Task<string> BuildBundleZipAsync(
         ApigeeWorkspace workspace, string proxyOrFlowName, CancellationToken ct = default)
     {
+        // Localiza a pasta do proxy/sharedflow
         var src = Path.Combine(workspace.RootPath, "apiproxies", proxyOrFlowName);
+        var kind = "apiproxies";
         if (!Directory.Exists(src))
-            src = Path.Combine(workspace.RootPath, "sharedflows", proxyOrFlowName);
+        {
+            src  = Path.Combine(workspace.RootPath, "sharedflows", proxyOrFlowName);
+            kind = "sharedflows";
+        }
         if (!Directory.Exists(src))
             throw new DirectoryNotFoundException(
                 $"Proxy or shared flow '{proxyOrFlowName}' not found.");
 
         var zip = Path.Combine(Path.GetTempPath(),
             $"{proxyOrFlowName}_{DateTime.UtcNow:yyyyMMddHHmmss}.zip");
-        ZipFile.CreateFromDirectory(src, zip);
+
+        using (var archive = ZipFile.Open(zip, ZipArchiveMode.Create))
+            AddDirectoryToZip(archive, src,
+                zipRoot: $"{EmulatorZipRoot}/{kind}/{proxyOrFlowName}");
+
         return Task.FromResult(zip);
     }
 
+    /// <summary>
+    /// Empacota o workspace inteiro no formato exigido pelo emulator:
+    ///   src/main/apigee/apiproxies/{name}/...
+    ///   src/main/apigee/sharedflows/{name}/...
+    ///   src/main/apigee/environments/{env}/...
+    /// </summary>
     public Task<string> BuildWorkspaceZipAsync(ApigeeWorkspace workspace, CancellationToken ct = default)
     {
         var zip = Path.Combine(Path.GetTempPath(),
             $"{workspace.Name}_full_{DateTime.UtcNow:yyyyMMddHHmmss}.zip");
-        ZipFile.CreateFromDirectory(workspace.RootPath, zip);
+
+        using (var archive = ZipFile.Open(zip, ZipArchiveMode.Create))
+        {
+            // apiproxies
+            var proxiesRoot = Path.Combine(workspace.RootPath, "apiproxies");
+            if (Directory.Exists(proxiesRoot))
+                foreach (var proxyDir in Directory.GetDirectories(proxiesRoot))
+                    AddDirectoryToZip(archive, proxyDir,
+                        $"{EmulatorZipRoot}/apiproxies/{Path.GetFileName(proxyDir)}");
+
+            // sharedflows
+            var sfRoot = Path.Combine(workspace.RootPath, "sharedflows");
+            if (Directory.Exists(sfRoot))
+                foreach (var sfDir in Directory.GetDirectories(sfRoot))
+                    AddDirectoryToZip(archive, sfDir,
+                        $"{EmulatorZipRoot}/sharedflows/{Path.GetFileName(sfDir)}");
+
+            // environments
+            var envRoot = Path.Combine(workspace.RootPath, "environments");
+            if (Directory.Exists(envRoot))
+                foreach (var envDir in Directory.GetDirectories(envRoot))
+                    AddDirectoryToZip(archive, envDir,
+                        $"{EmulatorZipRoot}/environments/{Path.GetFileName(envDir)}");
+        }
+
         return Task.FromResult(zip);
     }
 
     // ─── helpers ──────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Adiciona recursivamente todos os arquivos de <paramref name="sourceDir"/> no archive,
+    /// mapeando para <paramref name="zipRoot"/> como prefixo de caminho dentro do ZIP.
+    /// </summary>
+    private static void AddDirectoryToZip(ZipArchive archive, string sourceDir, string zipRoot)
+    {
+        foreach (var file in Directory.EnumerateFiles(sourceDir, "*", SearchOption.AllDirectories))
+        {
+            var relative = Path.GetRelativePath(sourceDir, file)
+                               .Replace(Path.DirectorySeparatorChar, '/');
+            var entryName = $"{zipRoot}/{relative}";
+            archive.CreateEntryFromFile(file, entryName, CompressionLevel.Optimal);
+        }
+    }
 
     private static void ScaffoldApiProxy(string workspaceRoot, string proxyName)
     {
