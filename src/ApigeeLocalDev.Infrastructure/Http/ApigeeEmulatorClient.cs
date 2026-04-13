@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Net.Http.Headers;
 using System.Text;
 using ApigeeLocalDev.Domain.Interfaces;
 using Microsoft.Extensions.Logging;
@@ -11,16 +12,35 @@ public sealed class ApigeeEmulatorClient(
 {
     private const string DefaultContainerName = "apigee-emulator";
 
+    // ── Deploy individual bundle (apiproxy/ or sharedflowbundle/ at ZIP root) ──
     public async Task DeployBundleAsync(string environment, string zipFilePath, CancellationToken ct = default)
     {
-        await using var fs = File.OpenRead(zipFilePath);
-        using var content = new StreamContent(fs);
-        // O Apigee Emulator espera octet-stream, nao application/zip
-        content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/octet-stream");
+        await PostZipAsync(
+            "/v1/emulator/deploy?environment=" + Uri.EscapeDataString(environment),
+            zipFilePath,
+            ct);
+    }
 
-        var url = $"/v1/emulator/deploy?environment={Uri.EscapeDataString(environment)}";
-        logger.LogInformation("Deploying bundle from {ZipPath} to environment {Env}", zipFilePath, environment);
+    // ── Deploy workspace archive (src/main/apigee/... inside ZIP) ──
+    public async Task DeployArchiveAsync(string environment, string zipFilePath, CancellationToken ct = default)
+    {
+        await PostZipAsync(
+            "/v1/emulator/deployArchive?environment=" + Uri.EscapeDataString(environment),
+            zipFilePath,
+            ct);
+    }
 
+    private async Task PostZipAsync(string url, string zipFilePath, CancellationToken ct)
+    {
+        if (!File.Exists(zipFilePath))
+            throw new FileNotFoundException("ZIP n\u00e3o encontrado: " + zipFilePath);
+
+        await using var fs      = File.OpenRead(zipFilePath);
+        using var       content = new StreamContent(fs);
+        // O Apigee Emulator aceita application/octet-stream para bundle deploy
+        content.Headers.ContentType = new MediaTypeHeaderValue("application/octet-stream");
+
+        logger.LogInformation("Deploying {Zip} -> {Url}", zipFilePath, url);
         using var response = await http.PostAsync(url, content, ct);
 
         if (!response.IsSuccessStatusCode)
@@ -28,7 +48,7 @@ public sealed class ApigeeEmulatorClient(
             var body = await response.Content.ReadAsStringAsync(ct);
             logger.LogError("Deploy failed {Status}: {Body}", response.StatusCode, body);
             throw new HttpRequestException(
-                $"Deploy falhou ({(int)response.StatusCode} {response.StatusCode}): {body}");
+                "Deploy falhou (" + (int)response.StatusCode + " " + response.StatusCode + "): " + body);
         }
 
         logger.LogInformation("Deploy successful: {StatusCode}", response.StatusCode);
@@ -38,8 +58,6 @@ public sealed class ApigeeEmulatorClient(
     {
         try
         {
-            // O Apigee Emulator nao expoe /v1/emulator/status.
-            // GET / retorna 200 quando o processo esta pronto.
             using var response = await http.GetAsync("/", ct);
             return response.IsSuccessStatusCode;
         }
@@ -54,16 +72,14 @@ public sealed class ApigeeEmulatorClient(
         if (string.IsNullOrWhiteSpace(image))
             throw new ArgumentException("Docker image must be provided.", nameof(image));
 
-        await RunDockerAsync($"rm -f {DefaultContainerName}", ct, ignoreErrors: true);
-
-        var args = $"run -d --name {DefaultContainerName} -p 8080:8080 {image}";
-        await RunDockerAsync(args, ct);
+        await RunDockerAsync("rm -f " + DefaultContainerName, ct, ignoreErrors: true);
+        await RunDockerAsync("run -d --name " + DefaultContainerName + " -p 8080:8080 " + image, ct);
         logger.LogInformation("Started Apigee Emulator container {Name} with image {Image}", DefaultContainerName, image);
     }
 
     public async Task StopContainerAsync(CancellationToken ct = default)
     {
-        await RunDockerAsync($"rm -f {DefaultContainerName}", ct, ignoreErrors: true);
+        await RunDockerAsync("rm -f " + DefaultContainerName, ct, ignoreErrors: true);
         logger.LogInformation("Stopped Apigee Emulator container {Name}", DefaultContainerName);
     }
 
@@ -111,7 +127,7 @@ public sealed class ApigeeEmulatorClient(
         var stderr = sbErr.ToString();
 
         if (proc.ExitCode != 0 && !ignoreErrors)
-            throw new InvalidOperationException($"docker {arguments} failed: {stderr}");
+            throw new InvalidOperationException("docker " + arguments + " failed: " + stderr);
 
         if (!string.IsNullOrWhiteSpace(stderr))
             logger.LogDebug("docker {Args} stderr: {Err}", arguments, stderr.Trim());

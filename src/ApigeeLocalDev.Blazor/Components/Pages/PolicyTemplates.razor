@@ -25,7 +25,6 @@
     <div class="card policy-gen-form">
         <h3>Generate: @_selected.Name</h3>
 
-        <!-- Destino: workspace + proxy -->
         <div class="target-section">
             <label>Workspace
                 <select class="input" @bind="_selectedWorkspace" @bind:after="OnWorkspaceChanged">
@@ -55,7 +54,6 @@
             }
         </div>
 
-        <!-- Parâmetros do template -->
         <div class="param-form">
             @foreach (var param in _selected.Parameters)
             {
@@ -68,7 +66,7 @@
 
         <div class="form-actions">
             <button class="btn btn-primary" @onclick="Generate"
-                    disabled="@(!CanGenerate)">
+                    disabled="@_cannotGenerate">
                 Generate Policy
             </button>
         </div>
@@ -95,13 +93,16 @@
     private string _genMessage        = string.Empty;
     private bool   _genError;
 
-    // Helpers sem string literal em atributo
     private string TemplateCardClass(PolicyTemplate t) =>
         t == _selected ? "template-card selected" : "template-card";
+
     private string GenMessageClass => _genError ? "error-text" : "success-text";
-    private bool   CanGenerate     => _selected is not null
-                                      && !string.IsNullOrEmpty(_selectedWorkspace)
-                                      && !string.IsNullOrEmpty(_selectedProxy);
+
+    // Propriedades booleanas simples para uso em disabled="@..." sem expressões inline
+    private bool _canGenerate    => _selected is not null
+                                    && !string.IsNullOrEmpty(_selectedWorkspace)
+                                    && !string.IsNullOrEmpty(_selectedProxy);
+    private bool _cannotGenerate => !_canGenerate;
 
     protected override void OnInitialized()
     {
@@ -111,8 +112,8 @@
 
     private void Select(PolicyTemplate t)
     {
-        _selected  = t;
-        _params    = t.Parameters.ToDictionary(p => p, _ => string.Empty);
+        _selected   = t;
+        _params     = t.Parameters.ToDictionary(p => p, _ => string.Empty);
         _params["PolicyName"] = t.Name + "Policy";
         _genMessage = string.Empty;
     }
@@ -141,10 +142,10 @@
         _genError   = false;
         try
         {
-            var ws = _workspaces.First(w => w.Name == _selectedWorkspace);
+            var ws   = _workspaces.First(w => w.Name == _selectedWorkspace);
             var path = await GeneratePolicy.ExecuteAsync(
                 ws.RootPath, _selectedProxy, "apiproxy/policies", _selected.Name, _params);
-            _genMessage = $"Policy gerada em: {path}";
+            _genMessage = "Policy gerada em: " + path;
         }
         catch (Exception ex)
         {
