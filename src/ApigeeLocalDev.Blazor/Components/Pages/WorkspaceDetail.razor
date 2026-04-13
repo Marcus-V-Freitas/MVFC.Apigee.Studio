@@ -38,7 +38,7 @@ else
                            @onkeydown="HandleNewItemKey" />
                     <div class="form-actions">
                         <button class="btn btn-primary btn-sm" @onclick="ConfirmNewItem">OK</button>
-                        <button class="btn btn-ghost btn-sm" @onclick="() => _showNewItem = false">✕</button>
+                        <button class="btn btn-ghost btn-sm" @onclick="() => _showNewItem = false">&#10005;</button>
                     </div>
                     @if (!string.IsNullOrEmpty(_newItemError))
                     {
@@ -62,8 +62,8 @@ else
                 <div class="editor-header">
                     <span class="editor-filename">@System.IO.Path.GetFileName(_selectedFile)</span>
                     <div class="editor-header-actions">
-                        <button class="btn btn-ghost btn-sm btn-danger" @onclick="DeleteSelectedFile">🗑 Delete</button>
-                        <button class="btn btn-primary btn-sm" @onclick="SaveFile">💾 Save</button>
+                        <button class="btn btn-ghost btn-sm btn-danger" @onclick="DeleteSelectedFile">&#128465; Delete</button>
+                        <button class="btn btn-primary btn-sm" @onclick="SaveFile">&#128190; Save</button>
                     </div>
                 </div>
                 <textarea class="code-editor" @bind="_fileContent" @bind:event="oninput"></textarea>
@@ -86,7 +86,7 @@ else
                         <h3>Adicionar em <code>@_quickAddCategory</code></h3>
                         <p class="modal-path">@_quickAddPath</p>
                     </div>
-                    <button class="btn btn-ghost btn-sm" @onclick="CloseQuickAdd">✕</button>
+                    <button class="btn btn-ghost btn-sm" @onclick="CloseQuickAdd">&#10005;</button>
                 </div>
 
                 @if (_quickAddCategory == "policies")
@@ -117,7 +117,7 @@ else
                             @if (_quickTemplate is null)
                             {
                                 <div class="drawer-empty">
-                                    <span>← Selecione um template</span>
+                                    <span>&larr; Selecione um template</span>
                                 </div>
                             }
                             else
@@ -310,7 +310,7 @@ else
     {
         if (_selectedFile is null || _workspace is null) return;
         var fileName = System.IO.Path.GetFileName(_selectedFile);
-        var confirm  = await JS.InvokeAsync<bool>("confirm", $"Remover arquivo '{fileName}'?");
+        var confirm  = await JS.InvokeAsync<bool>("confirm", "Remover arquivo '" + fileName + "'?");
         if (!confirm) return;
 
         await WorkspaceRepo.DeleteFileAsync(_selectedFile);
@@ -389,10 +389,10 @@ else
                 _quickTemplate.Name,
                 _quickParams);
 
-            _quickMessage = $"✔ Criado: {System.IO.Path.GetFileName(path)}";
+            _quickMessage = "\u2714 Criado: " + System.IO.Path.GetFileName(path);
             _tree = await WorkspaceRepo.LoadTreeAsync(_workspace);
         }
-        catch (Exception ex) { _quickMessage = $"✘ {ex.Message}"; _quickError = true; }
+        catch (Exception ex) { _quickMessage = "\u2718 " + ex.Message; _quickError = true; }
         finally { _quickGenerating = false; }
     }
 
@@ -416,7 +416,7 @@ else
                 _tree = await WorkspaceRepo.LoadTreeAsync(_workspace);
             }
         }
-        catch (Exception ex) { _quickMessage = $"✘ {ex.Message}"; _quickError = true; }
+        catch (Exception ex) { _quickMessage = "\u2718 " + ex.Message; _quickError = true; }
     }
 
     private async Task ConfirmQuickSharedFlow()
@@ -435,33 +435,33 @@ else
             await WorkspaceRepo.CreateDirectoryAsync(polDir);
             await WorkspaceRepo.CreateDirectoryAsync(resDir);
 
-            var bundleXml = $"""
-<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<SharedFlowBundle name="{name}">
-    <Description>{name}</Description>
-    <Revision>1</Revision>
-    <SharedFlows>
-        <SharedFlow>default</SharedFlow>
-    </SharedFlows>
-</SharedFlowBundle>
-""";
-            await WorkspaceRepo.SaveFileAsync(
-                System.IO.Path.Combine(sfDir, $"{name}.xml"), bundleXml);
+            var bundleXml =
+                "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n" +
+                "<SharedFlowBundle name=\"" + name + "\">\n" +
+                "    <Description>" + name + "</Description>\n" +
+                "    <Revision>1</Revision>\n" +
+                "    <SharedFlows>\n" +
+                "        <SharedFlow>default</SharedFlow>\n" +
+                "    </SharedFlows>\n" +
+                "</SharedFlowBundle>\n";
 
-            var sharedFlowXml = $"""
-<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<SharedFlow name="default">
-    <Description>Default shared flow</Description>
-</SharedFlow>
-""";
+            await WorkspaceRepo.SaveFileAsync(
+                System.IO.Path.Combine(sfDir, name + ".xml"), bundleXml);
+
+            var sharedFlowXml =
+                "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n" +
+                "<SharedFlow name=\"default\">\n" +
+                "    <Description>Default shared flow</Description>\n" +
+                "</SharedFlow>\n";
+
             await WorkspaceRepo.SaveFileAsync(
                 System.IO.Path.Combine(resDir, "default.xml"), sharedFlowXml);
 
-            _quickMessage = $"✔ Shared Flow '{name}' criado.";
+            _quickMessage = "\u2714 Shared Flow '" + name + "' criado.";
             _quickAddOpen = false;
             _tree = await WorkspaceRepo.LoadTreeAsync(_workspace);
         }
-        catch (Exception ex) { _quickMessage = $"✘ {ex.Message}"; _quickError = true; }
+        catch (Exception ex) { _quickMessage = "\u2718 " + ex.Message; _quickError = true; }
     }
 
     private async Task ConfirmQuickEnvironment()
@@ -487,12 +487,12 @@ else
                 System.IO.Path.Combine(envDir, "targetservers.json"),
                 "[]\n");
 
-            _quickMessage = $"✔ Environment '{envName}' criado.";
+            _quickMessage = "\u2714 Environment '" + envName + "' criado.";
             _quickAddOpen = false;
             _deployEnv    = envName;
             _tree = await WorkspaceRepo.LoadTreeAsync(_workspace);
         }
-        catch (Exception ex) { _quickMessage = $"✘ {ex.Message}"; _quickError = true; }
+        catch (Exception ex) { _quickMessage = "\u2718 " + ex.Message; _quickError = true; }
     }
 
     private async Task CreateApiProxySkeletonAsync()
@@ -516,7 +516,7 @@ else
         await WorkspaceRepo.CreateDirectoryAsync(targetsDir);
 
         var proxyXmlPath = System.IO.Path.Combine(apiproxyDir, "proxy.xml");
-        var xml = $"<APIProxy name=\"{name}\">\n  <Description>{name}</Description>\n  <Revision>1</Revision>\n</APIProxy>\n";
+        var xml = "<APIProxy name=\"" + name + "\">\n  <Description>" + name + "</Description>\n  <Revision>1</Revision>\n</APIProxy>\n";
         await WorkspaceRepo.SaveFileAsync(proxyXmlPath, xml);
 
         await LoadFile(proxyXmlPath);
@@ -539,8 +539,8 @@ else
     private async Task RunDeploy(Func<Task> action)
     {
         _deploying = true; _deployMessage = string.Empty; _deployError = false;
-        try   { await action(); _deployMessage = "✔ Deploy realizado com sucesso!"; }
-        catch (Exception ex) { _deployMessage = $"✘ Deploy falhou: {ex.Message}"; _deployError = true; }
+        try   { await action(); _deployMessage = "\u2714 Deploy realizado com sucesso!"; }
+        catch (Exception ex) { _deployMessage = "\u2718 Deploy falhou: " + ex.Message; _deployError = true; }
         finally { _deploying = false; }
     }
 }

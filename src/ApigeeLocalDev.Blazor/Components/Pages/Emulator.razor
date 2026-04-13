@@ -20,8 +20,8 @@
             <input class="input" @bind="_image" list="emulator-images" placeholder="gcr.io/apigee-release/hybrid/apigee-emulator:latest" />
         </label>
         <div class="emulator-actions">
-            <button class="btn btn-primary" @onclick="StartContainer" disabled="@_dockerBusy">▶ Start</button>
-            <button class="btn btn-ghost btn-sm btn-danger" @onclick="StopContainer" disabled="@_dockerBusy">■ Stop</button>
+            <button class="btn btn-primary" @onclick="StartContainer" disabled="@_dockerBusy">&#9654; Start</button>
+            <button class="btn btn-ghost btn-sm btn-danger" @onclick="StopContainer" disabled="@_dockerBusy">&#9632; Stop</button>
         </div>
     </div>
 
@@ -45,7 +45,7 @@
             <span class="status-dot @(_alive ? "dot-green" : "dot-red")"></span>
             <span>@(_checking ? "Verificando..." : (_alive ? "Emulator online" : "Emulator offline"))</span>
         </div>
-        <button class="btn btn-ghost btn-sm" @onclick="Check" disabled="@_checking">↻ Refresh</button>
+        <button class="btn btn-ghost btn-sm" @onclick="Check" disabled="@_checking">&#8635; Refresh</button>
     </div>
 
     @if (_statusError is not null)
@@ -77,7 +77,7 @@
         </label>
     </div>
 
-    <button class="btn btn-primary" @onclick="QuickDeploy" disabled="@(_deploying || !_alive)">
+    <button class="btn btn-primary" @onclick="QuickDeploy" disabled="@_deployDisabled">
         @(_deploying ? "Deploying..." : "Deploy ZIP")
     </button>
 
@@ -105,6 +105,8 @@
     private string        _dockerMessage = string.Empty;
     private bool          _dockerError;
 
+    private bool _deployDisabled => _deploying || !_alive;
+
     protected override async Task OnInitializedAsync()
     {
         _baseUrl = Config["ApigeeEmulator:BaseUrl"] ?? "http://localhost:8080";
@@ -126,7 +128,7 @@
         }
         catch (Exception ex)
         {
-            _dockerMessage = $"Não foi possível listar imagens: {ex.Message}";
+            _dockerMessage = "Não foi possível listar imagens: " + ex.Message;
             _dockerError   = true;
         }
     }
@@ -146,12 +148,12 @@
         try
         {
             await EmulatorClient.StartContainerAsync(_image);
-            _dockerMessage = "✔ Container iniciado.";
+            _dockerMessage = "\u2714 Container iniciado.";
             await Check();
         }
         catch (Exception ex)
         {
-            _dockerMessage = $"✘ Erro ao iniciar: {ex.Message}";
+            _dockerMessage = "\u2718 Erro ao iniciar: " + ex.Message;
             _dockerError   = true;
         }
         finally { _dockerBusy = false; }
@@ -165,12 +167,12 @@
         try
         {
             await EmulatorClient.StopContainerAsync();
-            _dockerMessage = "✔ Container parado.";
+            _dockerMessage = "\u2714 Container parado.";
             await Check();
         }
         catch (Exception ex)
         {
-            _dockerMessage = $"✘ Erro ao parar: {ex.Message}";
+            _dockerMessage = "\u2718 Erro ao parar: " + ex.Message;
             _dockerError   = true;
         }
         finally { _dockerBusy = false; }
@@ -187,7 +189,7 @@
         catch (Exception ex)
         {
             _alive       = false;
-            _statusError = $"Não foi possível conectar: {ex.Message}";
+            _statusError = "Não foi possível conectar: " + ex.Message;
         }
         finally
         {
@@ -205,11 +207,11 @@
         try
         {
             await EmulatorClient.DeployBundleAsync(_env, _zipPath);
-            _message = "✔ Deploy realizado com sucesso!";
+            _message = "\u2714 Deploy realizado com sucesso!";
         }
         catch (Exception ex)
         {
-            _message = $"✘ Erro: {ex.Message}";
+            _message = "\u2718 Erro: " + ex.Message;
             _isError = true;
         }
         finally { _deploying = false; }
