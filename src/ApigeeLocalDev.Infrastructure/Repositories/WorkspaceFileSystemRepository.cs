@@ -1,6 +1,6 @@
 using System.IO.Compression;
+using System.Text;
 using System.Text.Json;
-using System.Text.Json.Serialization;
 using ApigeeLocalDev.Domain.Entities;
 using ApigeeLocalDev.Domain.Interfaces;
 using Microsoft.Extensions.Configuration;
@@ -11,14 +11,6 @@ public sealed class WorkspaceFileSystemRepository(IConfiguration configuration) 
 {
     private static readonly string[] ProxySubFolders =
         ["apiproxy", "apiproxy/policies", "apiproxy/proxies", "apiproxy/targets", "apiproxy/resources"];
-
-    private static readonly JsonSerializerOptions JsonOpts = new()
-    {
-        WriteIndented          = true,
-        PropertyNamingPolicy   = JsonNamingPolicy.CamelCase,
-        // Omite chaves com valor null — usado para sharedFlows quando vazio
-        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
-    };
 
     private string WorkspacesRoot =>
         configuration["WorkspacesRoot"] ?? Path.Combine(
@@ -86,12 +78,11 @@ public sealed class WorkspaceFileSystemRepository(IConfiguration configuration) 
     // ── environment ───────────────────────────────────────────────────────────
 
     /// <summary>
-    /// Garante que environments/{envName}/ exista e grava deployments.json
-    /// com os proxies e shared flows do workspace.
+    /// Cria environments/{envName}/ e grava deployments.json.
     ///
-    /// IMPORTANTE: o emulator retorna 500 "Illegal identifier" quando
-    /// sharedFlows está presente mas vazio. A chave é omitida via null
-    /// quando não há shared flows (JsonIgnoreCondition.WhenWritingNull).
+    /// O emulator retorna 500 quando sharedFlows está presente com valor vazio.
+    /// Por isso usamos Utf8JsonWriter diretamente: a chave sharedFlows só
+    /// é emitida quando há pelo menos um shared flow no workspace.
     /// </summary>
     public async Task EnsureEnvironmentAsync(
         ApigeeWorkspace workspace, string envName, CancellationToken ct = default)
@@ -102,16 +93,40 @@ public sealed class WorkspaceFileSystemRepository(IConfiguration configuration) 
         var proxies     = ListApiProxies(workspace).ToList();
         var sharedFlows = ListSharedFlows(workspace).ToList();
 
-        var deployments = new DeploymentsJson(
-            Proxies:     proxies,
-            // null → chave omitida no JSON quando não há shared flows
-            SharedFlows: sharedFlows.Count > 0 ? sharedFlows : null);
-
-        var json = JsonSerializer.Serialize(deployments, JsonOpts);
-        await File.WriteAllTextAsync(Path.Combine(envPath, "deployments.json"), json, ct);
+        var json = BuildDeploymentsJson(proxies, sharedFlows);
+        await File.WriteAllTextAsync(Path.Combine(envPath, "deployments.json"), json, Encoding.UTF8, ct);
     }
 
-    // ── árvore e arquivos ─────────────────────────────────────────────────────
+    /// <summary>
+    /// Constrói o JSON de deployments.json manualmente.
+    /// sharedFlows é omitido quando vazio — o emulator não aceita array vazio.
+    /// </summary>
+    private static string BuildDeploymentsJson(List<string> proxies, List<string> sharedFlows)
+    {
+        using var ms     = new MemoryStream();
+        using var writer = new Utf8JsonWriter(ms, new JsonWriterOptions { Indented = true });
+
+        writer.WriteStartObject();
+
+        writer.WriteStartArray("proxies");
+        foreach (var p in proxies) writer.WriteStringValue(p);
+        writer.WriteEndArray();
+
+        // sharedFlows só emitido quando não vazio
+        if (sharedFlows.Count > 0)
+        {
+            writer.WriteStartArray("sharedFlows");
+            foreach (var sf in sharedFlows) writer.WriteStringValue(sf);
+            writer.WriteEndArray();
+        }
+
+        writer.WriteEndObject();
+        writer.Flush();
+
+        return Encoding.UTF8.GetString(ms.ToArray());
+    }
+
+    // ── árvore e arquivos ────────────────────────────────────────────────────
 
     public Task<WorkspaceItem> LoadTreeAsync(ApigeeWorkspace workspace, CancellationToken ct = default)
         => Task.FromResult(BuildItem(workspace.RootPath, workspace.RootPath));
@@ -158,7 +173,7 @@ public sealed class WorkspaceFileSystemRepository(IConfiguration configuration) 
             sourceDir = sfSrc;
         else
             throw new DirectoryNotFoundException(
-                "Proxy or shared flow '" + proxyOrFlowName + "' not found in workspace.");
+                $"Proxy or shared flow '{proxyOrFlowName}' not found in workspace.");
 
         var zip = Path.Combine(Path.GetTempPath(),
             proxyOrFlowName + "_" + DateTime.UtcNow.ToString("yyyyMMddHHmmss") + ".zip");
@@ -169,10 +184,6 @@ public sealed class WorkspaceFileSystemRepository(IConfiguration configuration) 
         return Task.FromResult(zip);
     }
 
-    /// <summary>
-    /// Gera ZIP do workspace completo. Deve ser chamado DEPOIS de
-    /// EnsureEnvironmentAsync (que grava deployments.json no disco).
-    /// </summary>
     public Task<string> BuildWorkspaceZipAsync(ApigeeWorkspace workspace, CancellationToken ct = default)
     {
         var zip = Path.Combine(Path.GetTempPath(),
@@ -224,27 +235,30 @@ public sealed class WorkspaceFileSystemRepository(IConfiguration configuration) 
 
         File.WriteAllText(
             Path.Combine(baseDir, "apiproxy", "proxies", "default.xml"),
-            "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n" +
-            "<ProxyEndpoint name=\"default\">\n" +
-            "    <Description>" + proxyName + " proxy endpoint</Description>\n" +
-            "    <HTTPProxyConnection>\n" +
-            "        <BasePath>/" + proxyName + "</BasePath>\n" +
-            "        <VirtualHost>default</VirtualHost>\n" +
-            "    </HTTPProxyConnection>\n" +
-            "    <RouteRule name=\"default\">\n" +
-            "        <TargetEndpoint>default</TargetEndpoint>\n" +
-            "    </RouteRule>\n" +
-            "</ProxyEndpoint>\n");
+            $"""<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<ProxyEndpoint name="default">
+    <Description>{proxyName} proxy endpoint</Description>
+    <HTTPProxyConnection>
+        <BasePath>/{proxyName}</BasePath>
+        <VirtualHost>default</VirtualHost>
+    </HTTPProxyConnection>
+    <RouteRule name="default">
+        <TargetEndpoint>default</TargetEndpoint>
+    </RouteRule>
+</ProxyEndpoint>
+""");
 
         File.WriteAllText(
             Path.Combine(baseDir, "apiproxy", "targets", "default.xml"),
-            "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n" +
-            "<TargetEndpoint name=\"default\">\n" +
-            "    <Description>Default target endpoint</Description>\n" +
-            "    <HTTPTargetConnection>\n" +
-            "        <URL>https://httpbin.org/anything</URL>\n" +
-            "    </HTTPTargetConnection>\n" +
-            "</TargetEndpoint>\n");
+            """
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<TargetEndpoint name="default">
+    <Description>Default target endpoint</Description>
+    <HTTPTargetConnection>
+        <URL>https://httpbin.org/anything</URL>
+    </HTTPTargetConnection>
+</TargetEndpoint>
+""");
     }
 
     private static WorkspaceItem BuildItem(string path, string rootPath)
@@ -269,11 +283,4 @@ public sealed class WorkspaceFileSystemRepository(IConfiguration configuration) 
 
         return new WorkspaceItem(name, path, rel, itemType, children);
     }
-
-    // ── DTOs internos ─────────────────────────────────────────────────────────
-
-    private sealed record DeploymentsJson(
-        [property: JsonPropertyName("proxies")]     List<string>  Proxies,
-        // Nullable: quando null, a chave é omitida do JSON (WhenWritingNull)
-        [property: JsonPropertyName("sharedFlows")] List<string>? SharedFlows);
 }
