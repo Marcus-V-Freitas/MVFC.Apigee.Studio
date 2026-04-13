@@ -6,7 +6,11 @@ namespace ApigeeLocalDev.Infrastructure.Parsers;
 /// <summary>
 /// Faz o parse do XML retornado pela Debug API do Apigee Emulator.
 /// O schema segue o formato da Management API do Apigee Edge:
-///   <DebugSession> → <Messages> → <Message> → <point id="..."> → <DebugInfo>
+///   &lt;DebugSession&gt; → &lt;Messages&gt; → &lt;Message&gt; → &lt;point id="..."&gt; → &lt;DebugInfo&gt;
+///
+/// Nota: este parser é mantido por compatibilidade futura.
+/// O trace primário agora é capturado pelo TraceMiddleware (proxy reverso),
+/// portanto RequestBody/ResponseBody vêm do middleware, não do XML.
 /// </summary>
 public static class DebugSessionXmlParser
 {
@@ -20,7 +24,6 @@ public static class DebugSessionXmlParser
                 $"Falha ao parsear XML de debug session para messageId '{messageId}'.", ex);
         }
 
-        // Extrai variáveis de flow do envelope principal
         var allProps = doc
             .Descendants("Property")
             .Where(p => p.Attribute("name") is not null)
@@ -38,7 +41,15 @@ public static class DebugSessionXmlParser
             .Cast<TracePoint>()
             .ToList();
 
-        return new TraceTransaction(messageId, path, verb, statusCode, points);
+        return new TraceTransaction(
+            MessageId:    messageId,
+            RequestPath:  path,
+            Verb:         verb,
+            StatusCode:   statusCode,
+            DurationMs:   0,
+            RequestBody:  null,
+            ResponseBody: null,
+            Points:       points);
     }
 
     private static TracePoint? ParsePoint(XElement point)
