@@ -2,6 +2,7 @@
 @using ApigeeLocalDev.Domain.Interfaces
 @implements IAsyncDisposable
 @inject IProxyTraceService TraceService
+@inject NavigationManager Nav
 @rendermode RenderMode.InteractiveServer
 
 <div class="card">
@@ -47,11 +48,11 @@
         <p class="help-text mt-2">
             <span class="status-dot dot-green"></span>
             Capturando tráfego via <code>/emulator-runtime/**</code>&hellip;
-            Faça requisições para <code>http://localhost:5000/emulator-runtime/seu-path</code>
+            Faça requisições para <code>@_proxyBaseUrl/emulator-runtime/seu-path</code>
         </p>
     }
 
-    @if (_visibleTransactions.Count() == 0 && !_tracing)
+    @if (!_visibleTransactions.Any() && !_tracing)
     {
         <div class="empty-trace">
             <p class="help-text">Nenhuma transação capturada. Inicie o trace e faça uma requisição para o emulator.</p>
@@ -102,6 +103,9 @@
     private bool   _tracing;
     private string _errorMessage  = string.Empty;
 
+    // URL base derivada do NavigationManager para exibir no help text
+    private string _proxyBaseUrl  = "http://localhost:5000";
+
     private readonly List<TraceTransaction> _transactions = [];
     private CancellationTokenSource? _cts;
 
@@ -119,6 +123,13 @@
     private static string BadgeClass(TraceTransaction tx) => tx.StatusCode >= 400 ? "badge badge-error" : "badge badge-success";
 
     protected override void OnParametersSet() => _environment = DefaultEnvironment;
+
+    protected override void OnInitialized()
+    {
+        // Deriva a URL base real da aplicação para exibir no help text
+        var uri = new Uri(Nav.BaseUri);
+        _proxyBaseUrl = $"{uri.Scheme}://{uri.Host}:{uri.Port}";
+    }
 
     private void StartTrace()
     {
