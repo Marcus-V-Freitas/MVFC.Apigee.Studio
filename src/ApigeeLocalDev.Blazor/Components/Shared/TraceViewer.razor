@@ -10,8 +10,8 @@
         <div class="trace-controls">
             <label class="input-label">
                 PROXY
-                <select class="input" @bind="_selectedProxy" disabled="@(_tracing || !AvailableProxies.Any())">
-                    <option value="">@(AvailableProxies.Any() ? "-- selecione --" : "Selecione um workspace")</option>
+                <select class="input" @bind="_selectedProxy" disabled="@_proxySelectDisabled">
+                    <option value="">@_proxyPlaceholder</option>
                     @foreach (var proxy in AvailableProxies)
                     {
                         <option value="@proxy">@proxy</option>
@@ -26,11 +26,10 @@
                 ENVIRONMENT
                 <input class="input" @bind="_environment" placeholder="local" style="width:100px" disabled="@_tracing" />
             </label>
-            <button class="btn btn-primary" @onclick="StartTrace"
-                    disabled="@(_tracing || string.IsNullOrWhiteSpace(_selectedProxy))">
+            <button class="btn btn-primary" @onclick="StartTrace" disabled="@_startDisabled">
                 &#9654; Start Trace
             </button>
-            <button class="btn btn-ghost btn-sm btn-danger" @onclick="StopTrace" disabled="@(!_tracing)">
+            <button class="btn btn-ghost btn-sm btn-danger" @onclick="StopTrace" disabled="@_stopDisabled">
                 &#9632; Stop
             </button>
             <button class="btn btn-ghost btn-sm" @onclick="ClearTransactions" disabled="@_tracing">
@@ -61,17 +60,17 @@
 
     @foreach (var tx in _transactions)
     {
-        <div class="trace-transaction @(tx.StatusCode >= 400 ? \"tx-error\" : \"tx-ok\")">
+        <div class="trace-transaction @TxClass(tx)">
             <div class="tx-summary">
                 <span class="tx-verb">@tx.Verb</span>
                 <code class="tx-path">@tx.RequestPath</code>
-                <span class="badge @(tx.StatusCode >= 400 ? \"badge-error\" : \"badge-success\")">@tx.StatusCode</span>
+                <span class="badge @BadgeClass(tx)">@tx.StatusCode</span>
                 <span class="tx-id help-text">@tx.MessageId</span>
             </div>
             <div class="trace-timeline">
                 @foreach (var point in tx.Points)
                 {
-                    <div class="trace-point @(point.Error ? \"point-error\" : point.Executed ? \"point-ok\" : \"point-skip\")">
+                    <div class="trace-point @PointClass(point)">
                         <span class="policy-phase">@point.Phase</span>
                         <span class="policy-name">@point.Policy</span>
                         @if (point.DurationMs > 0)
@@ -107,9 +106,20 @@
     private List<TraceTransaction> _transactions = new();
     private CancellationTokenSource? _cts;
 
+    // ── Computed properties para evitar expressões complexas em disabled ──
+    private bool   _hasProxies          => AvailableProxies.Count > 0;
+    private bool   _proxySelectDisabled => _tracing || !_hasProxies;
+    private bool   _startDisabled       => _tracing || string.IsNullOrWhiteSpace(_selectedProxy);
+    private bool   _stopDisabled        => !_tracing;
+    private string _proxyPlaceholder    => _hasProxies ? "-- selecione --" : "Selecione um workspace";
+
+    // ── Computed CSS classes (evitam ternários inline no markup) ──────────
+    private static string TxClass(TraceTransaction tx)    => tx.StatusCode >= 400 ? "trace-transaction tx-error" : "trace-transaction tx-ok";
+    private static string BadgeClass(TraceTransaction tx) => tx.StatusCode >= 400 ? "badge badge-error" : "badge badge-success";
+    private static string PointClass(TracePoint point)    => point.Error ? "trace-point point-error" : point.Executed ? "trace-point point-ok" : "trace-point point-skip";
+
     protected override void OnParametersSet()
     {
-        // Quando o workspace muda e o proxy selecionado some da nova lista, reset
         if (!string.IsNullOrEmpty(_selectedProxy) && !AvailableProxies.Contains(_selectedProxy))
             _selectedProxy = string.Empty;
 
