@@ -458,6 +458,8 @@ label .input { margin-top: var(--space-2); text-transform: none; letter-spacing:
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  /* min-height:0 garante que o flex item não ultrapasse o grid cell */
+  min-height: 0;
 }
 
 .editor-header {
@@ -503,6 +505,18 @@ label .input { margin-top: var(--space-2); text-transform: none; letter-spacing:
   font-family: var(--font-mono);
   font-size: var(--text-xs);
   color: var(--color-text-muted);
+}
+
+/* ─── Monaco Container ──────────────────────────────────────── */
+/*
+  flex:1        → ocupa toda a altura restante do .file-editor (após o header)
+  min-height:0  → impede que o flexbox extrapole o grid cell (bug clássico de flex + overflow)
+  overflow:hidden → Monaco gerencia o próprio scroll internamente
+*/
+.monaco-container {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .code-editor {
