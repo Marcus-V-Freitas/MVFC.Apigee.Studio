@@ -8,28 +8,24 @@ using Microsoft.Extensions.Logging;
 namespace ApigeeLocalDev.Infrastructure.Http;
 
 /// <summary>
-/// Implementação do cliente para o Apigee Emulator local.
+/// Cliente HTTP para o Apigee Emulator local.
 ///
-/// O emulator expõe a Management API no padrão Apigee Edge:
-///   Control port (default 8080): Management API + /v1/emulator/* endpoints
-///   Traffic port (default 8998): proxy runtime
+/// O emulator expõe a Management API do Apigee Edge na porta de controle (8080).
+/// Endpoints válidos confirmados:
+///   GET  /v1/emulator/version
+///   POST /v1/organizations/{org}/apis?action=import&name={proxy}
+///   POST /v1/organizations/{org}/environments/{env}/apis/{api}/revisions/{rev}/deployments
 ///
-/// Referências:
-///   https://discuss.google.dev/t/apigee-emulator-api-documentation/85865
-///   https://docs.apigee.com/api-platform/deploy/deploy-api-proxies-using-management-api
+/// NOTA: ":deployArchive" NÃO é suportado pelo emulator local (requer GCS/Apigee cloud).
 /// </summary>
 public sealed class ApigeeEmulatorClient(
     HttpClient http,
     ILogger<ApigeeEmulatorClient> logger) : IApigeeEmulatorClient
 {
     private const string DefaultContainerName = "apigee-emulator";
+    private const string DefaultOrg           = "emulator";
 
-    // Org padrão do emulator local — não é configurável no container
-    private const string DefaultOrg = "emulator";
-
-    // ── Health check ──────────────────────────────────────────────
-    // GET /v1/emulator/version — endpoint confirmado pela comunidade
-    // https://discuss.google.dev/t/apigee-emulator-api-documentation/85865
+    // ── Health check ──────────────────────────────────────────────────────────
     public async Task<bool> IsAliveAsync(CancellationToken ct = default)
     {
         try
@@ -43,23 +39,28 @@ public sealed class ApigeeEmulatorClient(
         }
     }
 
-    // ── Deploy individual proxy/sharedflow ────────────────────────────────
-    // Padrão Apigee Edge Management API:
-    //   1. POST /v1/organizations/{org}/apis?action=import&name={proxy}
-    //      Body: ZIP (application/octet-stream)
-    //      Response JSON contém { "revision": [ "1" ] } ou similar
-    //   2. POST /v1/organizations/{org}/environments/{env}/apis/{proxy}/revisions/{rev}/deployments
+    // ── Deploy proxy/sharedflow individual ────────────────────────────────────
+    // Passo 1: importar bundle ZIP
+    // POST /v1/organizations/{org}/apis?action=import&name={proxy}
+    //   Body: ZIP com Content-Type application/octet-stream
+    //   Response: { "revision": ["1"], ... }
+    //
+    // Passo 2: deployar revisão no environment
+    // POST /v1/organizations/{org}/environments/{env}/apis/{proxy}/revisions/{rev}/deployments
+    //   Body: vazio (application/x-www-form-urlencoded)
     public async Task DeployBundleAsync(string environment, string zipPath, CancellationToken ct = default)
     {
         if (!File.Exists(zipPath))
             throw new FileNotFoundException("ZIP não encontrado: " + zipPath);
 
-        // Extrai nome do proxy do nome do ZIP (convenção: {proxyName}.zip)
-        var proxyName = Path.GetFileNameWithoutExtension(zipPath);
+        var proxyName = Path.GetFileNameWithoutExtension(zipPath)
+                            .Split('_')[0]; // remove sufixo de timestamp gerado pelo repo
 
-        // ── Passo 1: importar bundle ─────────────────────────────────────────
-        var importUrl = "/v1/organizations/" + DefaultOrg + "/apis?action=import&name=" + Uri.EscapeDataString(proxyName);
-        logger.LogInformation("Importing bundle {Zip} as '{Proxy}' -> {Url}", zipPath, proxyName, importUrl);
+        // ── Passo 1: import ───────────────────────────────────────────────────
+        var importUrl = "/v1/organizations/" + DefaultOrg
+                      + "/apis?action=import&name=" + Uri.EscapeDataString(proxyName);
+
+        logger.LogInformation("Importing '{Proxy}' from {Zip} -> {Url}", proxyName, zipPath, importUrl);
 
         string revision;
         await using (var fs = File.OpenRead(zipPath))
@@ -78,20 +79,22 @@ public sealed class ApigeeEmulatorClient(
             }
 
             revision = ExtractRevision(importBody);
-            logger.LogInformation("Import ok — revision {Rev}", revision);
+            logger.LogInformation("Imported '{Proxy}' revision {Rev}", proxyName, revision);
         }
 
-        // ── Passo 2: deployar a revisão no environment ───────────────────────
+        // ── Passo 2: deploy revision ──────────────────────────────────────────
         var deployUrl = "/v1/organizations/" + DefaultOrg
                       + "/environments/" + Uri.EscapeDataString(environment)
                       + "/apis/" + Uri.EscapeDataString(proxyName)
                       + "/revisions/" + revision
                       + "/deployments";
 
-        logger.LogInformation("Deploying revision {Rev} to env '{Env}' -> {Url}", revision, environment, deployUrl);
+        logger.LogInformation("Deploying '{Proxy}' rev {Rev} to '{Env}' -> {Url}",
+            proxyName, revision, environment, deployUrl);
 
         using var deployContent = new StringContent(string.Empty);
-        deployContent.Headers.ContentType = new MediaTypeHeaderValue("application/x-www-form-urlencoded");
+        deployContent.Headers.ContentType =
+            new MediaTypeHeaderValue("application/x-www-form-urlencoded");
 
         using var deployResp = await http.PostAsync(deployUrl, deployContent, ct);
         var deployBody = await deployResp.Content.ReadAsStringAsync(ct);
@@ -103,40 +106,10 @@ public sealed class ApigeeEmulatorClient(
                 "Deploy falhou (" + (int)deployResp.StatusCode + "): " + deployBody);
         }
 
-        logger.LogInformation("Deploy successful: {StatusCode}", deployResp.StatusCode);
+        logger.LogInformation("Deploy ok: '{Proxy}' em '{Env}'", proxyName, environment);
     }
 
-    // ── Deploy workspace archive completo ───────────────────────────────
-    // POST /v1/organizations/{org}/environments/{env}:deployArchive
-    public async Task DeployArchiveAsync(string environment, string zipPath, CancellationToken ct = default)
-    {
-        if (!File.Exists(zipPath))
-            throw new FileNotFoundException("ZIP não encontrado: " + zipPath);
-
-        var url = "/v1/organizations/" + DefaultOrg
-                + "/environments/" + Uri.EscapeDataString(environment)
-                + ":deployArchive";
-
-        logger.LogInformation("Deploying archive {Zip} to env '{Env}' -> {Url}", zipPath, environment, url);
-
-        await using var fs = File.OpenRead(zipPath);
-        using var content = new StreamContent(fs);
-        content.Headers.ContentType = new MediaTypeHeaderValue("application/octet-stream");
-
-        using var response = await http.PostAsync(url, content, ct);
-        var body = await response.Content.ReadAsStringAsync(ct);
-
-        if (!response.IsSuccessStatusCode)
-        {
-            logger.LogError("DeployArchive failed {Status}: {Body}", response.StatusCode, body);
-            throw new HttpRequestException(
-                "DeployArchive falhou (" + (int)response.StatusCode + "): " + body);
-        }
-
-        logger.LogInformation("DeployArchive successful: {StatusCode}", response.StatusCode);
-    }
-
-    // ── Docker helpers ─────────────────────────────────────────────────
+    // ── Docker helpers ────────────────────────────────────────────────────────
 
     public async Task StartContainerAsync(string image, CancellationToken ct = default)
     {
@@ -169,38 +142,34 @@ public sealed class ApigeeEmulatorClient(
             .ToList();
     }
 
-    // ── Helpers privados ─────────────────────────────────────────────────
+    // ── helpers privados ──────────────────────────────────────────────────────
 
     /// <summary>
-    /// Extrai o número da revisão do JSON retornado pelo endpoint de import.
-    /// O emulator retorna a mesma estrutura do Apigee Edge:
-    ///   { "revision": ["1"], ... }  ou  { "latestRevisionId": "1", ... }
-    /// Fallback: "1" (primeira revisão após import fresco).
+    /// Extrai o número da revisão do JSON de resposta do import.
+    /// Formatos possíveis:
+    ///   { "revision": ["1"] }           — Apigee Edge padrão
+    ///   { "latestRevisionId": "1" }      — formato alternativo
+    /// Fallback: "1".
     /// </summary>
     private static string ExtractRevision(string json)
     {
         try
         {
-            using var doc = JsonDocument.Parse(json);
-            var root = doc.RootElement;
+            using var doc  = JsonDocument.Parse(json);
+            var       root = doc.RootElement;
 
-            // Formato Apigee Edge: { "revision": ["1"] }
-            if (root.TryGetProperty("revision", out var revArr)
-                && revArr.ValueKind == JsonValueKind.Array)
+            if (root.TryGetProperty("revision", out var arr)
+                && arr.ValueKind == JsonValueKind.Array)
             {
-                var last = revArr.EnumerateArray().LastOrDefault();
+                var last = arr.EnumerateArray().LastOrDefault();
                 if (last.ValueKind != JsonValueKind.Undefined)
                     return last.GetString() ?? "1";
             }
 
-            // Formato alternativo: { "latestRevisionId": "1" }
-            if (root.TryGetProperty("latestRevisionId", out var latestRev))
-                return latestRev.GetString() ?? "1";
+            if (root.TryGetProperty("latestRevisionId", out var lat))
+                return lat.GetString() ?? "1";
         }
-        catch
-        {
-            // JSON inválido ou formato desconhecido — usa revisão 1 como fallback
-        }
+        catch { /* JSON inesperado — fallback abaixo */ }
 
         return "1";
     }
@@ -233,15 +202,13 @@ public sealed class ApigeeEmulatorClient(
 
         await proc.WaitForExitAsync(ct);
 
-        var stdout = sbOut.ToString();
-        var stderr = sbErr.ToString();
-
         if (proc.ExitCode != 0 && !ignoreErrors)
-            throw new InvalidOperationException("docker " + arguments + " failed: " + stderr);
+            throw new InvalidOperationException(
+                "docker " + arguments + " failed: " + sbErr);
 
-        if (!string.IsNullOrWhiteSpace(stderr))
-            logger.LogDebug("docker {Args} stderr: {Err}", arguments, stderr.Trim());
+        if (!string.IsNullOrWhiteSpace(sbErr.ToString()))
+            logger.LogDebug("docker {Args} stderr: {Err}", arguments, sbErr.ToString().Trim());
 
-        return stdout;
+        return sbOut.ToString();
     }
 }
