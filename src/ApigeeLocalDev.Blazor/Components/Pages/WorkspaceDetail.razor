@@ -263,8 +263,7 @@ else
     private string?          _selectedFile;
     private string           _fileContent = string.Empty;
 
-    // Sinaliza que o editor precisa ser (re)criado no próximo OnAfterRenderAsync.
-    // Isso cobre tanto a primeira abertura quanto o retorno à página via navegação SPA.
+    // true quando o div do editor já existe no DOM e aguarda monacoInterop.create.
     private bool _editorPendingCreate = false;
 
     private bool   _showNewItem;
@@ -304,11 +303,21 @@ else
         _allTemplates = TemplateRepo.GetAll();
         if (_workspace is not null)
             _tree = await WorkspaceRepo.LoadTreeAsync(_workspace);
+
+        // Reseta o estado do editor a cada visita à página.
+        // No Blazor Server, OnInitializedAsync re-executa quando o usuário navega
+        // para outra página e volta, MAS os campos de instância sobrevivem (mesma
+        // instância do componente no circuito SignalR). Sem esse reset, _selectedFile
+        // continua com o valor anterior, o div do editor é renderizado pelo Blazor,
+        // mas _editorPendingCreate está false — e o OnAfterRenderAsync nunca cria o editor.
+        _selectedFile        = null;
+        _fileContent         = string.Empty;
+        _editorPendingCreate = false;
     }
 
-    // OnAfterRenderAsync é chamado após CADA render — inclusive no retorno à página via
-    // navegação Blazor SPA, onde firstRender=false mas o DOM do editor foi destruído.
-    // Usamos _editorPendingCreate para recriar o editor sempre que necessário.
+    // OnAfterRenderAsync é chamado após CADA render.
+    // _editorPendingCreate garante que o monacoInterop.create só é chamado
+    // depois que o Blazor colocou o div#monaco-editor-container no DOM.
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (_editorPendingCreate && _selectedFile is not null)
@@ -324,15 +333,11 @@ else
 
     private async Task LoadFile(string path)
     {
-        // Descarta instância anterior
         await JS.InvokeVoidAsync("monacoInterop.dispose", EditorId);
 
         _selectedFile = path;
         _fileContent  = await WorkspaceRepo.ReadFileAsync(path);
 
-        // Sinaliza que o próximo render deve criar o editor.
-        // StateHasChanged garante que o div#monaco-editor-container seja criado
-        // pelo Blazor antes do OnAfterRenderAsync tentar montar o Monaco nele.
         _editorPendingCreate = true;
         StateHasChanged();
     }
