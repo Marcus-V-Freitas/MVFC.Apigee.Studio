@@ -1,23 +1,34 @@
 namespace ApigeeLocalDev.Domain.Interfaces;
 
+/// <summary>
+/// Contrato para comunicação com o Apigee Emulator (container Docker local).
+/// </summary>
 public interface IApigeeEmulatorClient
 {
-    Task DeployBundleAsync(string environment, string zipFilePath, CancellationToken ct = default);
+    /// <summary>
+    /// Verifica se o emulator está acessível.
+    /// </summary>
     Task<bool> IsAliveAsync(CancellationToken ct = default);
 
     /// <summary>
-    /// Sobe o container do Apigee Emulator usando a imagem Docker informada.
-    /// A implementação pode usar docker CLI ou qualquer outro mecanismo.
+    /// Faz deploy de um bundle individual (proxy ou shared flow).
+    /// O ZIP deve conter "apiproxy/" ou "sharedflowbundle/" na raiz.
+    /// Endpoint: POST /v1/emulator/deploy?environment={env}
     /// </summary>
+    Task DeployBundleAsync(string environment, string zipPath, CancellationToken ct = default);
+
+    /// <summary>
+    /// Faz deploy de um archive completo do workspace (src/main/apigee/...).
+    /// Endpoint: POST /v1/emulator/deployArchive?environment={env}
+    /// </summary>
+    Task DeployArchiveAsync(string environment, string zipPath, CancellationToken ct = default);
+
+    /// <summary>Lista imagens Docker disponíveis do emulator.</summary>
+    Task<IReadOnlyList<string>> ListImagesAsync(CancellationToken ct = default);
+
+    /// <summary>Inicia o container do emulator com a imagem especificada.</summary>
     Task StartContainerAsync(string image, CancellationToken ct = default);
 
-    /// <summary>
-    /// Derruba (stop + rm) o container padrão do Apigee Emulator, se existir.
-    /// </summary>
+    /// <summary>Para o container do emulator.</summary>
     Task StopContainerAsync(CancellationToken ct = default);
-
-    /// <summary>
-    /// Lista imagens Docker disponíveis no host para auto-completar na UI.
-    /// </summary>
-    Task<IReadOnlyList<string>> ListImagesAsync(CancellationToken ct = default);
 }
