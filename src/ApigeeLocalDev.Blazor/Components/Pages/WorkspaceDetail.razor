@@ -2,12 +2,14 @@
 @using ApigeeLocalDev.Domain.Entities
 @using ApigeeLocalDev.Domain.Interfaces
 @using ApigeeLocalDev.Application.UseCases
+@using ApigeeLocalDev.Blazor.Services
 @using Microsoft.AspNetCore.Components.Web
 @using Microsoft.JSInterop
 @inject IWorkspaceRepository WorkspaceRepo
 @inject DeployToEmulatorUseCase DeployUseCase
 @inject IPolicyTemplateRepository TemplateRepo
 @inject GeneratePolicyUseCase GeneratePolicy
+@inject ToastService Toast
 @inject IJSRuntime JS
 @rendermode RenderMode.InteractiveServer
 
@@ -304,6 +306,7 @@ else
     {
         if (_selectedFile is null) return;
         await WorkspaceRepo.SaveFileAsync(_selectedFile, _fileContent);
+        Toast.ShowSuccess("\u2714 Arquivo salvo com sucesso!");
     }
 
     private async Task DeleteSelectedFile()
@@ -317,6 +320,7 @@ else
         _selectedFile = null;
         _fileContent  = string.Empty;
         _tree         = await WorkspaceRepo.LoadTreeAsync(_workspace);
+        Toast.ShowSuccess("\u2714 Arquivo '" + fileName + "' removido.");
     }
 
     private void OpenNewItemDialog(bool isDir)
@@ -391,6 +395,7 @@ else
 
             _quickMessage = "\u2714 Criado: " + System.IO.Path.GetFileName(path);
             _tree = await WorkspaceRepo.LoadTreeAsync(_workspace);
+            Toast.ShowSuccess("Política '" + System.IO.Path.GetFileName(path) + "' criada.");
         }
         catch (Exception ex) { _quickMessage = "\u2718 " + ex.Message; _quickError = true; }
         finally { _quickGenerating = false; }
@@ -460,6 +465,7 @@ else
             _quickMessage = "\u2714 Shared Flow '" + name + "' criado.";
             _quickAddOpen = false;
             _tree = await WorkspaceRepo.LoadTreeAsync(_workspace);
+            Toast.ShowSuccess("Shared Flow '" + name + "' criado.");
         }
         catch (Exception ex) { _quickMessage = "\u2718 " + ex.Message; _quickError = true; }
     }
@@ -491,6 +497,7 @@ else
             _quickAddOpen = false;
             _deployEnv    = envName;
             _tree = await WorkspaceRepo.LoadTreeAsync(_workspace);
+            Toast.ShowSuccess("Environment '" + envName + "' criado.");
         }
         catch (Exception ex) { _quickMessage = "\u2718 " + ex.Message; _quickError = true; }
     }
@@ -515,13 +522,63 @@ else
         await WorkspaceRepo.CreateDirectoryAsync(resourcesDir);
         await WorkspaceRepo.CreateDirectoryAsync(targetsDir);
 
-        var proxyXmlPath = System.IO.Path.Combine(apiproxyDir, "proxy.xml");
-        var xml = "<APIProxy name=\"" + name + "\">\n  <Description>" + name + "</Description>\n  <Revision>1</Revision>\n</APIProxy>\n";
-        await WorkspaceRepo.SaveFileAsync(proxyXmlPath, xml);
+        // apiproxy descriptor
+        var descriptorXml =
+            "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n" +
+            "<APIProxy name=\"" + name + "\">\n" +
+            "    <Description>" + name + "</Description>\n" +
+            "    <Revision>1</Revision>\n" +
+            "</APIProxy>\n";
+        await WorkspaceRepo.SaveFileAsync(System.IO.Path.Combine(apiproxyDir, name + ".xml"), descriptorXml);
 
-        await LoadFile(proxyXmlPath);
+        // proxies/default.xml
+        var proxyEndpointXml =
+            "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n" +
+            "<ProxyEndpoint name=\"default\">\n" +
+            "    <Description>" + name + " proxy endpoint</Description>\n" +
+            "    <HTTPProxyConnection>\n" +
+            "        <BasePath>/" + name + "</BasePath>\n" +
+            "        <VirtualHost>default</VirtualHost>\n" +
+            "    </HTTPProxyConnection>\n" +
+            "    <PreFlow name=\"PreFlow\">\n" +
+            "        <Request/>\n" +
+            "        <Response/>\n" +
+            "    </PreFlow>\n" +
+            "    <PostFlow name=\"PostFlow\">\n" +
+            "        <Request/>\n" +
+            "        <Response/>\n" +
+            "    </PostFlow>\n" +
+            "    <Flows/>\n" +
+            "    <RouteRule name=\"default\">\n" +
+            "        <TargetEndpoint>default</TargetEndpoint>\n" +
+            "    </RouteRule>\n" +
+            "</ProxyEndpoint>\n";
+        await WorkspaceRepo.SaveFileAsync(System.IO.Path.Combine(proxiesDir, "default.xml"), proxyEndpointXml);
+
+        // targets/default.xml
+        var targetEndpointXml =
+            "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n" +
+            "<TargetEndpoint name=\"default\">\n" +
+            "    <Description>Default target endpoint</Description>\n" +
+            "    <PreFlow name=\"PreFlow\">\n" +
+            "        <Request/>\n" +
+            "        <Response/>\n" +
+            "    </PreFlow>\n" +
+            "    <PostFlow name=\"PostFlow\">\n" +
+            "        <Request/>\n" +
+            "        <Response/>\n" +
+            "    </PostFlow>\n" +
+            "    <Flows/>\n" +
+            "    <HTTPTargetConnection>\n" +
+            "        <URL>https://httpbin.org/anything</URL>\n" +
+            "    </HTTPTargetConnection>\n" +
+            "</TargetEndpoint>\n";
+        await WorkspaceRepo.SaveFileAsync(System.IO.Path.Combine(targetsDir, "default.xml"), targetEndpointXml);
+
+        await LoadFile(System.IO.Path.Combine(proxiesDir, "default.xml"));
         _quickAddOpen = false;
         _tree = await WorkspaceRepo.LoadTreeAsync(_workspace);
+        Toast.ShowSuccess("API Proxy '" + name + "' criado com default.xml em proxies e targets.");
     }
 
     private async Task DeployProxy()
@@ -539,8 +596,18 @@ else
     private async Task RunDeploy(Func<Task> action)
     {
         _deploying = true; _deployMessage = string.Empty; _deployError = false;
-        try   { await action(); _deployMessage = "\u2714 Deploy realizado com sucesso!"; }
-        catch (Exception ex) { _deployMessage = "\u2718 Deploy falhou: " + ex.Message; _deployError = true; }
+        try
+        {
+            await action();
+            _deployMessage = "\u2714 Deploy realizado com sucesso!";
+            Toast.ShowSuccess("Deploy concluído com sucesso!");
+        }
+        catch (Exception ex)
+        {
+            _deployMessage = "\u2718 Deploy falhou: " + ex.Message;
+            _deployError = true;
+            Toast.ShowError("Deploy falhou: " + ex.Message);
+        }
         finally { _deploying = false; }
     }
 }
