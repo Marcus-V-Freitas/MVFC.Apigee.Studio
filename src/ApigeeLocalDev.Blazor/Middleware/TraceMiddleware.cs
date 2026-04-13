@@ -5,22 +5,18 @@ using ApigeeLocalDev.Domain.Interfaces;
 namespace ApigeeLocalDev.Blazor.Middleware;
 
 /// <summary>
-/// Middleware de proxy reverso leve que intercepta todas as requisições
-/// em /emulator-runtime/**, as encaminha ao emulator runtime (:8998)
-/// e publica uma TraceTransaction no IProxyTraceService.
-///
-/// Convenção ASP.NET Core para middlewares:
-///   - Construtor: apenas singletons (RequestDelegate, IProxyTraceService)
-///   - InvokeAsync: dependências que podem ser scoped/transient (IHttpClientFactory, ILogger)
+/// Intercepta /emulator-runtime/**, encaminha ao runtime (:8998) e
+/// publica uma TraceTransaction com os TracePoints do bundle no disco.
 /// </summary>
 public sealed class TraceMiddleware(RequestDelegate next, IProxyTraceService traceService)
 {
     private const string Prefix = "/emulator-runtime";
-    private const int MaxBodyBytes = 64 * 1024; // 64 KB
+    private const int MaxBodyBytes = 64 * 1024;
 
     public async Task InvokeAsync(
         HttpContext context,
         IHttpClientFactory httpClientFactory,
+        IBundleFlowReader bundleFlowReader,
         ILogger<TraceMiddleware> logger)
     {
         if (!context.Request.Path.StartsWithSegments(Prefix, out var remaining))
@@ -34,7 +30,7 @@ public sealed class TraceMiddleware(RequestDelegate next, IProxyTraceService tra
         var verb      = context.Request.Method;
         var path      = remaining.HasValue ? remaining.Value! : "/";
 
-        // ── Captura request body ────────────────────────────────────────
+        // ── Captura request body ────────────────────────────────────
         context.Request.EnableBuffering();
         string? requestBody = null;
         if (context.Request.ContentLength is > 0)
@@ -47,7 +43,7 @@ public sealed class TraceMiddleware(RequestDelegate next, IProxyTraceService tra
             context.Request.Body.Position = 0;
         }
 
-        // ── Encaminha ao emulator runtime ─────────────────────────────
+        // ── Proxy para o emulator runtime ───────────────────────────
         var client = httpClientFactory.CreateClient("EmulatorRuntime");
         using var proxyRequest = BuildProxyRequest(context, path);
 
@@ -93,7 +89,23 @@ public sealed class TraceMiddleware(RequestDelegate next, IProxyTraceService tra
 
         sw.Stop();
 
-        // ── Publica no trace ─────────────────────────────────────────
+        // ── Resolve policies do bundle no disco ───────────────────────
+        List<TracePoint> points = [];
+        var activeProxy = traceService.ActiveProxy;
+        if (activeProxy is { } ap)
+        {
+            try
+            {
+                points = [.. bundleFlowReader.ReadFlowPoints(
+                    ap.WorkspaceRoot, ap.ProxyName, statusCode)];
+            }
+            catch (Exception ex)
+            {
+                logger.LogDebug(ex, "Não foi possível ler flow points do bundle");
+            }
+        }
+
+        // ── Publica no trace ──────────────────────────────────────
         traceService.Publish(new TraceTransaction(
             MessageId:    messageId,
             RequestPath:  path,
@@ -102,13 +114,13 @@ public sealed class TraceMiddleware(RequestDelegate next, IProxyTraceService tra
             DurationMs:   sw.ElapsedMilliseconds,
             RequestBody:  requestBody,
             ResponseBody: responseBody,
-            Points:       []));
+            Points:       points));
     }
 
     private static HttpRequestMessage BuildProxyRequest(HttpContext context, string path)
     {
-        var query      = context.Request.QueryString.Value ?? string.Empty;
-        var targetUri  = new Uri(path + query, UriKind.Relative);
+        var query     = context.Request.QueryString.Value ?? string.Empty;
+        var targetUri = new Uri(path + query, UriKind.Relative);
 
         var request = new HttpRequestMessage
         {

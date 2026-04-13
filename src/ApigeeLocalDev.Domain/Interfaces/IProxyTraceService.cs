@@ -25,4 +25,13 @@ public interface IProxyTraceService
 
     /// <summary>Desativa a captura de transações.</summary>
     void Stop();
+
+    /// <summary>
+    /// Registra o workspace e proxy ativo para que o middleware
+    /// possa resolver os flows do bundle no disco.
+    /// </summary>
+    void SetActiveProxy(string workspaceRoot, string proxyName);
+
+    /// <summary>Retorna o workspace root e proxy name registrados, ou null se não houver.</summary>
+    (string WorkspaceRoot, string ProxyName)? ActiveProxy { get; }
 }

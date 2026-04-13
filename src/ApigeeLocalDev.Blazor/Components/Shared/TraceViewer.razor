@@ -55,7 +55,7 @@
     @if (!_visibleTransactions.Any() && !_tracing)
     {
         <div class="empty-trace">
-            <p class="help-text">Nenhuma transação capturada. Inicie o trace e faça uma requisição para o emulator.</p>
+            <p class="help-text">Nenhuma transação capturada. Selecione um workspace e proxy, inicie o trace e faça uma requisição.</p>
         </div>
     }
 
@@ -69,6 +69,69 @@
                 <span class="tx-duration help-text">@tx.DurationMs ms</span>
                 <span class="tx-id help-text">@tx.MessageId</span>
             </div>
+
+            @if (tx.Points.Count > 0)
+            {
+                <div class="policy-timeline">
+                    @{
+                        var requestSteps  = tx.Points.Where(p => p.Phase == "ProxyRequest").ToList();
+                        var responseSteps = tx.Points.Where(p => p.Phase == "ProxyResponse").ToList();
+                    }
+
+                    @if (requestSteps.Count > 0)
+                    {
+                        <div class="timeline-phase">
+                            <span class="phase-label request-label">&#8599; Request</span>
+                            <div class="timeline-steps">
+                                @foreach (var pt in requestSteps)
+                                {
+                                    <div class="timeline-step @StepClass(pt)" title="@(pt.Condition ?? string.Empty)">
+                                        <span class="step-icon">@StepIcon(pt)</span>
+                                        <span class="step-name">@pt.Policy</span>
+                                        @if (!string.IsNullOrWhiteSpace(pt.Condition))
+                                        {
+                                            <span class="step-condition" title="@pt.Condition">if</span>
+                                        }
+                                    </div>
+                                    @if (requestSteps.Last() != pt)
+                                    {
+                                        <span class="step-arrow">→</span>
+                                    }
+                                }
+                            </div>
+                        </div>
+                    }
+
+                    <div class="timeline-target">
+                        <span class="target-icon">&#9654;</span>
+                        <span class="target-label">Target</span>
+                    </div>
+
+                    @if (responseSteps.Count > 0)
+                    {
+                        <div class="timeline-phase">
+                            <span class="phase-label response-label">&#8600; Response</span>
+                            <div class="timeline-steps">
+                                @foreach (var pt in responseSteps)
+                                {
+                                    <div class="timeline-step @StepClass(pt)" title="@(pt.Condition ?? string.Empty)">
+                                        <span class="step-icon">@StepIcon(pt)</span>
+                                        <span class="step-name">@pt.Policy</span>
+                                        @if (!string.IsNullOrWhiteSpace(pt.Condition))
+                                        {
+                                            <span class="step-condition" title="@pt.Condition">if</span>
+                                        }
+                                    </div>
+                                    @if (responseSteps.Last() != pt)
+                                    {
+                                        <span class="step-arrow">→</span>
+                                    }
+                                }
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
 
             @if (!string.IsNullOrWhiteSpace(tx.RequestBody))
             {
@@ -91,19 +154,12 @@
 
 @code {
     [Parameter] public string DefaultEnvironment { get; set; } = "local";
-
-    /// <summary>
-    /// Lista de API proxies disponíveis no workspace selecionado.
-    /// Quando fornecida, exibe um seletor para filtrar transações por proxy.
-    /// </summary>
     [Parameter] public List<string>? AvailableProxies { get; set; }
 
     private string _environment   = "local";
     private string _selectedProxy = string.Empty;
     private bool   _tracing;
     private string _errorMessage  = string.Empty;
-
-    // URL base derivada do NavigationManager para exibir no help text
     private string _proxyBaseUrl  = "http://localhost:5000";
 
     private readonly List<TraceTransaction> _transactions = [];
@@ -112,7 +168,6 @@
     private bool _startDisabled => _tracing;
     private bool _stopDisabled  => !_tracing;
 
-    /// <summary>Filtra por proxy se um estiver selecionado.</summary>
     private IEnumerable<TraceTransaction> _visibleTransactions =>
         string.IsNullOrEmpty(_selectedProxy)
             ? _transactions
@@ -121,12 +176,13 @@
 
     private static string TxClass(TraceTransaction tx)    => tx.StatusCode >= 400 ? "trace-transaction tx-error" : "trace-transaction tx-ok";
     private static string BadgeClass(TraceTransaction tx) => tx.StatusCode >= 400 ? "badge badge-error" : "badge badge-success";
+    private static string StepClass(TracePoint pt)        => pt.Error ? "step-error" : pt.Executed ? "step-ok" : "step-skip";
+    private static string StepIcon(TracePoint pt)         => pt.Error ? "❌" : pt.Executed ? "✅" : "⏭️";
 
     protected override void OnParametersSet() => _environment = DefaultEnvironment;
 
     protected override void OnInitialized()
     {
-        // Deriva a URL base real da aplicação para exibir no help text
         var uri = new Uri(Nav.BaseUri);
         _proxyBaseUrl = $"{uri.Scheme}://{uri.Host}:{uri.Port}";
     }

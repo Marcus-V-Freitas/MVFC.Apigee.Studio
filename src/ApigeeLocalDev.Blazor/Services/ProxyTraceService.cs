@@ -5,21 +5,13 @@ using ApigeeLocalDev.Domain.Interfaces;
 
 namespace ApigeeLocalDev.Blazor.Services;
 
-/// <summary>
-/// Singleton que gerencia o ciclo de vida do trace por proxy reverso.
-/// O TraceMiddleware chama Publish() a cada request interceptado;
-/// o TraceViewer.razor consome via ReadAllAsync().
-///
-/// Usa broadcast pattern: cada chamada a ReadAllAsync() registra um
-/// ChannelWriter próprio — todos os subscribers recebem as mesmas
-/// transações (suporta múltiplas abas abertas simultaneamente).
-/// </summary>
 public sealed class ProxyTraceService : IProxyTraceService
 {
     private readonly object _lock = new();
     private readonly List<ChannelWriter<TraceTransaction>> _subscribers = [];
 
     public bool IsActive { get; private set; }
+    public (string WorkspaceRoot, string ProxyName)? ActiveProxy { get; private set; }
 
     public void Start()
     {
@@ -30,7 +22,16 @@ public sealed class ProxyTraceService : IProxyTraceService
     public void Stop()
     {
         lock (_lock)
-            IsActive = false;
+        {
+            IsActive   = false;
+            ActiveProxy = null;
+        }
+    }
+
+    public void SetActiveProxy(string workspaceRoot, string proxyName)
+    {
+        lock (_lock)
+            ActiveProxy = (workspaceRoot, proxyName);
     }
 
     public void Publish(TraceTransaction transaction)
