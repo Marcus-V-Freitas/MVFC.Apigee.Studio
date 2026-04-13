@@ -51,7 +51,7 @@
         </p>
     }
 
-    @if (_visibleTransactions.Count == 0 && !_tracing)
+    @if (_visibleTransactions.Count() == 0 && !_tracing)
     {
         <div class="empty-trace">
             <p class="help-text">Nenhuma transação capturada. Inicie o trace e faça uma requisição para o emulator.</p>
