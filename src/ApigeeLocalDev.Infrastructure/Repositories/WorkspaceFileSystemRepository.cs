@@ -26,8 +26,13 @@ public sealed class WorkspaceFileSystemRepository(IConfiguration configuration) 
         configuration["WorkspacesRoot"] ?? Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "apigee-workspaces");
 
-    private static string ApigeeRoot(ApigeeWorkspace workspace)
-        => Path.Combine(workspace.RootPath, "src", "main", "apigee");
+    // A estrutura correta do Apigee Cloud Code workspace é:
+    //   <workspace-root>/
+    //   ├── apiproxies/
+    //   ├── sharedflows/
+    //   └── environments/
+    // Sem nenhum src/main/apigee intermediário.
+    private static string ApigeeRoot(ApigeeWorkspace workspace) => workspace.RootPath;
 
     // ── lista ──────────────────────────────────────────────────────────────
 
@@ -66,15 +71,14 @@ public sealed class WorkspaceFileSystemRepository(IConfiguration configuration) 
             ? customPath.Trim()
             : Path.Combine(WorkspacesRoot, name);
 
-        var apigeeRoot = Path.Combine(fullPath, "src", "main", "apigee");
-
-        Directory.CreateDirectory(Path.Combine(apigeeRoot, "apiproxies"));
-        Directory.CreateDirectory(Path.Combine(apigeeRoot, "sharedflows"));
-        Directory.CreateDirectory(Path.Combine(apigeeRoot, "environments"));
+        // Cria as três pastas raiz do workspace diretamente em fullPath
+        Directory.CreateDirectory(Path.Combine(fullPath, "apiproxies"));
+        Directory.CreateDirectory(Path.Combine(fullPath, "sharedflows"));
+        Directory.CreateDirectory(Path.Combine(fullPath, "environments"));
 
         if (initialProxies is { Count: > 0 })
             foreach (var p in initialProxies.Where(p => !string.IsNullOrWhiteSpace(p)))
-                ScaffoldApiProxy(apigeeRoot, p.Trim());
+                ScaffoldApiProxy(fullPath, p.Trim());
 
         return new ApigeeWorkspace(name, fullPath);
     }
@@ -111,6 +115,7 @@ public sealed class WorkspaceFileSystemRepository(IConfiguration configuration) 
         foreach (var p in proxies) writer.WriteStringValue(p);
         writer.WriteEndArray();
 
+        // sharedFlows omitido quando vazio — o emulator não aceita array vazio
         if (sharedFlows.Count > 0)
         {
             writer.WriteStartArray("sharedFlows");
@@ -124,7 +129,7 @@ public sealed class WorkspaceFileSystemRepository(IConfiguration configuration) 
         return Encoding.UTF8.GetString(ms.ToArray());
     }
 
-    // ── árvore e arquivos ───────────────────────────────────────────────────
+    // ── árvore e arquivos ──────────────────────────────────────────────────
 
     public Task<WorkspaceItem> LoadTreeAsync(ApigeeWorkspace workspace, CancellationToken ct = default)
         => Task.FromResult(BuildItem(workspace.RootPath, workspace.RootPath));
@@ -193,7 +198,7 @@ public sealed class WorkspaceFileSystemRepository(IConfiguration configuration) 
         return Task.FromResult(zip);
     }
 
-    // ── privados ────────────────────────────────────────────────────────────
+    // ── privados ───────────────────────────────────────────────────────────
 
     private static void AddDirectoryToZip(ZipArchive archive, string sourceDir, string zipRoot)
     {
@@ -225,17 +230,12 @@ public sealed class WorkspaceFileSystemRepository(IConfiguration configuration) 
         }
     }
 
-    /// <summary>
-    /// Cria a estrutura de pastas de um API proxy e gera os XMLs via XDocument,
-    /// evitando qualquer problema com raw string literals interpoladas e aspas.
-    /// </summary>
     private static void ScaffoldApiProxy(string apigeeRoot, string proxyName)
     {
         var baseDir = Path.Combine(apigeeRoot, "apiproxies", proxyName);
         foreach (var sub in ProxySubFolders)
             Directory.CreateDirectory(Path.Combine(baseDir, sub));
 
-        // ── ProxyEndpoint (default.xml) ──────────────────────────────────────
         var proxyEndpoint = new XDocument(
             new XDeclaration("1.0", "UTF-8", "yes"),
             new XElement("ProxyEndpoint",
@@ -250,7 +250,6 @@ public sealed class WorkspaceFileSystemRepository(IConfiguration configuration) 
 
         SaveXml(proxyEndpoint, Path.Combine(baseDir, "apiproxy", "proxies", "default.xml"));
 
-        // ── TargetEndpoint (default.xml) ─────────────────────────────────────
         var targetEndpoint = new XDocument(
             new XDeclaration("1.0", "UTF-8", "yes"),
             new XElement("TargetEndpoint",
