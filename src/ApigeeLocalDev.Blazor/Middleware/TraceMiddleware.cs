@@ -9,18 +9,19 @@ namespace ApigeeLocalDev.Blazor.Middleware;
 /// em /emulator-runtime/**, as encaminha ao emulator runtime (:8998)
 /// e publica uma TraceTransaction no IProxyTraceService.
 ///
-/// Rota:  /emulator-runtime/{**rest}
-/// Target: http://localhost:{EmulatorRuntime:Port}/{rest}
+/// Convenção ASP.NET Core para middlewares:
+///   - Construtor: apenas singletons (RequestDelegate, IProxyTraceService)
+///   - InvokeAsync: dependências que podem ser scoped/transient (IHttpClientFactory, ILogger)
 /// </summary>
-public sealed class TraceMiddleware(
-    IProxyTraceService traceService,
-    IHttpClientFactory httpClientFactory,
-    ILogger<TraceMiddleware> logger)
+public sealed class TraceMiddleware(RequestDelegate next, IProxyTraceService traceService)
 {
     private const string Prefix = "/emulator-runtime";
     private const int MaxBodyBytes = 64 * 1024; // 64 KB
 
-    public async Task InvokeAsync(HttpContext context, RequestDelegate next)
+    public async Task InvokeAsync(
+        HttpContext context,
+        IHttpClientFactory httpClientFactory,
+        ILogger<TraceMiddleware> logger)
     {
         if (!context.Request.Path.StartsWithSegments(Prefix, out var remaining))
         {
@@ -28,12 +29,12 @@ public sealed class TraceMiddleware(
             return;
         }
 
-        var sw = Stopwatch.StartNew();
-        var messageId = $"tx-{Guid.NewGuid():N[..8]}";
-        var verb = context.Request.Method;
-        var path = remaining.HasValue ? remaining.Value! : "/";
+        var sw        = Stopwatch.StartNew();
+        var messageId = $"tx-{Guid.NewGuid():N}"[..16];
+        var verb      = context.Request.Method;
+        var path      = remaining.HasValue ? remaining.Value! : "/";
 
-        // ── Captura request body ───────────────────────────────────────────
+        // ── Captura request body ────────────────────────────────────────
         context.Request.EnableBuffering();
         string? requestBody = null;
         if (context.Request.ContentLength is > 0)
@@ -46,7 +47,7 @@ public sealed class TraceMiddleware(
             context.Request.Body.Position = 0;
         }
 
-        // ── Encaminha ao emulator runtime ──────────────────────────────────
+        // ── Encaminha ao emulator runtime ─────────────────────────────
         var client = httpClientFactory.CreateClient("EmulatorRuntime");
         using var proxyRequest = BuildProxyRequest(context, path);
 
@@ -63,7 +64,6 @@ public sealed class TraceMiddleware(
 
             statusCode = (int)proxyResponse.StatusCode;
 
-            // Copia headers de resposta
             foreach (var (key, values) in proxyResponse.Headers)
                 context.Response.Headers.TryAdd(key, values.ToArray());
             foreach (var (key, values) in proxyResponse.Content.Headers)
@@ -71,7 +71,6 @@ public sealed class TraceMiddleware(
 
             context.Response.StatusCode = statusCode;
 
-            // Lê body da resposta para captura e repasse
             var responseBytes = await proxyResponse.Content.ReadAsByteArrayAsync(context.RequestAborted);
             if (responseBytes.Length > 0)
             {
@@ -94,7 +93,7 @@ public sealed class TraceMiddleware(
 
         sw.Stop();
 
-        // ── Publica no trace ───────────────────────────────────────────────
+        // ── Publica no trace ─────────────────────────────────────────
         traceService.Publish(new TraceTransaction(
             MessageId:    messageId,
             RequestPath:  path,
@@ -108,16 +107,15 @@ public sealed class TraceMiddleware(
 
     private static HttpRequestMessage BuildProxyRequest(HttpContext context, string path)
     {
-        var query = context.Request.QueryString.Value ?? string.Empty;
-        var targetUri = new Uri(path + query, UriKind.Relative);
+        var query      = context.Request.QueryString.Value ?? string.Empty;
+        var targetUri  = new Uri(path + query, UriKind.Relative);
 
         var request = new HttpRequestMessage
         {
-            Method  = new HttpMethod(context.Request.Method),
+            Method     = new HttpMethod(context.Request.Method),
             RequestUri = targetUri
         };
 
-        // Copia headers relevantes (exclui Host)
         foreach (var (key, values) in context.Request.Headers)
         {
             if (string.Equals(key, "Host", StringComparison.OrdinalIgnoreCase)) continue;
