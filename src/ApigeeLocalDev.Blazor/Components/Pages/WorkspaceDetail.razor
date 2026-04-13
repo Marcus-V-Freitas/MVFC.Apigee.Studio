@@ -152,6 +152,37 @@ else
                         </div>
                     </div>
                 }
+                else if (_quickAddCategory == "sharedflows")
+                {
+                    <!-- Scaffold de Shared Flow -->
+                    <div class="drawer-body drawer-body--single">
+                        <label>
+                            Nome do Shared Flow
+                            <input class="input" @bind="_quickFileName" placeholder="meu-shared-flow" />
+                        </label>
+                        <button class="btn btn-primary" @onclick="ConfirmQuickSharedFlow">Criar Shared Flow</button>
+                        @if (!string.IsNullOrEmpty(_quickMessage))
+                        {
+                            <p class="mt-2 @QuickMessageClass">@_quickMessage</p>
+                        }
+                    </div>
+                }
+                else if (_quickAddCategory == "environments")
+                {
+                    <!-- Scaffold de Environment -->
+                    <div class="drawer-body drawer-body--single">
+                        <label>
+                            Nome do Environment
+                            <input class="input" @bind="_quickFileName" placeholder="local" />
+                        </label>
+                        <p class="help-text">Cria a pasta do environment com arquivos mínimos (deployments.json, flowhooks.json, targetservers.json).</p>
+                        <button class="btn btn-primary" @onclick="ConfirmQuickEnvironment">Criar Environment</button>
+                        @if (!string.IsNullOrEmpty(_quickMessage))
+                        {
+                            <p class="mt-2 @QuickMessageClass">@_quickMessage</p>
+                        }
+                    </div>
+                }
                 else
                 {
                     var labelText       = _quickAddCategory == "apiproxies" ? "Nome da API (proxy)" : "Nome do arquivo";
@@ -178,8 +209,8 @@ else
     <div class="deploy-panel card">
         <h3>Deploy to Emulator</h3>
         <div class="deploy-tabs">
-            <button class="@TabClass(DeployModeProxy)" @onclick="SetDeployModeProxy">Proxy / Shared Flow</button>
             <button class="@TabClass(DeployModeFull)"  @onclick="SetDeployModeFull">Workspace completo</button>
+            <button class="@TabClass(DeployModeProxy)" @onclick="SetDeployModeProxy">Proxy / Shared Flow</button>
         </div>
 
         @if (_deployMode == DeployModeProxy)
@@ -233,7 +264,8 @@ else
 
     private string _deployTarget  = string.Empty;
     private string _deployEnv     = "local";
-    private string _deployMode    = DeployModeProxy;
+    // default: workspace completo
+    private string _deployMode    = DeployModeFull;
     private bool   _deploying;
     private string _deployMessage = string.Empty;
     private bool   _deployError;
@@ -386,6 +418,79 @@ else
                 _quickAddOpen = false;
                 _tree = await WorkspaceRepo.LoadTreeAsync(_workspace);
             }
+        }
+        catch (Exception ex) { _quickMessage = $"✘ {ex.Message}"; _quickError = true; }
+    }
+
+    private async Task ConfirmQuickSharedFlow()
+    {
+        if (string.IsNullOrWhiteSpace(_quickFileName) || _workspace is null) return;
+        _quickMessage = string.Empty;
+        _quickError   = false;
+        try
+        {
+            var name    = _quickFileName.Trim();
+            var sfRoot  = System.IO.Path.Combine(_workspace.RootPath, "sharedflows", name);
+            var sfDir   = System.IO.Path.Combine(sfRoot, "sharedflowbundle");
+            var polDir  = System.IO.Path.Combine(sfDir, "policies");
+            var resDir  = System.IO.Path.Combine(sfDir, "sharedflows");
+
+            await WorkspaceRepo.CreateDirectoryAsync(sfDir);
+            await WorkspaceRepo.CreateDirectoryAsync(polDir);
+            await WorkspaceRepo.CreateDirectoryAsync(resDir);
+
+            var bundleXml = $"""<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<SharedFlowBundle name="{name}">
+    <Description>{name}</Description>
+    <Revision>1</Revision>
+    <SharedFlows>
+        <SharedFlow>default</SharedFlow>
+    </SharedFlows>
+</SharedFlowBundle>""";
+            await WorkspaceRepo.SaveFileAsync(System.IO.Path.Combine(sfDir, $"{name}.xml"), bundleXml);
+
+            var sharedFlowXml = $"""<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<SharedFlow name="default">
+    <Description>Default shared flow</Description>
+</SharedFlow>""";
+            await WorkspaceRepo.SaveFileAsync(
+                System.IO.Path.Combine(resDir, "default.xml"), sharedFlowXml);
+
+            _quickMessage = $"✔ Shared Flow '{name}' criado.";
+            _quickAddOpen = false;
+            _tree = await WorkspaceRepo.LoadTreeAsync(_workspace);
+        }
+        catch (Exception ex) { _quickMessage = $"✘ {ex.Message}"; _quickError = true; }
+    }
+
+    private async Task ConfirmQuickEnvironment()
+    {
+        if (string.IsNullOrWhiteSpace(_quickFileName) || _workspace is null) return;
+        _quickMessage = string.Empty;
+        _quickError   = false;
+        try
+        {
+            var envName = _quickFileName.Trim();
+            var envDir  = System.IO.Path.Combine(_workspace.RootPath, "environments", envName);
+            await WorkspaceRepo.CreateDirectoryAsync(envDir);
+
+            // Arquivos mínimos exigidos pelo emulator
+            await WorkspaceRepo.SaveFileAsync(
+                System.IO.Path.Combine(envDir, "deployments.json"),
+                """{\n  \"proxies\": [],\n  \"sharedFlows\": []\n}""");
+
+            await WorkspaceRepo.SaveFileAsync(
+                System.IO.Path.Combine(envDir, "flowhooks.json"),
+                """{\n  \"PreProxyFlowHook\": {},\n  \"PostProxyFlowHook\": {},\n  \"PreTargetFlowHook\": {},\n  \"PostTargetFlowHook\": {}\n}""");
+
+            await WorkspaceRepo.SaveFileAsync(
+                System.IO.Path.Combine(envDir, "targetservers.json"),
+                "[]\n");
+
+            _quickMessage = $"✔ Environment '{envName}' criado.";
+            _quickAddOpen = false;
+            _deployEnv    = envName; // pré-preenche o campo de deploy
+            _tree = await WorkspaceRepo.LoadTreeAsync(_workspace);
         }
         catch (Exception ex) { _quickMessage = $"✘ {ex.Message}"; _quickError = true; }
     }
