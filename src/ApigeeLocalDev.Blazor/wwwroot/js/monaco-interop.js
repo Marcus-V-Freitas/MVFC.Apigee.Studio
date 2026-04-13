@@ -8,8 +8,6 @@ window.monacoInterop = (function () {
     const MONACO_CDN = 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.52.0/min';
 
     // Providers são registrados globalmente no objeto monaco — só pode ser feito UMA vez.
-    // Se registrar mais de uma vez o Monaco empilha múltiplos providers e o IntelliSense
-    // para de funcionar após navegação (retorno à página).
     let _providersRegistered = false;
 
     function _configureLoader() {
@@ -383,28 +381,50 @@ window.monacoInterop = (function () {
         });
     }
 
-    // Aguarda o container ter clientHeight > 0 antes de criar o editor.
-    function _waitForHeight(container, cb, attempts) {
-        attempts = attempts || 0;
-        if (container.clientHeight > 0 || attempts >= 20) {
-            cb();
-        } else {
-            requestAnimationFrame(function () {
-                _waitForHeight(container, cb, attempts + 1);
-            });
+    // Cria o editor Monaco no container assim que ele tiver dimensões reais.
+    //
+    // Estratégia:
+    // 1. Se o container já tem altura (caso comum na primeira carga), cria imediatamente.
+    // 2. Se não tem (retorno via navegação Blazor SPA), usa ResizeObserver — ele dispara
+    //    exatamente quando o browser termina de aplicar o CSS e o container tem área real.
+    //    Isso é garantido e não depende de contar frames arbitrários.
+    function _createWhenVisible(container, factory) {
+        if (container.clientHeight > 0) {
+            factory();
+            return;
         }
+
+        const ro = new ResizeObserver(function (entries) {
+            for (const entry of entries) {
+                const h = entry.contentRect
+                    ? entry.contentRect.height
+                    : (entry.borderBoxSize && entry.borderBoxSize[0]
+                        ? entry.borderBoxSize[0].blockSize
+                        : 0);
+                if (h > 0) {
+                    ro.disconnect();
+                    factory();
+                    return;
+                }
+            }
+        });
+        ro.observe(container);
+
+        // Timeout de segurança: se por algum motivo o ResizeObserver nunca disparar
+        // (ex: container oculto permanentemente), não trava a página.
+        setTimeout(function () {
+            ro.disconnect();
+        }, 5000);
     }
 
-    // Resolve o objeto monaco: usa window.monaco se já carregado (navegação de volta
-    // à página), ou carrega via AMD. Isso evita que o callback do require() não seja
-    // chamado quando o módulo já está em cache — comportamento do AMD loader.
+    // Resolve o objeto monaco: usa window.monaco se já carregado (navegações de volta
+    // à página), ou carrega via AMD na primeira vez.
     function _withMonaco(cb) {
         if (window.monaco) {
             cb(window.monaco);
         } else {
             _configureLoader();
             require(['vs/editor/editor.main'], function (monaco) {
-                // Expõe globalmente para reuso em navegações futuras
                 window.monaco = monaco;
                 cb(monaco);
             });
@@ -424,10 +444,13 @@ window.monacoInterop = (function () {
             const language = _detectLanguage(filePath);
 
             _withMonaco(function (monaco) {
-                // Registra providers uma única vez para toda a sessão
                 _registerProviders(monaco);
 
-                _waitForHeight(container, function () {
+                _createWhenVisible(container, function () {
+                    // Verifica novamente: o Blazor pode ter removido o container
+                    // entre o momento em que agendamos e o ResizeObserver disparar.
+                    if (!document.getElementById(elementId)) return;
+
                     const editor = monaco.editor.create(container, {
                         value:             initialContent || '',
                         language:          language,
