@@ -14,8 +14,9 @@ public sealed class WorkspaceFileSystemRepository(IConfiguration configuration) 
 
     private static readonly JsonSerializerOptions JsonOpts = new()
     {
-        WriteIndented        = true,
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        WriteIndented          = true,
+        PropertyNamingPolicy   = JsonNamingPolicy.CamelCase,
+        // Omite chaves com valor null — usado para sharedFlows quando vazio
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
     };
 
@@ -23,11 +24,10 @@ public sealed class WorkspaceFileSystemRepository(IConfiguration configuration) 
         configuration["WorkspacesRoot"] ?? Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "apigee-workspaces");
 
-    // Retorna {workspaceRoot}/src/main/apigee — raiz exigida pelo emulator
     private static string ApigeeRoot(ApigeeWorkspace workspace)
         => Path.Combine(workspace.RootPath, "src", "main", "apigee");
 
-    // ── lista ────────────────────────────────────────────────────────────────
+    // ── lista ─────────────────────────────────────────────────────────────────
 
     public IReadOnlyList<ApigeeWorkspace> ListAll()
     {
@@ -56,7 +56,7 @@ public sealed class WorkspaceFileSystemRepository(IConfiguration configuration) 
             .OrderBy(x => x).ToList();
     }
 
-    // ── CRUD ─────────────────────────────────────────────────────────────────
+    // ── CRUD ──────────────────────────────────────────────────────────────────
 
     public ApigeeWorkspace Create(string name, string? customPath, IReadOnlyList<string>? initialProxies = null)
     {
@@ -83,14 +83,15 @@ public sealed class WorkspaceFileSystemRepository(IConfiguration configuration) 
             Directory.Delete(workspace.RootPath, recursive: true);
     }
 
-    // ── environment ────────────────────────────────────────────────────────
+    // ── environment ───────────────────────────────────────────────────────────
 
     /// <summary>
-    /// Garante que environments/{envName}/ exista e que deployments.json
-    /// liste TODOS os proxies e shared flows presentes no workspace.
+    /// Garante que environments/{envName}/ exista e grava deployments.json
+    /// com os proxies e shared flows do workspace.
     ///
-    /// O emulator lê deployments.json para saber o que deployar no ambiente.
-    /// Sem esse arquivo (ou com lista vazia) retorna NoValidProxiesFound.
+    /// IMPORTANTE: o emulator retorna 500 "Illegal identifier" quando
+    /// sharedFlows está presente mas vazio. A chave é omitida via null
+    /// quando não há shared flows (JsonIgnoreCondition.WhenWritingNull).
     /// </summary>
     public async Task EnsureEnvironmentAsync(
         ApigeeWorkspace workspace, string envName, CancellationToken ct = default)
@@ -98,19 +99,19 @@ public sealed class WorkspaceFileSystemRepository(IConfiguration configuration) 
         var envPath = Path.Combine(ApigeeRoot(workspace), "environments", envName);
         Directory.CreateDirectory(envPath);
 
-        var proxies     = ListApiProxies(workspace);
-        var sharedFlows = ListSharedFlows(workspace);
+        var proxies     = ListApiProxies(workspace).ToList();
+        var sharedFlows = ListSharedFlows(workspace).ToList();
 
         var deployments = new DeploymentsJson(
-            Proxies:     proxies.ToList(),
-            SharedFlows: sharedFlows.ToList());
+            Proxies:     proxies,
+            // null → chave omitida no JSON quando não há shared flows
+            SharedFlows: sharedFlows.Count > 0 ? sharedFlows : null);
 
         var json = JsonSerializer.Serialize(deployments, JsonOpts);
-        await File.WriteAllTextAsync(
-            Path.Combine(envPath, "deployments.json"), json, ct);
+        await File.WriteAllTextAsync(Path.Combine(envPath, "deployments.json"), json, ct);
     }
 
-    // ── árvore e arquivos ────────────────────────────────────────────────────
+    // ── árvore e arquivos ─────────────────────────────────────────────────────
 
     public Task<WorkspaceItem> LoadTreeAsync(ApigeeWorkspace workspace, CancellationToken ct = default)
         => Task.FromResult(BuildItem(workspace.RootPath, workspace.RootPath));
@@ -141,7 +142,7 @@ public sealed class WorkspaceFileSystemRepository(IConfiguration configuration) 
         return Task.CompletedTask;
     }
 
-    // ── ZIP helpers ──────────────────────────────────────────────────────────
+    // ── ZIP helpers ───────────────────────────────────────────────────────────
 
     public Task<string> BuildBundleZipAsync(
         ApigeeWorkspace workspace, string proxyOrFlowName, CancellationToken ct = default)
@@ -169,10 +170,8 @@ public sealed class WorkspaceFileSystemRepository(IConfiguration configuration) 
     }
 
     /// <summary>
-    /// Gera ZIP do workspace completo a partir de workspace.RootPath,
-    /// preservando a estrutura src/main/apigee/... exigida pelo emulator.
-    /// Deve ser chamado DEPOIS de EnsureEnvironmentAsync, que garante
-    /// que deployments.json já está no disco antes de zipar.
+    /// Gera ZIP do workspace completo. Deve ser chamado DEPOIS de
+    /// EnsureEnvironmentAsync (que grava deployments.json no disco).
     /// </summary>
     public Task<string> BuildWorkspaceZipAsync(ApigeeWorkspace workspace, CancellationToken ct = default)
     {
@@ -191,8 +190,7 @@ public sealed class WorkspaceFileSystemRepository(IConfiguration configuration) 
     {
         foreach (var file in Directory.EnumerateFiles(sourceDir, "*", SearchOption.AllDirectories))
         {
-            var relative = Path.GetRelativePath(sourceDir, file)
-                               .Replace(Path.DirectorySeparatorChar, '/');
+            var relative  = Path.GetRelativePath(sourceDir, file).Replace(Path.DirectorySeparatorChar, '/');
             var entryName = string.IsNullOrEmpty(zipRoot) ? relative : zipRoot + "/" + relative;
             archive.CreateEntryFromFile(file, entryName, CompressionLevel.Optimal);
         }
@@ -202,19 +200,16 @@ public sealed class WorkspaceFileSystemRepository(IConfiguration configuration) 
     {
         foreach (var file in Directory.EnumerateFiles(sourceDir, "*", SearchOption.AllDirectories))
         {
-            var relative = Path.GetRelativePath(sourceDir, file)
-                               .Replace(Path.DirectorySeparatorChar, '/');
+            var relative  = Path.GetRelativePath(sourceDir, file).Replace(Path.DirectorySeparatorChar, '/');
             var entryName = string.IsNullOrEmpty(zipRoot) ? relative : zipRoot + "/" + relative;
             archive.CreateEntryFromFile(file, entryName, CompressionLevel.Optimal);
         }
 
-        // Inclui pastas vazias (exceto as que já têm arquivos)
         foreach (var dir in Directory.EnumerateDirectories(sourceDir, "*", SearchOption.AllDirectories))
         {
             if (!Directory.EnumerateFileSystemEntries(dir).Any())
             {
-                var relative = Path.GetRelativePath(sourceDir, dir)
-                                   .Replace(Path.DirectorySeparatorChar, '/') + "/";
+                var relative  = Path.GetRelativePath(sourceDir, dir).Replace(Path.DirectorySeparatorChar, '/') + "/";
                 var entryName = string.IsNullOrEmpty(zipRoot) ? relative : zipRoot + "/" + relative;
                 archive.CreateEntry(entryName);
             }
@@ -278,6 +273,7 @@ public sealed class WorkspaceFileSystemRepository(IConfiguration configuration) 
     // ── DTOs internos ─────────────────────────────────────────────────────────
 
     private sealed record DeploymentsJson(
-        [property: JsonPropertyName("proxies")]     List<string> Proxies,
-        [property: JsonPropertyName("sharedFlows")] List<string> SharedFlows);
+        [property: JsonPropertyName("proxies")]     List<string>  Proxies,
+        // Nullable: quando null, a chave é omitida do JSON (WhenWritingNull)
+        [property: JsonPropertyName("sharedFlows")] List<string>? SharedFlows);
 }
