@@ -14,17 +14,19 @@ public static class InfrastructureServiceExtensions
         services.AddScoped<IWorkspaceRepository, WorkspaceFileSystemRepository>();
         services.AddSingleton<IPolicyTemplateRepository, PolicyTemplateRepository>();
 
-        var baseUrl = configuration["ApigeeEmulator:BaseUrl"] ?? "http://localhost:8080";
+        var managementUrl = configuration["ApigeeEmulator:BaseUrl"] ?? "http://localhost:8080";
 
+        // Client para Management API (:8080) — deploy, undeploy, listagem
         services.AddHttpClient<IApigeeEmulatorClient, ApigeeEmulatorClient>(client =>
         {
-            client.BaseAddress = new Uri(baseUrl);
+            client.BaseAddress = new Uri(managementUrl);
             client.Timeout     = TimeSpan.FromSeconds(30);
         });
 
+        // Client para Management API (:8080) — lista deployments para o trace
         services.AddHttpClient<IApigeeTraceClient, ApigeeTraceClient>(client =>
         {
-            client.BaseAddress = new Uri(baseUrl);
+            client.BaseAddress = new Uri(managementUrl);
             client.Timeout     = TimeSpan.FromSeconds(30);
         });
 

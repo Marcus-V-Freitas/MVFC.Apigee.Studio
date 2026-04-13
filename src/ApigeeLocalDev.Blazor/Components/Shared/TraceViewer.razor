@@ -1,6 +1,7 @@
 @using ApigeeLocalDev.Domain.Entities
 @using ApigeeLocalDev.Domain.Interfaces
 @implements IAsyncDisposable
+@inject IProxyTraceService TraceService
 @inject IApigeeTraceClient TraceClient
 @rendermode RenderMode.InteractiveServer
 
@@ -8,20 +9,6 @@
     <div class="card-header-row">
         <h3>Policy Trace</h3>
         <div class="trace-controls">
-            <label class="input-label">
-                PROXY
-                <select class="input" @bind="_selectedProxy" disabled="@_proxySelectDisabled">
-                    <option value="">@_proxyPlaceholder</option>
-                    @foreach (var proxy in AvailableProxies)
-                    {
-                        <option value="@proxy">@proxy</option>
-                    }
-                </select>
-            </label>
-            <label class="input-label">
-                REVISION
-                <input class="input" @bind="_revision" placeholder="1" style="width:80px" disabled="@_tracing" />
-            </label>
             <label class="input-label">
                 ENVIRONMENT
                 <input class="input" @bind="_environment" placeholder="local" style="width:100px" disabled="@_tracing" />
@@ -47,7 +34,8 @@
     {
         <p class="help-text mt-2">
             <span class="status-dot dot-green"></span>
-            Capturando tráfego na sessão <code>@_sessionId</code>&hellip;
+            Capturando tráfego via <code>/emulator-runtime/**</code>&hellip;
+            Faça requisições para <code>http://localhost:5000/emulator-runtime/seu-path</code>
         </p>
     }
 
@@ -60,155 +48,96 @@
 
     @foreach (var tx in _transactions)
     {
-        <div class="trace-transaction @TxClass(tx)">
+        <div class="@TxClass(tx)">
             <div class="tx-summary">
                 <span class="tx-verb">@tx.Verb</span>
                 <code class="tx-path">@tx.RequestPath</code>
-                <span class="badge @BadgeClass(tx)">@tx.StatusCode</span>
+                <span class="@BadgeClass(tx)">@tx.StatusCode</span>
+                <span class="tx-duration help-text">@tx.DurationMs ms</span>
                 <span class="tx-id help-text">@tx.MessageId</span>
             </div>
-            <div class="trace-timeline">
-                @foreach (var point in tx.Points)
-                {
-                    <div class="trace-point @PointClass(point)">
-                        <span class="policy-phase">@point.Phase</span>
-                        <span class="policy-name">@point.Policy</span>
-                        @if (point.DurationMs > 0)
-                        {
-                            <span class="duration">@point.DurationMs ms</span>
-                        }
-                        @if (point.Error)
-                        {
-                            <span class="point-error-badge">&#9888; ERRO</span>
-                        }
-                        else if (!point.Executed)
-                        {
-                            <span class="point-skip-badge">SKIP</span>
-                        }
-                    </div>
-                }
-            </div>
+
+            @if (!string.IsNullOrWhiteSpace(tx.RequestBody))
+            {
+                <details class="tx-body">
+                    <summary class="help-text">Request body</summary>
+                    <pre><code>@tx.RequestBody</code></pre>
+                </details>
+            }
+
+            @if (!string.IsNullOrWhiteSpace(tx.ResponseBody))
+            {
+                <details class="tx-body">
+                    <summary class="help-text">Response body</summary>
+                    <pre><code>@tx.ResponseBody</code></pre>
+                </details>
+            }
         </div>
     }
 </div>
 
 @code {
     [Parameter] public string DefaultEnvironment { get; set; } = "local";
-    [Parameter] public List<string> AvailableProxies { get; set; } = [];
 
-    private string _environment   = "local";
-    private string _selectedProxy = string.Empty;
-    private string _revision      = "1";
-    private string? _sessionId;
-    private bool _tracing;
-    private string _errorMessage  = string.Empty;
+    private string _environment  = "local";
+    private bool   _tracing;
+    private string _errorMessage = string.Empty;
 
-    private List<TraceTransaction> _transactions = new();
+    private readonly List<TraceTransaction> _transactions = [];
     private CancellationTokenSource? _cts;
 
-    // ── Computed properties para evitar expressões complexas em disabled ──
-    private bool   _hasProxies          => AvailableProxies.Count > 0;
-    private bool   _proxySelectDisabled => _tracing || !_hasProxies;
-    private bool   _startDisabled       => _tracing || string.IsNullOrWhiteSpace(_selectedProxy);
-    private bool   _stopDisabled        => !_tracing;
-    private string _proxyPlaceholder    => _hasProxies ? "-- selecione --" : "Selecione um workspace";
+    private bool _startDisabled => _tracing;
+    private bool _stopDisabled  => !_tracing;
 
-    // ── Computed CSS classes (evitam ternários inline no markup) ──────────
     private static string TxClass(TraceTransaction tx)    => tx.StatusCode >= 400 ? "trace-transaction tx-error" : "trace-transaction tx-ok";
     private static string BadgeClass(TraceTransaction tx) => tx.StatusCode >= 400 ? "badge badge-error" : "badge badge-success";
-    private static string PointClass(TracePoint point)    => point.Error ? "trace-point point-error" : point.Executed ? "trace-point point-ok" : "trace-point point-skip";
 
-    protected override void OnParametersSet()
+    protected override void OnParametersSet() => _environment = DefaultEnvironment;
+
+    private void StartTrace()
     {
-        if (!string.IsNullOrEmpty(_selectedProxy) && !AvailableProxies.Contains(_selectedProxy))
-            _selectedProxy = string.Empty;
-
-        _environment = DefaultEnvironment;
-    }
-
-    private async Task StartTrace()
-    {
-        if (string.IsNullOrWhiteSpace(_selectedProxy)) return;
-
         _errorMessage = string.Empty;
         _cts = new CancellationTokenSource();
-
-        try
-        {
-            var session = await TraceClient.CreateSessionAsync(
-                _environment, _selectedProxy, _revision, _cts.Token);
-            _sessionId = session.SessionId;
-            _tracing   = true;
-            _ = Task.Run(() => PollAsync(_cts.Token), _cts.Token);
-        }
-        catch (Exception ex)
-        {
-            _errorMessage = "Erro ao iniciar trace: " + ex.Message;
-        }
+        TraceService.Start();
+        _tracing = true;
+        _ = ConsumeTraceAsync(_cts.Token);
     }
 
-    private async Task StopTrace()
+    private void StopTrace()
     {
         _tracing = false;
+        TraceService.Stop();
         _cts?.Cancel();
-
-        if (_sessionId is not null)
-        {
-            try { await TraceClient.DeleteSessionAsync(_environment, _selectedProxy, _revision, _sessionId); }
-            catch { /* best-effort */ }
-            _sessionId = null;
-        }
+        _cts?.Dispose();
+        _cts = null;
     }
 
     private void ClearTransactions() => _transactions.Clear();
 
-    private async Task PollAsync(CancellationToken ct)
+    private async Task ConsumeTraceAsync(CancellationToken ct)
     {
-        while (!ct.IsCancellationRequested && _tracing)
+        try
         {
-            try
+            await foreach (var tx in TraceService.ReadAllAsync(ct))
             {
-                var ids = await TraceClient.GetTransactionIdsAsync(
-                    _environment, _selectedProxy, _revision, _sessionId!, ct);
-
-                var existingIds = _transactions.Select(t => t.MessageId).ToHashSet();
-                var newIds = ids.Where(id => !existingIds.Contains(id)).ToList();
-
-                foreach (var msgId in newIds)
-                {
-                    var detail = await TraceClient.GetTransactionDetailAsync(
-                        _environment, _selectedProxy, _revision, _sessionId!, msgId, ct);
-                    _transactions.Add(detail);
-                }
-
-                if (newIds.Count > 0)
-                    await InvokeAsync(StateHasChanged);
+                _transactions.Add(tx);
+                await InvokeAsync(StateHasChanged);
             }
-            catch (OperationCanceledException) { break; }
-            catch (Exception ex)
+        }
+        catch (OperationCanceledException) { /* normal ao parar */ }
+        catch (Exception ex)
+        {
+            await InvokeAsync(() =>
             {
-                await InvokeAsync(() =>
-                {
-                    _errorMessage = "Erro no polling: " + ex.Message;
-                    StateHasChanged();
-                });
-                break;
-            }
-
-            await Task.Delay(2000, ct).ConfigureAwait(false);
+                _errorMessage = "Erro no trace: " + ex.Message;
+                StateHasChanged();
+            });
         }
     }
 
-    public async ValueTask DisposeAsync()
+    public ValueTask DisposeAsync()
     {
-        _tracing = false;
-        _cts?.Cancel();
-        _cts?.Dispose();
-
-        if (_sessionId is not null)
-        {
-            try { await TraceClient.DeleteSessionAsync(_environment, _selectedProxy, _revision, _sessionId); }
-            catch { /* best-effort */ }
-        }
+        StopTrace();
+        return ValueTask.CompletedTask;
     }
 }
