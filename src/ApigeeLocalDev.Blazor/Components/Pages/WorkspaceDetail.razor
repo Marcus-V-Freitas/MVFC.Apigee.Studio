@@ -26,10 +26,15 @@ else
         @* ÁRVORE *@
         <aside class="file-tree">
             <div class="file-tree-header">
-                <h3>Files</h3>
-                <div class="file-tree-actions">
-                    <button class="btn btn-ghost btn-sm" @onclick="() => OpenNewItemDialog(false)">+ File</button>
-                    <button class="btn btn-ghost btn-sm" @onclick="() => OpenNewItemDialog(true)">+ Folder</button>
+                <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+                    <h3>Files</h3>
+                    <div class="file-tree-actions">
+                        <button class="btn btn-ghost btn-sm" @onclick="() => OpenNewItemDialog(false)">+ File</button>
+                        <button class="btn btn-ghost btn-sm" @onclick="() => OpenNewItemDialog(true)">+ Folder</button>
+                    </div>
+                </div>
+                <div class="file-tree-search mt-4">
+                    <input class="input" style="width: 100%; font-size: var(--text-xs); padding: 4px 8px;" placeholder="Filter files..." @bind="_searchQuery" @bind:event="oninput" />
                 </div>
             </div>
 
@@ -50,24 +55,60 @@ else
                 </div>
             }
 
-            @if (_tree is not null)
-            {
-                <TreeNode Item="_tree"
-                          OnFileSelected="LoadFile"
-                          OnQuickAdd="OpenQuickAddModal" />
-            }
+            <div class="file-tree-body">
+                @if (FilterTree(_tree) is { } filteredTree)
+                {
+                    <TreeNode Item="filteredTree"
+                              SelectedFilePath="@_activeTab?.FullPath"
+                              OnFileSelected="LoadFile"
+                              OnQuickAdd="OpenQuickAddModal"
+                              OnContextMenu="HandleContextMenu" />
+                }
+                else if (_tree is not null && !string.IsNullOrWhiteSpace(_searchQuery))
+                {
+                    <div class="empty-state" style="padding: var(--space-4); text-align: center; color: var(--color-text-faint); font-size: var(--text-sm);">Nenhum arquivo encontrado.</div>
+                }
+            </div>
         </aside>
 
         @* MONACO EDITOR *@
         <section class="file-editor">
-            @if (_selectedFile is not null)
+            @if (_openTabs.Any())
             {
+                <div class="editor-tabs">
+                    @foreach (var tab in _openTabs)
+                    {
+                        var isActive = tab == _activeTab;
+                        <div class="editor-tab @(isActive ? "active" : "")" 
+                             @onclick="() => SwitchTab(tab)">
+                            <span class="tab-title">
+                                @if (tab.IsDirty) { <span class="editor-dirty-dot" style="margin-right: 4px;">●</span> }
+                                @tab.FileName
+                            </span>
+                            <button class="btn btn-ghost tab-close-btn" @onclick:stopPropagation @onclick="() => CloseTab(tab)">✕</button>
+                        </div>
+                    }
+                </div>
+                <!-- ... header of active tab ... -->
                 <div class="editor-header">
-                    <span class="editor-filename">@System.IO.Path.GetFileName(_selectedFile)</span>
+                    <div class="editor-header-left">
+                        <span class="editor-filename">@_activeTab?.FileName</span>
+                        <span class="editor-lang-badge">@_detectLanguage()</span>
+                    </div>
                     <div class="editor-header-actions">
                         <button class="btn btn-ghost btn-sm" title="Format (Alt+Shift+F)" @onclick="FormatDocument">&#10024; Format</button>
                         <button class="btn btn-ghost btn-sm btn-danger" @onclick="DeleteSelectedFile">&#128465; Delete</button>
-                        <button class="btn btn-primary btn-sm" @onclick="SaveFile">&#128190; Save</button>
+                        <button class="btn btn-primary btn-sm" @onclick="SaveFile" disabled="@_saving" title="Ctrl+S">
+                            @if (_saving)
+                            {
+                                <span>Salvando...</span>
+                            }
+                            else
+                            {
+                                <span>&#128190; Save</span>
+                                <kbd class="kbd-hint">Ctrl+S</kbd>
+                            }
+                        </button>
                     </div>
                 </div>
                 <div id="monaco-editor-container"
@@ -249,6 +290,24 @@ else
             <p class="@DeployMessageClass">@_deployMessage</p>
         }
     </div>
+
+    @* CONTEXT MENU *@
+    @if (_showContextMenu)
+    {
+        <div class="context-menu-backdrop" @onclick="CloseContextMenu" @oncontextmenu="CloseContextMenu" @oncontextmenu:preventDefault="true" style="position: fixed; inset: 0; z-index: 9998;"></div>
+        <div class="context-menu card" style="position: fixed; left: @(_contextMenuX)px; top: @(_contextMenuY)px; z-index: 9999; padding: 4px 0; min-width: 150px; background: var(--bg-crust); box-shadow: 0 4px 12px rgba(0,0,0,0.5);">
+            @if (_contextMenuItem?.Type == WorkspaceItemType.Directory || _contextMenuItem?.Type == WorkspaceItemType.ApiProxy || _contextMenuItem?.Type == WorkspaceItemType.SharedFlow || _contextMenuItem?.Type == WorkspaceItemType.Environment)
+            {
+                <button class="context-menu-item" style="display: block; width: 100%; text-align: left; padding: 8px 16px; border: none; background: transparent; color: var(--color-text); cursor: pointer;"
+                        @onclick="() => ContextAdd(false)">New File</button>
+                <button class="context-menu-item" style="display: block; width: 100%; text-align: left; padding: 8px 16px; border: none; background: transparent; color: var(--color-text); cursor: pointer;"
+                        @onclick="() => ContextAdd(true)">New Folder</button>
+                <hr style="margin: 4px 0; border: none; border-top: 1px solid var(--bg-surface);" />
+            }
+            <button class="context-menu-item" style="display: block; width: 100%; text-align: left; padding: 8px 16px; border: none; background: transparent; color: var(--color-danger); cursor: pointer;"
+                    @onclick="ContextDelete">Delete</button>
+        </div>
+    }
 }
 
 @code {
@@ -256,20 +315,42 @@ else
     private const string DeployModeProxy = "proxy";
     private const string DeployModeFull  = "full";
 
+    private class OpenFileTab
+    {
+        public string FullPath { get; set; } = string.Empty;
+        public string FileName => System.IO.Path.GetFileName(FullPath);
+        public string Content { get; set; } = string.Empty;
+        public bool IsDirty { get; set; }
+    }
+
     [Parameter] public string WorkspaceName { get; set; } = string.Empty;
 
     private ApigeeWorkspace? _workspace;
     private WorkspaceItem?   _tree;
-    private string?          _selectedFile;
-    private string           _fileContent = string.Empty;
+    
+    private List<OpenFileTab> _openTabs = new();
+    private OpenFileTab?      _activeTab;
+
+    private string _searchQuery = string.Empty;
+
+    // Context menu state
+    private bool _showContextMenu;
+    private double _contextMenuX;
+    private double _contextMenuY;
+    private WorkspaceItem? _contextMenuItem;
 
     // true quando o div do editor já existe no DOM e aguarda monacoInterop.create.
     private bool _editorPendingCreate = false;
+    private bool _editorCreated       = false;
+
+    // dirty state / saving
+    private bool _saving;
 
     private bool   _showNewItem;
     private bool   _newItemIsDir;
     private string _newItemName  = string.Empty;
     private string _newItemError = string.Empty;
+    private WorkspaceItem? _targetDirContext;
 
     private string _deployTarget  = string.Empty;
     private string _deployEnv     = "local";
@@ -297,6 +378,65 @@ else
     private void SetDeployModeProxy() => _deployMode = DeployModeProxy;
     private void SetDeployModeFull()  => _deployMode = DeployModeFull;
 
+    private string _detectLanguage()
+    {
+        if (_activeTab is null) return "";
+        var ext = System.IO.Path.GetExtension(_activeTab.FullPath).TrimStart('.').ToLower();
+        return ext switch
+        {
+            "xml"  => "XML",
+            "json" => "JSON",
+            "js"   => "JavaScript",
+            "yaml" or "yml" => "YAML",
+            "md"   => "Markdown",
+            "css"  => "CSS",
+            "html" => "HTML",
+            _      => ext.ToUpper()
+        };
+    }
+
+    private WorkspaceItem? FilterTree(WorkspaceItem? root)
+    {
+        if (root is null) return null;
+        if (string.IsNullOrWhiteSpace(_searchQuery)) return root;
+
+        return FilterNode(root, _searchQuery);
+    }
+
+    private WorkspaceItem? FilterNode(WorkspaceItem node, string query)
+    {
+        // Se for arquivo e combinar com a busca, retorna o nó
+        if (node.Type is WorkspaceItemType.File)
+        {
+            if (node.Name.Contains(query, StringComparison.OrdinalIgnoreCase))
+                return node;
+            return null;
+        }
+
+        // Se for pasta, filtra os filhos
+        var filteredChildren = new List<WorkspaceItem>();
+        foreach (var child in node.Children)
+        {
+            var filteredChild = FilterNode(child, query);
+            if (filteredChild is not null)
+                filteredChildren.Add(filteredChild);
+        }
+
+        // Se a pasta tiver filhos ou se o próprio nome da pasta combinar com a busca
+        if (filteredChildren.Any() || node.Name.Contains(query, StringComparison.OrdinalIgnoreCase))
+        {
+            return new WorkspaceItem(
+                node.Name,
+                node.FullPath,
+                node.RelativePath,
+                node.Type,
+                filteredChildren
+            );
+        }
+
+        return null;
+    }
+
     protected override async Task OnInitializedAsync()
     {
         _workspace    = WorkspaceRepo.ListAll().FirstOrDefault(w => w.Name == WorkspaceName);
@@ -307,12 +447,13 @@ else
         // Reseta o estado do editor a cada visita à página.
         // No Blazor Server, OnInitializedAsync re-executa quando o usuário navega
         // para outra página e volta, MAS os campos de instância sobrevivem (mesma
-        // instância do componente no circuito SignalR). Sem esse reset, _selectedFile
-        // continua com o valor anterior, o div do editor é renderizado pelo Blazor,
-        // mas _editorPendingCreate está false — e o OnAfterRenderAsync nunca cria o editor.
-        _selectedFile        = null;
-        _fileContent         = string.Empty;
+        // instância do componente no circuito SignalR). 
+        _openTabs.Clear();
+        _activeTab           = null;
         _editorPendingCreate = false;
+        _editorCreated       = false;
+        _saving              = false;
+        _searchQuery         = string.Empty;
     }
 
     // OnAfterRenderAsync é chamado após CADA render.
@@ -320,55 +461,169 @@ else
     // depois que o Blazor colocou o div#monaco-editor-container no DOM.
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (_editorPendingCreate && _selectedFile is not null)
+        if (_editorPendingCreate && _activeTab is not null)
         {
             _editorPendingCreate = false;
+            _editorCreated = true;
             await JS.InvokeVoidAsync(
                 "monacoInterop.create",
                 EditorId,
-                _fileContent,
-                _selectedFile);
+                _activeTab.Content,
+                _activeTab.FullPath);
         }
+    }
+
+    private async Task SwitchTab(OpenFileTab tab)
+    {
+        if (_activeTab == tab) return;
+        
+        // Antes de trocar, salva o conteúdo do anterior em memória
+        if (_activeTab is not null && _editorCreated)
+        {
+            _activeTab.Content = await JS.InvokeAsync<string>("monacoInterop.getValue", EditorId);
+            _activeTab.IsDirty = await JS.InvokeAsync<bool>("monacoInterop.isDirty", EditorId);
+        }
+
+        _activeTab = tab;
+
+        if (!_editorCreated)
+        {
+            _editorPendingCreate = true;
+        }
+        else
+        {
+            await JS.InvokeVoidAsync("monacoInterop.setValue", EditorId, tab.Content, tab.FullPath);
+            if (!tab.IsDirty) await JS.InvokeVoidAsync("monacoInterop.clearDirty", EditorId);
+        }
+        StateHasChanged();
+    }
+
+    private async Task CloseTab(OpenFileTab tab)
+    {
+        var isCurrent = _activeTab == tab;
+        if (tab.IsDirty)
+        {
+            // Precisamos confirmar se queremos fechar e perder dados
+            // Como tab.IsDirty não reflete instantaneamente, usamos o do editor
+            if (isCurrent) tab.IsDirty = await JS.InvokeAsync<bool>("monacoInterop.isDirty", EditorId);
+            
+            if (tab.IsDirty)
+            {
+                var discard = await JS.InvokeAsync<bool>("confirm", $"A aba '{tab.FileName}' tem alterações não salvas. Descartar?");
+                if (!discard) return;
+            }
+        }
+
+        _openTabs.Remove(tab);
+
+        if (isCurrent)
+        {
+            if (_openTabs.Any())
+            {
+                await SwitchTab(_openTabs.Last());
+            }
+            else
+            {
+                _activeTab = null;
+                _editorPendingCreate = false;
+                _editorCreated = false;
+                try { await JS.InvokeVoidAsync("monacoInterop.dispose", EditorId); } catch { }
+            }
+        }
+        StateHasChanged();
     }
 
     private async Task LoadFile(string path)
     {
-        await JS.InvokeVoidAsync("monacoInterop.dispose", EditorId);
+        var existingTab = _openTabs.FirstOrDefault(t => t.FullPath == path);
+        if (existingTab is not null)
+        {
+            await SwitchTab(existingTab);
+            return;
+        }
 
-        _selectedFile = path;
-        _fileContent  = await WorkspaceRepo.ReadFileAsync(path);
+        var isFirstLoad = _activeTab is null;
+        var content = await WorkspaceRepo.ReadFileAsync(path);
+        
+        var newTab = new OpenFileTab { FullPath = path, Content = content };
+        _openTabs.Add(newTab);
+        
+        // Switch to the newly opening tab
+        if (_activeTab is not null && _editorCreated)
+        {
+            _activeTab.Content = await JS.InvokeAsync<string>("monacoInterop.getValue", EditorId);
+            _activeTab.IsDirty = await JS.InvokeAsync<bool>("monacoInterop.isDirty", EditorId);
+        }
 
-        _editorPendingCreate = true;
+        _activeTab = newTab;
+
+        if (isFirstLoad || !_editorCreated)
+        {
+            _editorPendingCreate = true;
+        }
+        else
+        {
+            await JS.InvokeVoidAsync("monacoInterop.setValue", EditorId, newTab.Content, newTab.FullPath);
+        }
+
         StateHasChanged();
     }
 
     private async Task SaveFile()
     {
-        if (_selectedFile is null) return;
-        _fileContent = await JS.InvokeAsync<string>("monacoInterop.getValue", EditorId);
-        await WorkspaceRepo.SaveFileAsync(_selectedFile, _fileContent);
-        Toast.ShowSuccess("✔ Arquivo salvo com sucesso!");
+        if (_activeTab is null || _saving) return;
+        _saving = true;
+        StateHasChanged();
+        try
+        {
+            _activeTab.Content = await JS.InvokeAsync<string>("monacoInterop.getValue", EditorId);
+            await WorkspaceRepo.SaveFileAsync(_activeTab.FullPath, _activeTab.Content);
+            await JS.InvokeVoidAsync("monacoInterop.clearDirty", EditorId);
+            _activeTab.IsDirty = false;
+            Toast.ShowSuccess("✔ Arquivo salvo com sucesso!");
+        }
+        catch (Exception ex)
+        {
+            Toast.ShowError("Erro ao salvar: " + ex.Message);
+        }
+        finally
+        {
+            _saving = false;
+        }
     }
 
     private async Task FormatDocument()
     {
-        if (_selectedFile is null) return;
+        if (_activeTab is null) return;
         await JS.InvokeVoidAsync("monacoInterop.formatDocument", EditorId);
     }
 
     private async Task DeleteSelectedFile()
     {
-        if (_selectedFile is null || _workspace is null) return;
-        var fileName = System.IO.Path.GetFileName(_selectedFile);
+        if (_activeTab is null || _workspace is null) return;
+        var fileName = _activeTab.FileName;
         var confirm  = await JS.InvokeAsync<bool>("confirm", "Remover arquivo '" + fileName + "'?");
         if (!confirm) return;
 
-        await JS.InvokeVoidAsync("monacoInterop.dispose", EditorId);
-        await WorkspaceRepo.DeleteFileAsync(_selectedFile);
-        _selectedFile        = null;
-        _fileContent         = string.Empty;
-        _editorPendingCreate = false;
-        _tree                = await WorkspaceRepo.LoadTreeAsync(_workspace);
+        await WorkspaceRepo.DeleteFileAsync(_activeTab.FullPath);
+        
+        // Remove the tab and switch to another
+        _openTabs.Remove(_activeTab);
+        
+        if (_openTabs.Any())
+        {
+            await SwitchTab(_openTabs.Last());
+        }
+        else
+        {
+            _activeTab           = null;
+            _editorPendingCreate = false;
+            _editorCreated       = false; 
+            try { await JS.InvokeVoidAsync("monacoInterop.dispose", EditorId); } catch { }
+        }
+
+        _tree = await WorkspaceRepo.LoadTreeAsync(_workspace);
+        
         Toast.ShowSuccess("✔ Arquivo '" + fileName + "' removido.");
     }
 
@@ -378,8 +633,52 @@ else
         catch { /* JS runtime pode já estar descartado */ }
     }
 
-    private void OpenNewItemDialog(bool isDir)
+    private void HandleContextMenu((Microsoft.AspNetCore.Components.Web.MouseEventArgs e, WorkspaceItem item) args)
     {
+        _contextMenuX = args.e.ClientX;
+        _contextMenuY = args.e.ClientY;
+        _contextMenuItem = args.item;
+        _showContextMenu = true;
+    }
+
+    private void CloseContextMenu() => _showContextMenu = false;
+
+    private void ContextAdd(bool isDir)
+    {
+        _showContextMenu = false;
+        OpenNewItemDialog(isDir, _contextMenuItem);
+    }
+
+    private async Task ContextDelete()
+    {
+        _showContextMenu = false;
+        if (_contextMenuItem is null || _workspace is null) return;
+        
+        var fileName = _contextMenuItem.Name;
+        var confirm  = await JS.InvokeAsync<bool>("confirm", $"Remover '{fileName}'?");
+        if (!confirm) return;
+
+        if (_contextMenuItem.Type is WorkspaceItemType.Directory or WorkspaceItemType.Environment or WorkspaceItemType.ApiProxy or WorkspaceItemType.SharedFlow)
+        {
+            await WorkspaceRepo.DeleteDirectoryAsync(_contextMenuItem.FullPath);
+        }
+        else
+        {
+            await WorkspaceRepo.DeleteFileAsync(_contextMenuItem.FullPath);
+            
+            // If the deleted file is an open tab, close it
+            var tabToClose = _openTabs.FirstOrDefault(t => t.FullPath == _contextMenuItem.FullPath);
+            if (tabToClose is not null) await CloseTab(tabToClose);
+        }
+
+        _tree = await WorkspaceRepo.LoadTreeAsync(_workspace);
+        Toast.ShowSuccess($"✔ '{fileName}' removido.");
+        StateHasChanged();
+    }
+
+    private void OpenNewItemDialog(bool isDir, WorkspaceItem? targetDir = null)
+    {
+        _targetDirContext = targetDir;
         _newItemIsDir = isDir;
         _newItemName  = _newItemError = string.Empty;
         _showNewItem  = true;
@@ -397,9 +696,10 @@ else
         if (string.IsNullOrWhiteSpace(_newItemName)) { _newItemError = "Informe um nome."; return; }
         if (_workspace is null) return;
 
-        var basePath = _selectedFile is not null
-            ? System.IO.Path.GetDirectoryName(_selectedFile)!
-            : _workspace.RootPath;
+        var basePath = _targetDirContext is not null 
+            ? (_targetDirContext.Type == WorkspaceItemType.File ? System.IO.Path.GetDirectoryName(_targetDirContext.FullPath)! : _targetDirContext.FullPath)
+            : (_activeTab is not null ? System.IO.Path.GetDirectoryName(_activeTab.FullPath)! : _workspace.RootPath);
+            
         var fullPath = System.IO.Path.Combine(basePath, _newItemName);
         try
         {
@@ -544,7 +844,7 @@ else
 
             await WorkspaceRepo.SaveFileAsync(
                 System.IO.Path.Combine(envDir, "flowhooks.json"),
-                "{\n  \"PreProxyFlowHook\": {},\n  \"PostProxyFlowHook\": {},\n  \"PreTargetFlowHook\": {},\n  \"PostTargetFlowHook\": {}\n}");
+                "{}");
 
             await WorkspaceRepo.SaveFileAsync(
                 System.IO.Path.Combine(envDir, "targetservers.json"),

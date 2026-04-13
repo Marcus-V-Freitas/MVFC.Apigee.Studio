@@ -5,6 +5,7 @@ window.monacoInterop = (function () {
     'use strict';
 
     const _editors = {};
+    const _dirty   = {};          // dirty-state por editor
     const MONACO_CDN = 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.52.0/min';
 
     // Providers são registrados globalmente no objeto monaco — só pode ser feito UMA vez.
@@ -379,6 +380,47 @@ window.monacoInterop = (function () {
                 };
             },
         });
+
+        // ── XML: DocumentSymbolProvider (Outline) ─────────────────────────────
+        monaco.languages.registerDocumentSymbolProvider('xml', {
+            provideDocumentSymbols(model, token) {
+                const symbols = [];
+                const regex = /<([a-zA-Z0-9_\-]+)([^>]*)>/g;
+                let match;
+                const text = model.getValue();
+                
+                while ((match = regex.exec(text)) !== null) {
+                    // Ignora tags de fechamento se regex der match indesejado (mas o regex acima só pega aberturas/singles)
+                    if (match[1].startsWith('/')) continue;
+
+                    const tagName = match[1];
+                    const attrs = match[2];
+                    
+                    const nameMatch = attrs.match(/name=["']([^"']+)["']/i);
+                    const isStructureNode = ['ProxyEndpoint', 'TargetEndpoint', 'Flow', 'Step', 'FaultRule', 'APIProxy', 'SharedFlow'].includes(tagName);
+
+                    if (nameMatch || isStructureNode) {
+                        const name = nameMatch ? nameMatch[1] : tagName;
+                        const detail = nameMatch ? tagName : "Apigee Node";
+                        const kind = isStructureNode ? monaco.languages.SymbolKind.Struct : monaco.languages.SymbolKind.Object;
+
+                        const position = model.getPositionAt(match.index);
+                        // Tentamos achar a tag de fechamento para ter um range melhor (simplificado aqui)
+                        const endPosition = model.getPositionAt(match.index + match[0].length);
+                        
+                        symbols.push({
+                            name: name,
+                            detail: detail,
+                            kind: kind,
+                            range: new monaco.Range(position.lineNumber, position.column, endPosition.lineNumber, endPosition.column),
+                            selectionRange: new monaco.Range(position.lineNumber, position.column, endPosition.lineNumber, endPosition.column),
+                            tags: []
+                        });
+                    }
+                }
+                return symbols;
+            }
+        });
     }
 
     // Cria o editor Monaco no container assim que ele tiver dimensões reais.
@@ -417,103 +459,175 @@ window.monacoInterop = (function () {
         }, 5000);
     }
 
-    // Resolve o objeto monaco: usa window.monaco se já carregado (navegações de volta
-    // à página), ou carrega via AMD na primeira vez.
+    // Resolve o objeto monaco via AMD require.
+    // SEMPRE usa require() — mesmo quando window.monaco já existe.
+    // O loader AMD mantém cache interno e retorna instantaneamente, mas
+    // esse caminho garante que os web workers de tokenização estejam
+    // conectados corretamente ao módulo (na navegação SPA do Blazor,
+    // a referência em window.monaco pode ficar «stale» para os workers).
     function _withMonaco(cb) {
-        if (window.monaco) {
-            cb(window.monaco);
-        } else {
-            _configureLoader();
-            require(['vs/editor/editor.main'], function (monaco) {
-                window.monaco = monaco;
-                cb(monaco);
-            });
-        }
+        _configureLoader();
+        require(['vs/editor/editor.main'], function (monaco) {
+            window.monaco = monaco;
+            cb(monaco);
+        });
     }
 
     return {
         create(elementId, initialContent, filePath) {
-            if (_editors[elementId]) {
-                _editors[elementId].dispose();
-                delete _editors[elementId];
-            }
+            try {
+                // Dispor editor anterior se existir
+                if (_editors[elementId]) {
+                    _editors[elementId].dispose();
+                    delete _editors[elementId];
+                }
+                delete _dirty[elementId];
 
-            const container = document.getElementById(elementId);
-            if (!container) return;
+                const container = document.getElementById(elementId);
+                if (!container) return;
 
-            const language = _detectLanguage(filePath);
+                const language = _detectLanguage(filePath);
 
-            _withMonaco(function (monaco) {
-                _registerProviders(monaco);
+                _withMonaco(function (monaco) {
+                    _registerProviders(monaco);
 
-                _createWhenVisible(container, function () {
-                    // Verifica novamente: o Blazor pode ter removido o container
-                    // entre o momento em que agendamos e o ResizeObserver disparar.
-                    if (!document.getElementById(elementId)) return;
+                    // Limpar modelos órfãos de navegações anteriores
+                    // para evitar leaks e conflitos de tokenização.
+                    monaco.editor.getModels().forEach(function (m) { m.dispose(); });
 
-                    const editor = monaco.editor.create(container, {
-                        value:             initialContent || '',
-                        language:          language,
-                        theme:             'vs-dark',
-                        automaticLayout:   true,
-                        fontSize:          13,
-                        fontFamily:        '"JetBrains Mono", "Fira Code", monospace',
-                        fontLigatures:     true,
-                        minimap:           { enabled: false },
-                        scrollBeyondLastLine: false,
-                        wordWrap:          'off',
-                        tabSize:           4,
-                        insertSpaces:      true,
-                        formatOnType:      true,
-                        formatOnPaste:     true,
-                        suggestOnTriggerCharacters: true,
-                        quickSuggestions:  { other: true, comments: false, strings: true },
-                        acceptSuggestionOnEnter: 'on',
-                        renderLineHighlight: 'line',
-                        bracketPairColorization: { enabled: true },
-                        guides: { bracketPairs: true, indentation: true },
+                    // ── FIX CRÍTICO: Re-injetar CSS do tema ────────────────
+                    // A navegação SPA do Blazor (enhanced navigation) pode
+                    // remover os <style> que Monaco injeta dinamicamente no
+                    // <head> para colorização de tokens. Chamar defineTheme()
+                    // ANTES de criar o editor força Monaco a regenerar e
+                    // re-injetar todas as regras CSS do tema no DOM.
+                    monaco.editor.defineTheme('apigee-dark', {
+                        base: 'vs-dark',
+                        inherit: true,
+                        rules: [],
+                        colors: {}
                     });
 
-                    editor.addCommand(
-                        monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS,
-                        function () {
-                            container.dispatchEvent(new CustomEvent('monaco-save', { bubbles: true }));
-                        }
-                    );
+                    _createWhenVisible(container, function () {
+                        // Verifica novamente: o Blazor pode ter removido o container
+                        // entre o momento em que agendamos e o ResizeObserver disparar.
+                        if (!document.getElementById(elementId)) return;
 
-                    _editors[elementId] = editor;
+                        // Criar modelo explicitamente para garantir que a linguagem
+                        // e o tokenizer sejam inicializados antes do editor renderizar.
+                        const model = monaco.editor.createModel(initialContent || '', language);
+
+                        const editor = monaco.editor.create(container, {
+                            model:             model,
+                            theme:             'apigee-dark',
+                            automaticLayout:   true,
+                            fontSize:          13,
+                            fontFamily:        '"JetBrains Mono", "Fira Code", monospace',
+                            fontLigatures:     true,
+                            minimap:           { enabled: false },
+                            scrollBeyondLastLine: false,
+                            wordWrap:          'off',
+                            tabSize:           4,
+                            insertSpaces:      true,
+                            formatOnType:      true,
+                            formatOnPaste:     true,
+                            suggestOnTriggerCharacters: true,
+                            quickSuggestions:  { other: true, comments: false, strings: true },
+                            acceptSuggestionOnEnter: 'on',
+                            renderLineHighlight: 'line',
+                            bracketPairColorization: { enabled: true },
+                            guides: { bracketPairs: true, indentation: true },
+                        });
+
+                        // Forçar aplicação do tema e linguagem após criação
+                        monaco.editor.setModelLanguage(model, language);
+                        monaco.editor.setTheme('apigee-dark');
+
+                        // ── Ctrl+S → save ──────────────────────────────────────
+                        editor.addCommand(
+                            monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS,
+                            function () {
+                                container.dispatchEvent(new CustomEvent('monaco-save', { bubbles: true }));
+                            }
+                        );
+
+                        // ── Dirty state tracking ───────────────────────────────
+                        _dirty[elementId] = false;
+                        editor.onDidChangeModelContent(function () {
+                            _dirty[elementId] = true;
+                        });
+
+                        _editors[elementId] = editor;
+                    });
                 });
-            });
+            } catch (e) {
+                console.error('[monacoInterop] create failed:', e);
+            }
         },
 
         getValue(elementId) {
-            const ed = _editors[elementId];
-            return ed ? ed.getValue() : '';
+            try {
+                const ed = _editors[elementId];
+                return ed ? ed.getValue() : '';
+            } catch (e) {
+                console.error('[monacoInterop] getValue failed:', e);
+                return '';
+            }
         },
 
         setValue(elementId, content, filePath) {
-            const ed = _editors[elementId];
-            if (!ed) return;
-            const language = _detectLanguage(filePath);
-            _withMonaco(function (monaco) {
-                const model = ed.getModel();
-                if (model) monaco.editor.setModelLanguage(model, language);
-                ed.setValue(content || '');
-                ed.revealLine(1);
-            });
+            try {
+                const ed = _editors[elementId];
+                if (!ed) return;
+                const language = _detectLanguage(filePath);
+                _withMonaco(function (monaco) {
+                    const model = ed.getModel();
+                    if (model) monaco.editor.setModelLanguage(model, language);
+                    ed.setValue(content || '');
+                    ed.revealLine(1);
+
+                    // Re-injetar tema ao trocar de arquivo
+                    monaco.editor.defineTheme('apigee-dark', {
+                        base: 'vs-dark', inherit: true, rules: [], colors: {}
+                    });
+                    monaco.editor.setTheme('apigee-dark');
+
+                    // Resetar dirty state ao definir novo conteúdo
+                    _dirty[elementId] = false;
+                });
+            } catch (e) {
+                console.error('[monacoInterop] setValue failed:', e);
+            }
         },
 
         dispose(elementId) {
-            const ed = _editors[elementId];
-            if (ed) {
-                ed.dispose();
-                delete _editors[elementId];
+            try {
+                const ed = _editors[elementId];
+                if (ed) {
+                    ed.dispose();
+                    delete _editors[elementId];
+                }
+                delete _dirty[elementId];
+            } catch (e) {
+                console.error('[monacoInterop] dispose failed:', e);
             }
         },
 
         formatDocument(elementId) {
-            const ed = _editors[elementId];
-            if (ed) ed.getAction('editor.action.formatDocument').run();
+            try {
+                const ed = _editors[elementId];
+                if (ed) ed.getAction('editor.action.formatDocument').run();
+            } catch (e) {
+                console.error('[monacoInterop] formatDocument failed:', e);
+            }
+        },
+
+        isDirty(elementId) {
+            return !!_dirty[elementId];
+        },
+
+        clearDirty(elementId) {
+            _dirty[elementId] = false;
         },
     };
 })();

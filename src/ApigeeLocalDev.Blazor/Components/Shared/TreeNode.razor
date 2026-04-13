@@ -6,9 +6,9 @@
                    or WorkspaceItemType.SharedFlow
                    or WorkspaceItemType.Environment)
     {
-        <div class="tree-dir">
-            <span class="tree-caret" @onclick="ToggleExpand">@(_expanded ? "\u25bc" : "\u25ba")</span>
-            <span class="tree-dir-name" @onclick="ToggleExpand">@Item.Name</span>
+        <div class="tree-dir" @oncontextmenu="e => HandleContextMenu(e, Item)" @oncontextmenu:preventDefault="true">
+            <span class="tree-caret" @onclick="ToggleExpand" @onclick:stopPropagation>@(_expanded ? "\u25bc" : "\u25ba")</span>
+            <span class="tree-dir-name" @onclick="ToggleExpand" @onclick:stopPropagation>@Item.Name</span>
 
             @if (QuickAddCategory is not null)
             {
@@ -25,15 +25,20 @@
                 @foreach (var child in Item.Children)
                 {
                     <TreeNode Item="child"
+                              SelectedFilePath="@SelectedFilePath"
                               OnFileSelected="OnFileSelected"
-                              OnQuickAdd="OnQuickAdd" />
+                              OnQuickAdd="OnQuickAdd"
+                              OnContextMenu="OnContextMenu" />
                 }
             </div>
         }
     }
     else
     {
-        <div class="tree-file" @onclick="() => OnFileSelected.InvokeAsync(Item.FullPath)">
+        var isActive = string.Equals(Item.FullPath, SelectedFilePath, StringComparison.OrdinalIgnoreCase);
+        <div class="tree-file @(isActive ? "active" : "")" 
+             @onclick="() => OnFileSelected.InvokeAsync(Item.FullPath)"
+             @oncontextmenu="e => HandleContextMenu(e, Item)" @oncontextmenu:preventDefault="true">
             <span class="tree-file-icon">&#128196;</span> @Item.Name
         </div>
     }
@@ -59,9 +64,11 @@
         };
 
     [Parameter] public WorkspaceItem Item { get; set; } = default!;
+    [Parameter] public string? SelectedFilePath { get; set; }
     [Parameter] public EventCallback<string> OnFileSelected { get; set; }
     /// <summary>Emite (folderAbsolutePath, folderName) para o pai abrir o modal correto.</summary>
     [Parameter] public EventCallback<(string Path, string Category)> OnQuickAdd { get; set; }
+    [Parameter] public EventCallback<(Microsoft.AspNetCore.Components.Web.MouseEventArgs e, WorkspaceItem item)> OnContextMenu { get; set; }
 
     private bool _expanded = true;
 
@@ -72,4 +79,7 @@
 
     private Task HandleQuickAdd()
         => OnQuickAdd.InvokeAsync((Item.FullPath, Item.Name.ToLowerInvariant()));
+
+    private Task HandleContextMenu(Microsoft.AspNetCore.Components.Web.MouseEventArgs e, WorkspaceItem item)
+        => OnContextMenu.InvokeAsync((e, item));
 }

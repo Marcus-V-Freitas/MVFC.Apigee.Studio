@@ -160,6 +160,13 @@ public sealed class WorkspaceFileSystemRepository(IConfiguration configuration) 
         return Task.CompletedTask;
     }
 
+    public Task DeleteDirectoryAsync(string absolutePath, CancellationToken ct = default)
+    {
+        if (Directory.Exists(absolutePath))
+            Directory.Delete(absolutePath, recursive: true);
+        return Task.CompletedTask;
+    }
+
     // ── ZIP helpers ───────────────────────────────────────────────────────
 
     public Task<string> BuildBundleZipAsync(
