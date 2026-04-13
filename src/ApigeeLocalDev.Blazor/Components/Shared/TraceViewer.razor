@@ -9,23 +9,25 @@
         <h3>Policy Trace</h3>
         <div class="trace-controls">
             <label class="input-label">
-                Proxy
-                <select class="input" @bind="_selectedProxy" @bind:after="OnProxyChanged">
-                    @foreach (var (proxy, _) in _deployedApis)
+                PROXY
+                <select class="input" @bind="_selectedProxy" disabled="@(_tracing || !AvailableProxies.Any())">
+                    <option value="">@(AvailableProxies.Any() ? "-- selecione --" : "Selecione um workspace")</option>
+                    @foreach (var proxy in AvailableProxies)
                     {
                         <option value="@proxy">@proxy</option>
                     }
                 </select>
             </label>
             <label class="input-label">
-                Revision
-                <input class="input" @bind="_revision" placeholder="1" style="width:80px" />
+                REVISION
+                <input class="input" @bind="_revision" placeholder="1" style="width:80px" disabled="@_tracing" />
             </label>
             <label class="input-label">
-                Environment
-                <input class="input" @bind="_environment" placeholder="local" style="width:100px" />
+                ENVIRONMENT
+                <input class="input" @bind="_environment" placeholder="local" style="width:100px" disabled="@_tracing" />
             </label>
-            <button class="btn btn-primary" @onclick="StartTrace" disabled="@(_tracing || string.IsNullOrWhiteSpace(_selectedProxy))">
+            <button class="btn btn-primary" @onclick="StartTrace"
+                    disabled="@(_tracing || string.IsNullOrWhiteSpace(_selectedProxy))">
                 &#9654; Start Trace
             </button>
             <button class="btn btn-ghost btn-sm btn-danger" @onclick="StopTrace" disabled="@(!_tracing)">
@@ -59,17 +61,17 @@
 
     @foreach (var tx in _transactions)
     {
-        <div class="trace-transaction @(tx.StatusCode >= 400 ? "tx-error" : "tx-ok")">
+        <div class="trace-transaction @(tx.StatusCode >= 400 ? \"tx-error\" : \"tx-ok\")">
             <div class="tx-summary">
                 <span class="tx-verb">@tx.Verb</span>
                 <code class="tx-path">@tx.RequestPath</code>
-                <span class="badge @(tx.StatusCode >= 400 ? "badge-error" : "badge-success")">@tx.StatusCode</span>
+                <span class="badge @(tx.StatusCode >= 400 ? \"badge-error\" : \"badge-success\")">@tx.StatusCode</span>
                 <span class="tx-id help-text">@tx.MessageId</span>
             </div>
             <div class="trace-timeline">
                 @foreach (var point in tx.Points)
                 {
-                    <div class="trace-point @(point.Error ? "point-error" : point.Executed ? "point-ok" : "point-skip")">
+                    <div class="trace-point @(point.Error ? \"point-error\" : point.Executed ? \"point-ok\" : \"point-skip\")">
                         <span class="policy-phase">@point.Phase</span>
                         <span class="policy-name">@point.Policy</span>
                         @if (point.DurationMs > 0)
@@ -93,6 +95,7 @@
 
 @code {
     [Parameter] public string DefaultEnvironment { get; set; } = "local";
+    [Parameter] public List<string> AvailableProxies { get; set; } = [];
 
     private string _environment   = "local";
     private string _selectedProxy = string.Empty;
@@ -101,40 +104,16 @@
     private bool _tracing;
     private string _errorMessage  = string.Empty;
 
-    private List<TraceTransaction>              _transactions  = new();
-    private List<(string ApiProxy, string Rev)> _deployedApis  = new();
-
+    private List<TraceTransaction> _transactions = new();
     private CancellationTokenSource? _cts;
 
-    protected override async Task OnInitializedAsync()
+    protected override void OnParametersSet()
     {
+        // Quando o workspace muda e o proxy selecionado some da nova lista, reset
+        if (!string.IsNullOrEmpty(_selectedProxy) && !AvailableProxies.Contains(_selectedProxy))
+            _selectedProxy = string.Empty;
+
         _environment = DefaultEnvironment;
-        await LoadDeployedApis();
-    }
-
-    private async Task LoadDeployedApis()
-    {
-        try
-        {
-            var apis = await TraceClient.ListDeployedApisAsync(_environment);
-            _deployedApis = [.. apis];
-            if (_deployedApis.Count > 0)
-            {
-                _selectedProxy = _deployedApis[0].ApiProxy;
-                _revision      = _deployedApis[0].Rev;
-            }
-        }
-        catch (Exception ex)
-        {
-            _errorMessage = "Não foi possível listar APIs deployadas: " + ex.Message;
-        }
-    }
-
-    private async Task OnProxyChanged()
-    {
-        var match = _deployedApis.FirstOrDefault(d => d.ApiProxy == _selectedProxy);
-        if (match != default) _revision = match.Rev;
-        await Task.CompletedTask;
     }
 
     private async Task StartTrace()
@@ -165,11 +144,7 @@
 
         if (_sessionId is not null)
         {
-            try
-            {
-                await TraceClient.DeleteSessionAsync(
-                    _environment, _selectedProxy, _revision, _sessionId);
-            }
+            try { await TraceClient.DeleteSessionAsync(_environment, _selectedProxy, _revision, _sessionId); }
             catch { /* best-effort */ }
             _sessionId = null;
         }
@@ -222,11 +197,7 @@
 
         if (_sessionId is not null)
         {
-            try
-            {
-                await TraceClient.DeleteSessionAsync(
-                    _environment, _selectedProxy, _revision, _sessionId);
-            }
+            try { await TraceClient.DeleteSessionAsync(_environment, _selectedProxy, _revision, _sessionId); }
             catch { /* best-effort */ }
         }
     }

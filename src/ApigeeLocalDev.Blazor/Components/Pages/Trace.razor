@@ -1,4 +1,7 @@
 @page "/trace"
+@using ApigeeLocalDev.Domain.Interfaces
+@using ApigeeLocalDev.Domain.Entities
+@inject IWorkspaceRepository WorkspaceRepo
 @rendermode RenderMode.InteractiveServer
 
 <div class="page-header">
@@ -6,4 +9,38 @@
     <p class="page-subtitle">Capture e inspecione a execução de políticas em tempo real no Apigee Emulator.</p>
 </div>
 
-<TraceViewer DefaultEnvironment="local" />
+<div class="card" style="margin-bottom: var(--space-4); padding: var(--space-4);">
+    <div style="display:flex; gap: var(--space-4); align-items: flex-end; flex-wrap: wrap;">
+        <label class="input-label">
+            Workspace
+            <select class="input" @bind="_selectedWorkspace" @bind:after="OnWorkspaceChanged">
+                <option value="">-- selecione --</option>
+                @foreach (var ws in _workspaces)
+                {
+                    <option value="@ws.Name">@ws.Name</option>
+                }
+            </select>
+        </label>
+    </div>
+</div>
+
+<TraceViewer AvailableProxies="@_proxies" DefaultEnvironment="local" />
+
+@code {
+    private List<ApigeeWorkspace> _workspaces = [];
+    private List<string> _proxies = [];
+    private string _selectedWorkspace = string.Empty;
+
+    protected override void OnInitialized()
+    {
+        _workspaces = [.. WorkspaceRepo.ListAll()];
+    }
+
+    private void OnWorkspaceChanged()
+    {
+        _proxies = [];
+        var ws = _workspaces.FirstOrDefault(w => w.Name == _selectedWorkspace);
+        if (ws is not null)
+            _proxies = [.. WorkspaceRepo.ListApiProxies(ws)];
+    }
+}
