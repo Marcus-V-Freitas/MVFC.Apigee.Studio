@@ -6,7 +6,7 @@
 @inject IApigeeEmulatorClient Emulator
 @inject ToastService Toast
 @implements IAsyncDisposable
-@rendermode InteractiveServer
+@rendermode RenderMode.InteractiveServer
 
 <PageTitle>Policy Trace — Apigee Local Dev</PageTitle>
 
@@ -131,12 +131,12 @@
             _pollCts = new CancellationTokenSource();
             _ = PollLoopAsync(_pollCts.Token);
 
-            Toast.Show($"Trace iniciado para '{_proxyName}'", ToastType.Success);
+            Toast.ShowSuccess($"Trace iniciado para '{_proxyName}'");
         }
         catch (Exception ex)
         {
             _error = ex.Message;
-            Toast.Show("Falha ao iniciar trace: " + ex.Message, ToastType.Error);
+            Toast.ShowError("Falha ao iniciar trace: " + ex.Message);
         }
         finally
         {
@@ -157,7 +157,7 @@
         }
 
         _isTracing = false;
-        Toast.Show("Trace encerrado.", ToastType.Info);
+        Toast.ShowSuccess("Trace encerrado.");
     }
 
     private void ClearTransactions()
