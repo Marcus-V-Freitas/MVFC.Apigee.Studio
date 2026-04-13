@@ -1,29 +1,24 @@
+using ApigeeLocalDev.Domain.Entities;
+
 namespace ApigeeLocalDev.Domain.Interfaces;
 
 /// <summary>
 /// Contrato para comunicação com o Apigee Emulator (container Docker local).
 ///
-/// O emulator expõe a Management API padrão do Apigee Edge na porta 8080:
-///   GET  /v1/emulator/version                                        — health check
-///   POST /v1/organizations/{org}/apis?action=import&name={proxy}     — import bundle ZIP
-///   POST /v1/organizations/{org}/environments/{env}/apis/{api}/revisions/{rev}/deployments
-///
-/// IMPORTANTE: o emulator local NÃO suporta deployArchive (requer GCS).
-/// Para deploy completo de workspace, use DeployBundleAsync para cada proxy.
-/// Org padrão: "emulator".
+/// Endpoints usados:
+///   GET    /v1/emulator/healthz                                   — liveness check
+///   POST   /v1/emulator/deploy?environment=                       — bundle deploy
+///   POST   /v1/emulator/deployArchive?environment=                — archive deploy
+///   POST   /v1/emulator/trace?proxyName=                          — inicia sessão de trace
+///   GET    /v1/emulator/trace/transactions?sessionid=             — polling de transações
+///   DELETE /v1/emulator/trace?sessionid=                          — encerra sessão
 /// </summary>
 public interface IApigeeEmulatorClient
 {
-    /// <summary>Verifica se o emulator está acessível via GET /v1/emulator/version.</summary>
+    /// <summary>Verifica se o emulator está acessível via GET /v1/emulator/healthz.</summary>
     Task<bool> IsAliveAsync(CancellationToken ct = default);
 
-    /// <summary>
-    /// Importa e deploya um bundle individual (proxy ou shared flow).
-    /// Fluxo de 2 passos:
-    ///   1. POST /v1/organizations/emulator/apis?action=import&name={proxy}  → extrai revision
-    ///   2. POST /v1/organizations/emulator/environments/{env}/apis/{proxy}/revisions/{rev}/deployments
-    /// O ZIP deve ter "apiproxy/" ou "sharedflowbundle/" diretamente na raiz.
-    /// </summary>
+    /// <summary>Importa e deploya um bundle individual (proxy ou shared flow).</summary>
     Task DeployBundleAsync(string environment, string zipPath, CancellationToken ct = default);
 
     /// <summary>Lista imagens Docker disponíveis do emulator.</summary>
@@ -34,4 +29,25 @@ public interface IApigeeEmulatorClient
 
     /// <summary>Para o container do emulator.</summary>
     Task StopContainerAsync(CancellationToken ct = default);
+
+    // ─── TRACE ───────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Inicia uma sessão de trace para o proxy informado.
+    /// POST /v1/emulator/trace?proxyName={proxyName}
+    /// </summary>
+    Task<TraceSession> StartTraceAsync(string proxyName, CancellationToken ct = default);
+
+    /// <summary>
+    /// Busca as transações capturadas até o momento para a sessão ativa.
+    /// GET /v1/emulator/trace/transactions?sessionid={sessionId}
+    /// Deve ser chamado em polling (~2 s) enquanto a sessão estiver ativa.
+    /// </summary>
+    Task<IReadOnlyList<TraceTransaction>> GetTraceTransactionsAsync(string sessionId, CancellationToken ct = default);
+
+    /// <summary>
+    /// Encerra a sessão de trace ativa.
+    /// DELETE /v1/emulator/trace?sessionid={sessionId}
+    /// </summary>
+    Task StopTraceAsync(string sessionId, CancellationToken ct = default);
 }

@@ -1,75 +1,222 @@
 @page "/trace"
-@using ApigeeLocalDev.Domain.Interfaces
 @using ApigeeLocalDev.Domain.Entities
-@inject IWorkspaceRepository WorkspaceRepo
-@inject IProxyTraceService TraceService
-@inject IConfiguration Config
-@rendermode RenderMode.InteractiveServer
+@using ApigeeLocalDev.Domain.Interfaces
+@using ApigeeLocalDev.Blazor.Components.Shared
+@using ApigeeLocalDev.Blazor.Services
+@inject IApigeeEmulatorClient Emulator
+@inject ToastService Toast
+@implements IAsyncDisposable
+@rendermode InteractiveServer
+
+<PageTitle>Policy Trace — Apigee Local Dev</PageTitle>
 
 <div class="page-header">
-    <h1>Trace</h1>
-    <p class="page-subtitle">Capture e inspecione a execução de políticas em tempo real no Apigee Emulator.</p>
-</div>
-
-<div class="card" style="margin-bottom: var(--space-4); padding: var(--space-4);">
-    <div style="display:flex; gap: var(--space-4); align-items: flex-end; flex-wrap: wrap;">
-        <label class="input-label">
-            Workspace
-            <select class="input" @bind="_selectedWorkspace" @bind:after="OnWorkspaceChanged">
-                <option value="">-- selecione --</option>
-                @foreach (var ws in _workspaces)
-                {
-                    <option value="@ws.Name">@ws.Name</option>
-                }
-            </select>
-        </label>
-
-        @if (_proxies.Count > 0)
-        {
-            <label class="input-label">
-                API Proxy
-                <select class="input" @bind="_selectedProxy" @bind:after="OnProxyChanged">
-                    <option value="">-- selecione --</option>
-                    @foreach (var p in _proxies)
-                    {
-                        <option value="@p">@p</option>
-                    }
-                </select>
-            </label>
-        }
+    <div class="page-header-left">
+        <i data-lucide="radio" class="page-icon"></i>
+        <div>
+            <h1 class="page-title">Policy Trace</h1>
+            <p class="page-subtitle">Capture e inspecione a execução de políticas em tempo real.</p>
+        </div>
     </div>
 </div>
 
-<TraceViewer AvailableProxies="@_proxies" DefaultEnvironment="local" />
+<div class="trace-page">
+
+    <!-- ── Painel de controle ── -->
+    <div class="card trace-control-card">
+        <div class="trace-control-row">
+            <div class="form-group" style="flex:1">
+                <label class="form-label">Proxy Name</label>
+                <input class="form-input"
+                       placeholder="ex: hello-world"
+                       @bind="_proxyName"
+                       disabled="@_isTracing" />
+            </div>
+
+            <div class="trace-control-actions">
+                @if (!_isTracing)
+                {
+                    <button class="btn btn-primary" @onclick="StartTrace"
+                            disabled="@(string.IsNullOrWhiteSpace(_proxyName) || _loading)">
+                        @if (_loading)
+                        {
+                            <i data-lucide="loader-2" class="spin"></i>
+                            <span>Iniciando...</span>
+                        }
+                        else
+                        {
+                            <i data-lucide="play"></i>
+                            <span>Iniciar Trace</span>
+                        }
+                    </button>
+                }
+                else
+                {
+                    <div class="trace-status-badge">
+                        <span class="pulse-dot"></span>
+                        <span>Capturando</span>
+                    </div>
+                    <button class="btn btn-ghost" @onclick="StopTrace">
+                        <i data-lucide="square"></i>
+                        <span>Parar</span>
+                    </button>
+                    <button class="btn btn-ghost" @onclick="ClearTransactions" title="Limpar transacões">
+                        <i data-lucide="trash-2"></i>
+                    </button>
+                }
+            </div>
+        </div>
+
+        @if (_session is not null)
+        {
+            <div class="trace-session-info">
+                <span class="badge">Session: @_session.SessionId</span>
+                <span class="badge">Proxy: @_session.Application</span>
+                <span class="badge">Iniciado: @_session.StartedAt.ToLocalTime().ToString("HH:mm:ss")</span>
+                <span class="badge">@_transactions.Count transação(ões)</span>
+            </div>
+        }
+
+        @if (!string.IsNullOrWhiteSpace(_error))
+        {
+            <div class="alert alert-error">
+                <i data-lucide="alert-circle"></i>
+                <span>@_error</span>
+            </div>
+        }
+    </div>
+
+    <!-- ── Timeline de transações ── -->
+    <div class="card">
+        <div class="card-header">
+            <h2 class="card-title">
+                <i data-lucide="list"></i>
+                Transações
+            </h2>
+            @if (_transactions.Any())
+            {
+                <span class="badge badge-primary">@_transactions.Count</span>
+            }
+        </div>
+        <div class="card-body">
+            <TraceViewer Transactions="_transactions" />
+        </div>
+    </div>
+</div>
 
 @code {
-    private List<ApigeeWorkspace> _workspaces = [];
-    private List<string>          _proxies    = [];
-    private string _selectedWorkspace = string.Empty;
-    private string _selectedProxy     = string.Empty;
+    private string  _proxyName = string.Empty;
+    private bool    _isTracing = false;
+    private bool    _loading   = false;
+    private string? _error     = null;
 
-    protected override void OnInitialized()
+    private TraceSession?            _session      = null;
+    private List<TraceTransaction>   _transactions = [];
+    private CancellationTokenSource? _pollCts      = null;
+
+    // ─── Start ───────────────────────────────────────────────────────────────
+
+    private async Task StartTrace()
     {
-        _workspaces = [.. WorkspaceRepo.ListAll()];
+        _error   = null;
+        _loading = true;
+        StateHasChanged();
+
+        try
+        {
+            _session      = await Emulator.StartTraceAsync(_proxyName);
+            _isTracing    = true;
+            _transactions = [];
+
+            _pollCts = new CancellationTokenSource();
+            _ = PollLoopAsync(_pollCts.Token);
+
+            Toast.Show($"Trace iniciado para '{_proxyName}'", ToastType.Success);
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+            Toast.Show("Falha ao iniciar trace: " + ex.Message, ToastType.Error);
+        }
+        finally
+        {
+            _loading = false;
+        }
     }
 
-    private void OnWorkspaceChanged()
-    {
-        _proxies       = [];
-        _selectedProxy = string.Empty;
-        var ws = _workspaces.FirstOrDefault(w => w.Name == _selectedWorkspace);
-        if (ws is not null)
-            _proxies = [.. WorkspaceRepo.ListApiProxies(ws)];
+    // ─── Stop ────────────────────────────────────────────────────────────────
 
-        TraceService.SetActiveProxy(
-            _workspaces.FirstOrDefault(w => w.Name == _selectedWorkspace)?.RootPath ?? string.Empty,
-            string.Empty);
+    private async Task StopTrace()
+    {
+        await CancelPollAsync();
+
+        if (_session is not null)
+        {
+            try   { await Emulator.StopTraceAsync(_session.SessionId); }
+            catch { /* best-effort */ }
+        }
+
+        _isTracing = false;
+        Toast.Show("Trace encerrado.", ToastType.Info);
     }
 
-    private void OnProxyChanged()
+    private void ClearTransactions()
     {
-        var ws = _workspaces.FirstOrDefault(w => w.Name == _selectedWorkspace);
-        if (ws is not null && !string.IsNullOrEmpty(_selectedProxy))
-            TraceService.SetActiveProxy(ws.RootPath, _selectedProxy);
+        _transactions = [];
+        StateHasChanged();
+    }
+
+    // ─── Polling loop ─────────────────────────────────────────────────────────
+
+    private async Task PollLoopAsync(CancellationToken ct)
+    {
+        while (!ct.IsCancellationRequested && _session is not null)
+        {
+            try
+            {
+                var txs = await Emulator.GetTraceTransactionsAsync(_session.SessionId, ct);
+
+                if (txs.Count != _transactions.Count)
+                {
+                    _transactions = txs.ToList();
+                    await InvokeAsync(StateHasChanged);
+                }
+            }
+            catch (OperationCanceledException) { break; }
+            catch (Exception ex)
+            {
+                await InvokeAsync(() =>
+                {
+                    _error = "Erro no polling: " + ex.Message;
+                    StateHasChanged();
+                });
+                break;
+            }
+
+            await Task.Delay(2_000, ct).ConfigureAwait(false);
+        }
+    }
+
+    private async Task CancelPollAsync()
+    {
+        if (_pollCts is not null)
+        {
+            await _pollCts.CancelAsync();
+            _pollCts.Dispose();
+            _pollCts = null;
+        }
+    }
+
+    // ─── Dispose ─────────────────────────────────────────────────────────────
+
+    public async ValueTask DisposeAsync()
+    {
+        await CancelPollAsync();
+
+        if (_isTracing && _session is not null)
+        {
+            try   { await Emulator.StopTraceAsync(_session.SessionId); }
+            catch { /* best-effort */ }
+        }
     }
 }

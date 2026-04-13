@@ -1,236 +1,78 @@
 @using ApigeeLocalDev.Domain.Entities
-@using ApigeeLocalDev.Domain.Interfaces
-@implements IAsyncDisposable
-@inject IProxyTraceService TraceService
-@inject NavigationManager Nav
-@rendermode RenderMode.InteractiveServer
 
-<div class="card">
-    <div class="card-header-row">
-        <h3>Policy Trace</h3>
-        <div class="trace-controls">
-            @if (AvailableProxies is { Count: > 0 })
-            {
-                <label class="input-label">
-                    PROXY
-                    <select class="input" @bind="_selectedProxy" disabled="@_tracing" style="width:160px">
-                        <option value="">-- todos --</option>
-                        @foreach (var p in AvailableProxies)
+<div class="trace-viewer">
+    @if (!Transactions.Any())
+    {
+        <div class="trace-empty">
+            <i data-lucide="radio" style="width:32px;height:32px;color:var(--color-text-faint)"></i>
+            <p>Nenhuma transação capturada ainda.<br/>Faça uma requisição ao proxy enquanto o trace estiver ativo.</p>
+        </div>
+    }
+    else
+    {
+        @foreach (var tx in Transactions)
+        {
+            var isExpanded = _expanded.Contains(tx.MessageId);
+            var statusClass = tx.ResponseCode >= 500 ? "tx-error"
+                            : tx.ResponseCode >= 400 ? "tx-warn"
+                            : "tx-ok";
+
+            <div class="trace-tx @statusClass">
+                <button class="trace-tx-header" @onclick="() => Toggle(tx.MessageId)">
+                    <span class="tx-method">@tx.RequestMethod</span>
+                    <span class="tx-uri">@tx.RequestUri</span>
+                    <span class="tx-badge @statusClass">@tx.ResponseCode</span>
+                    <span class="tx-time">@tx.TotalTimeMs ms</span>
+                    <i data-lucide="@(isExpanded ? "chevron-up" : "chevron-down")" class="tx-chevron"></i>
+                </button>
+
+                @if (isExpanded)
+                {
+                    <div class="trace-timeline">
+                        @foreach (var pt in tx.Points)
                         {
-                            <option value="@p">@p</option>
+                            var ptClass = pt.HasError                     ? "pt-error"
+                                        : pt.PointType == "Execution"     ? "pt-exec"
+                                        : pt.PointType == "Condition"     ? "pt-cond"
+                                        : "pt-state";
+
+                            <div class="trace-point @ptClass">
+                                <span class="pt-icon">
+                                    @if (pt.HasError)                      { <i data-lucide="x-circle"></i>            }
+                                    else if (pt.PointType == "Execution")  { <i data-lucide="play-circle"></i>        }
+                                    else if (pt.PointType == "Condition")  { <i data-lucide="git-branch"></i>         }
+                                    else                                   { <i data-lucide="arrow-right-circle"></i>  }
+                                </span>
+                                <span class="pt-name">@(string.IsNullOrWhiteSpace(pt.PolicyName) ? pt.PointType : pt.PolicyName)</span>
+                                @if (!string.IsNullOrWhiteSpace(pt.Phase))
+                                {
+                                    <span class="pt-phase">@pt.Phase</span>
+                                }
+                                @if (pt.ElapsedTimeMs > 0)
+                                {
+                                    <span class="pt-ms">@pt.ElapsedTimeMs ms</span>
+                                }
+                                @if (!string.IsNullOrWhiteSpace(pt.Description))
+                                {
+                                    <span class="pt-desc">@pt.Description</span>
+                                }
+                            </div>
                         }
-                    </select>
-                </label>
-            }
-            <label class="input-label">
-                ENVIRONMENT
-                <input class="input" @bind="_environment" placeholder="local" style="width:100px" disabled="@_tracing" />
-            </label>
-            <button class="btn btn-primary" @onclick="StartTrace" disabled="@_startDisabled">
-                &#9654; Start Trace
-            </button>
-            <button class="btn btn-ghost btn-sm btn-danger" @onclick="StopTrace" disabled="@_stopDisabled">
-                &#9632; Stop
-            </button>
-            <button class="btn btn-ghost btn-sm" @onclick="ClearTransactions" disabled="@_tracing">
-                &#128465; Clear
-            </button>
-        </div>
-    </div>
-
-    @if (!string.IsNullOrEmpty(_errorMessage))
-    {
-        <p class="error-text mt-2">@_errorMessage</p>
-    }
-
-    @if (_tracing)
-    {
-        <p class="help-text mt-2">
-            <span class="status-dot dot-green"></span>
-            Capturando tráfego via <code>/emulator-runtime/**</code>&hellip;
-            Faça requisições para <code>@_proxyBaseUrl/emulator-runtime/seu-path</code>
-        </p>
-    }
-
-    @if (!_visibleTransactions.Any() && !_tracing)
-    {
-        <div class="empty-trace">
-            <p class="help-text">Nenhuma transação capturada. Selecione um workspace e proxy, inicie o trace e faça uma requisição.</p>
-        </div>
-    }
-
-    @foreach (var tx in _visibleTransactions)
-    {
-        <div class="@TxClass(tx)">
-            <div class="tx-summary">
-                <span class="tx-verb">@tx.Verb</span>
-                <code class="tx-path">@tx.RequestPath</code>
-                <span class="@BadgeClass(tx)">@tx.StatusCode</span>
-                <span class="tx-duration help-text">@tx.DurationMs ms</span>
-                <span class="tx-id help-text">@tx.MessageId</span>
-            </div>
-
-            @if (tx.Points.Count > 0)
-            {
-                <div class="policy-timeline">
-                    @{
-                        var requestSteps  = tx.Points.Where(p => p.Phase == "ProxyRequest").ToList();
-                        var responseSteps = tx.Points.Where(p => p.Phase == "ProxyResponse").ToList();
-                    }
-
-                    @if (requestSteps.Count > 0)
-                    {
-                        <div class="timeline-phase">
-                            <span class="phase-label request-label">&#8599; Request</span>
-                            <div class="timeline-steps">
-                                @foreach (var pt in requestSteps)
-                                {
-                                    <div class="timeline-step @StepClass(pt)" title="@(pt.Condition ?? string.Empty)">
-                                        <span class="step-icon">@StepIcon(pt)</span>
-                                        <span class="step-name">@pt.Policy</span>
-                                        @if (!string.IsNullOrWhiteSpace(pt.Condition))
-                                        {
-                                            <span class="step-condition" title="@pt.Condition">if</span>
-                                        }
-                                    </div>
-                                    @if (requestSteps.Last() != pt)
-                                    {
-                                        <span class="step-arrow">→</span>
-                                    }
-                                }
-                            </div>
-                        </div>
-                    }
-
-                    <div class="timeline-target">
-                        <span class="target-icon">&#9654;</span>
-                        <span class="target-label">Target</span>
                     </div>
-
-                    @if (responseSteps.Count > 0)
-                    {
-                        <div class="timeline-phase">
-                            <span class="phase-label response-label">&#8600; Response</span>
-                            <div class="timeline-steps">
-                                @foreach (var pt in responseSteps)
-                                {
-                                    <div class="timeline-step @StepClass(pt)" title="@(pt.Condition ?? string.Empty)">
-                                        <span class="step-icon">@StepIcon(pt)</span>
-                                        <span class="step-name">@pt.Policy</span>
-                                        @if (!string.IsNullOrWhiteSpace(pt.Condition))
-                                        {
-                                            <span class="step-condition" title="@pt.Condition">if</span>
-                                        }
-                                    </div>
-                                    @if (responseSteps.Last() != pt)
-                                    {
-                                        <span class="step-arrow">→</span>
-                                    }
-                                }
-                            </div>
-                        </div>
-                    }
-                </div>
-            }
-
-            @if (!string.IsNullOrWhiteSpace(tx.RequestBody))
-            {
-                <details class="tx-body">
-                    <summary class="help-text">Request body</summary>
-                    <pre><code>@tx.RequestBody</code></pre>
-                </details>
-            }
-
-            @if (!string.IsNullOrWhiteSpace(tx.ResponseBody))
-            {
-                <details class="tx-body">
-                    <summary class="help-text">Response body</summary>
-                    <pre><code>@tx.ResponseBody</code></pre>
-                </details>
-            }
-        </div>
+                }
+            </div>
+        }
     }
 </div>
 
 @code {
-    [Parameter] public string DefaultEnvironment { get; set; } = "local";
-    [Parameter] public List<string>? AvailableProxies { get; set; }
+    [Parameter] public IReadOnlyList<TraceTransaction> Transactions { get; set; } = [];
 
-    private string _environment   = "local";
-    private string _selectedProxy = string.Empty;
-    private bool   _tracing;
-    private string _errorMessage  = string.Empty;
-    private string _proxyBaseUrl  = "http://localhost:5000";
+    private readonly HashSet<string> _expanded = [];
 
-    private readonly List<TraceTransaction> _transactions = [];
-    private CancellationTokenSource? _cts;
-
-    private bool _startDisabled => _tracing;
-    private bool _stopDisabled  => !_tracing;
-
-    private IEnumerable<TraceTransaction> _visibleTransactions =>
-        string.IsNullOrEmpty(_selectedProxy)
-            ? _transactions
-            : _transactions.Where(tx =>
-                tx.RequestPath.Contains(_selectedProxy, StringComparison.OrdinalIgnoreCase));
-
-    private static string TxClass(TraceTransaction tx)    => tx.StatusCode >= 400 ? "trace-transaction tx-error" : "trace-transaction tx-ok";
-    private static string BadgeClass(TraceTransaction tx) => tx.StatusCode >= 400 ? "badge badge-error" : "badge badge-success";
-    private static string StepClass(TracePoint pt)        => pt.Error ? "step-error" : pt.Executed ? "step-ok" : "step-skip";
-    private static string StepIcon(TracePoint pt)         => pt.Error ? "❌" : pt.Executed ? "✅" : "⏭️";
-
-    protected override void OnParametersSet() => _environment = DefaultEnvironment;
-
-    protected override void OnInitialized()
+    private void Toggle(string messageId)
     {
-        var uri = new Uri(Nav.BaseUri);
-        _proxyBaseUrl = $"{uri.Scheme}://{uri.Host}:{uri.Port}";
-    }
-
-    private void StartTrace()
-    {
-        _errorMessage = string.Empty;
-        _cts = new CancellationTokenSource();
-        TraceService.Start();
-        _tracing = true;
-        _ = ConsumeTraceAsync(_cts.Token);
-    }
-
-    private void StopTrace()
-    {
-        _tracing = false;
-        TraceService.Stop();
-        _cts?.Cancel();
-        _cts?.Dispose();
-        _cts = null;
-    }
-
-    private void ClearTransactions() => _transactions.Clear();
-
-    private async Task ConsumeTraceAsync(CancellationToken ct)
-    {
-        try
-        {
-            await foreach (var tx in TraceService.ReadAllAsync(ct))
-            {
-                _transactions.Add(tx);
-                await InvokeAsync(StateHasChanged);
-            }
-        }
-        catch (OperationCanceledException) { /* normal ao parar */ }
-        catch (Exception ex)
-        {
-            await InvokeAsync(() =>
-            {
-                _errorMessage = "Erro no trace: " + ex.Message;
-                StateHasChanged();
-            });
-        }
-    }
-
-    public ValueTask DisposeAsync()
-    {
-        StopTrace();
-        return ValueTask.CompletedTask;
+        if (!_expanded.Add(messageId))
+            _expanded.Remove(messageId);
     }
 }

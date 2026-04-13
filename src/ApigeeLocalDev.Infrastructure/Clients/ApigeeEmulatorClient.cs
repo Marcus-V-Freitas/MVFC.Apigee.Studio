@@ -1,5 +1,7 @@
 using System.Diagnostics;
 using System.Net.Http.Headers;
+using System.Text.Json;
+using ApigeeLocalDev.Domain.Entities;
 using ApigeeLocalDev.Domain.Interfaces;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
@@ -8,17 +10,14 @@ namespace ApigeeLocalDev.Infrastructure.Clients;
 
 /// <summary>
 /// Cliente HTTP para o Apigee Emulator rodando localmente em Docker.
-///
-/// Endpoints usados:
-///   GET  /v1/emulator/healthz              -> liveness check
-///   POST /v1/emulator/deploy?environment=  -> bundle deploy (apiproxy/ na raiz do ZIP)
-///   POST /v1/emulator/deployArchive?environment= -> archive deploy (src/main/apigee/...)
 /// </summary>
 public sealed class ApigeeEmulatorClient(
     HttpClient http,
     IConfiguration config,
     ILogger<ApigeeEmulatorClient> logger) : IApigeeEmulatorClient
 {
+    // ─── Health ────────────────────────────────────────────────────────────
+
     public async Task<bool> IsAliveAsync(CancellationToken ct = default)
     {
         try
@@ -33,32 +32,18 @@ public sealed class ApigeeEmulatorClient(
         }
     }
 
-    /// <summary>
-    /// Bundle deploy: ZIP com apiproxy/ ou sharedflowbundle/ na raiz.
-    /// </summary>
-    public async Task DeployBundleAsync(string environment, string zipPath, CancellationToken ct = default)
-    {
-        await PostZipAsync(
-            "/v1/emulator/deploy?environment=" + Uri.EscapeDataString(environment),
-            zipPath,
-            ct);
-    }
+    // ─── Deploy ────────────────────────────────────────────────────────────
 
-    /// <summary>
-    /// Archive deploy: ZIP no formato src/main/apigee/... (workspace completo).
-    /// </summary>
+    public async Task DeployBundleAsync(string environment, string zipPath, CancellationToken ct = default)
+        => await PostZipAsync("/v1/emulator/deploy?environment=" + Uri.EscapeDataString(environment), zipPath, ct);
+
     public async Task DeployArchiveAsync(string environment, string zipPath, CancellationToken ct = default)
-    {
-        await PostZipAsync(
-            "/v1/emulator/deployArchive?environment=" + Uri.EscapeDataString(environment),
-            zipPath,
-            ct);
-    }
+        => await PostZipAsync("/v1/emulator/deployArchive?environment=" + Uri.EscapeDataString(environment), zipPath, ct);
 
     private async Task PostZipAsync(string url, string zipPath, CancellationToken ct)
     {
         if (!File.Exists(zipPath))
-            throw new FileNotFoundException("ZIP n\u00e3o encontrado: " + zipPath);
+            throw new FileNotFoundException("ZIP não encontrado: " + zipPath);
 
         await using var fs      = File.OpenRead(zipPath);
         using var       content = new StreamContent(fs);
@@ -71,10 +56,11 @@ public sealed class ApigeeEmulatorClient(
         {
             var body = await response.Content.ReadAsStringAsync(ct);
             throw new HttpRequestException(
-                "Deploy falhou (" + (int)response.StatusCode + " " +
-                response.StatusCode + "): " + body);
+                $"Deploy falhou ({(int)response.StatusCode} {response.StatusCode}): {body}");
         }
     }
+
+    // ─── Docker images / container ───────────────────────────────────────────
 
     public Task<IReadOnlyList<string>> ListImagesAsync(CancellationToken ct = default)
     {
@@ -86,7 +72,6 @@ public sealed class ApigeeEmulatorClient(
             "gcr.io/apigee-release/hybrid/apigee-emulator:1.10.0"
         };
 
-        // Tenta complementar com imagens Docker instaladas localmente
         try
         {
             var psi = new ProcessStartInfo("docker", "images --format \"{{.Repository}}:{{.Tag}}\"")
@@ -100,25 +85,21 @@ public sealed class ApigeeEmulatorClient(
             {
                 var output = proc.StandardOutput.ReadToEnd();
                 proc.WaitForExit();
-                var local = output
-                    .Split('\n', StringSplitOptions.RemoveEmptyEntries)
-                    .Where(l => l.Contains("apigee", StringComparison.OrdinalIgnoreCase))
-                    .ToList();
-                foreach (var img in local)
-                    if (!images.Contains(img))
-                        images.Add(img);
+                foreach (var img in output.Split('\n', StringSplitOptions.RemoveEmptyEntries)
+                             .Where(l => l.Contains("apigee", StringComparison.OrdinalIgnoreCase))
+                             .Where(l => !images.Contains(l)))
+                    images.Add(img);
             }
         }
-        catch { /* docker n\u00e3o instalado ou acess\u00edvel */ }
+        catch { /* docker não instalado ou acessível */ }
 
         return Task.FromResult<IReadOnlyList<string>>(images);
     }
 
     public async Task StartContainerAsync(string image, CancellationToken ct = default)
     {
-        var port    = config["ApigeeEmulator:Port"] ?? "8080";
-        var args    = "run -d --rm -p " + port + ":8080 --name apigee-emulator " + image;
-        await RunDockerAsync(args, ct);
+        var port = config["ApigeeEmulator:Port"] ?? "8080";
+        await RunDockerAsync($"run -d --rm -p {port}:8080 --name apigee-emulator {image}", ct);
     }
 
     public async Task StopContainerAsync(CancellationToken ct = default)
@@ -135,14 +116,134 @@ public sealed class ApigeeEmulatorClient(
         };
 
         using var proc = Process.Start(psi)
-            ?? throw new InvalidOperationException("N\u00e3o foi poss\u00edvel iniciar o processo docker.");
+            ?? throw new InvalidOperationException("Não foi possível iniciar o processo docker.");
 
         await proc.WaitForExitAsync(ct);
 
         if (proc.ExitCode != 0)
         {
             var err = await proc.StandardError.ReadToEndAsync(ct);
-            throw new InvalidOperationException("docker " + args + " falhou: " + err);
+            throw new InvalidOperationException($"docker {args} falhou: {err}");
         }
+    }
+
+    // ─── TRACE ───────────────────────────────────────────────────────────────
+
+    public async Task<TraceSession> StartTraceAsync(string proxyName, CancellationToken ct = default)
+    {
+        var url = $"/v1/emulator/trace?proxyName={Uri.EscapeDataString(proxyName)}";
+        logger.LogInformation("Starting trace session for proxy '{Proxy}'", proxyName);
+
+        var response = await http.PostAsync(url, null, ct);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            var body = await response.Content.ReadAsStringAsync(ct);
+            throw new HttpRequestException($"Trace start falhou ({(int)response.StatusCode}): {body}");
+        }
+
+        var json = await response.Content.ReadFromJsonAsync<JsonElement>(cancellationToken: ct);
+
+        var sessionId   = TryGetString(json, "name")        ?? TryGetString(json, "sessionId") ?? Guid.NewGuid().ToString("N");
+        var application = TryGetString(json, "application") ?? proxyName;
+
+        return new TraceSession
+        {
+            SessionId   = sessionId,
+            ApiProxy    = proxyName,
+            Application = application,
+            StartedAt   = DateTime.UtcNow
+        };
+    }
+
+    public async Task<IReadOnlyList<TraceTransaction>> GetTraceTransactionsAsync(
+        string sessionId, CancellationToken ct = default)
+    {
+        var url      = $"/v1/emulator/trace/transactions?sessionid={Uri.EscapeDataString(sessionId)}";
+        var response = await http.GetAsync(url, ct);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            var body = await response.Content.ReadAsStringAsync(ct);
+            throw new HttpRequestException($"GetTraceTransactions falhou ({(int)response.StatusCode}): {body}");
+        }
+
+        var root = await response.Content.ReadFromJsonAsync<JsonElement>(cancellationToken: ct);
+        return ParseTransactions(root);
+    }
+
+    public async Task StopTraceAsync(string sessionId, CancellationToken ct = default)
+    {
+        var url      = $"/v1/emulator/trace?sessionid={Uri.EscapeDataString(sessionId)}";
+        var response = await http.DeleteAsync(url, ct);
+
+        if (!response.IsSuccessStatusCode)
+            logger.LogWarning("StopTrace retornou {Status} para sessão {SessionId}",
+                (int)response.StatusCode, sessionId);
+        else
+            logger.LogInformation("Trace session '{SessionId}' encerrada", sessionId);
+    }
+
+    // ─── Parsing helpers ─────────────────────────────────────────────────────
+
+    private static IReadOnlyList<TraceTransaction> ParseTransactions(JsonElement root)
+    {
+        var result  = new List<TraceTransaction>();
+        var session = root.TryGetProperty("DebugSession", out var ds) ? ds : root;
+
+        if (!session.TryGetProperty("Messages", out var messages))
+            return result;
+
+        foreach (var msg in messages.EnumerateArray())
+        {
+            var points = new List<TracePoint>();
+
+            if (msg.TryGetProperty("tracePoints", out var tps))
+                foreach (var tp in tps.EnumerateArray())
+                    points.Add(ParseTracePoint(tp));
+
+            result.Add(new TraceTransaction
+            {
+                MessageId     = TryGetString(msg, "messageId")     ?? string.Empty,
+                RequestMethod = TryGetString(msg, "requestMethod") ?? string.Empty,
+                RequestUri    = TryGetString(msg, "requestURI")    ?? string.Empty,
+                ResponseCode  = msg.TryGetProperty("responseCode", out var rc) ? rc.GetInt32() : 0,
+                TotalTimeMs   = msg.TryGetProperty("totalTime",    out var tt) ? tt.GetInt64()  : 0,
+                Points        = points
+            });
+        }
+
+        return result;
+    }
+
+    private static TracePoint ParseTracePoint(JsonElement tp)
+    {
+        var variables = new Dictionary<string, string>();
+
+        if (tp.TryGetProperty("properties", out var props))
+            foreach (var p in props.EnumerateObject())
+                variables[p.Name] = p.Value.ToString();
+
+        return new TracePoint
+        {
+            PointType     = TryGetString(tp, "pointType")   ?? string.Empty,
+            PolicyName    = TryGetString(tp, "id")           ?? TryGetString(tp, "policyName") ?? string.Empty,
+            Phase         = TryGetString(tp, "properties", "TO") ?? TryGetString(tp, "phase") ?? string.Empty,
+            Description   = TryGetString(tp, "description") ?? string.Empty,
+            ElapsedTimeMs = tp.TryGetProperty("elapsedTime", out var el) ? el.GetInt64() : 0,
+            HasError      = tp.TryGetProperty("pointType",   out var pt) && pt.GetString() == "Error",
+            Variables     = variables
+        };
+    }
+
+    private static string? TryGetString(JsonElement el, string key)
+        => el.TryGetProperty(key, out var v) && v.ValueKind == JsonValueKind.String
+            ? v.GetString()
+            : null;
+
+    private static string? TryGetString(JsonElement el, string outer, string inner)
+    {
+        if (!el.TryGetProperty(outer, out var o)) return null;
+        return TryGetString(o, inner);
     }
 }
