@@ -3,14 +3,24 @@ using ApigeeLocalDev.Domain.Interfaces;
 
 namespace ApigeeLocalDev.Application.UseCases;
 
+/// <summary>
+/// Orquestra o deploy de proxies/shared flows no Apigee Emulator local.
+///
+/// O emulator usa a Management API padrão do Apigee Edge:
+///   1. Import bundle  → POST /v1/organizations/emulator/apis?action=import&name={proxy}
+///   2. Deploy revisão → POST /v1/organizations/emulator/environments/{env}/apis/{proxy}/revisions/{rev}/deployments
+///
+/// Para workspace archive completo:
+///   POST /v1/organizations/emulator/environments/{env}:deployArchive
+/// </summary>
 public sealed class DeployToEmulatorUseCase(
     IWorkspaceRepository workspaceRepository,
     IApigeeEmulatorClient emulatorClient)
 {
     /// <summary>
-    /// Deploya um proxy ou shared flow específico.
-    /// O ZIP gerado tem o conteúdo começando em "apiproxy/" ou "sharedflowbundle/"
-    /// direto na raiz, que é o formato esperado pelo endpoint de bundle deploy.
+    /// Deploya um proxy ou shared flow específico do workspace.
+    /// O ZIP gerado terá "apiproxy/" ou "sharedflowbundle/" na raiz —
+    /// formato esperado pelo endpoint de import da Management API.
     /// </summary>
     public async Task ExecuteAsync(
         ApigeeWorkspace workspace,
@@ -19,20 +29,17 @@ public sealed class DeployToEmulatorUseCase(
         CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(proxyOrFlowName))
-            throw new ArgumentException("Informe o nome do proxy ou shared flow.", nameof(proxyOrFlowName));
+            throw new ArgumentException(
+                "Informe o nome do proxy ou shared flow.", nameof(proxyOrFlowName));
 
         var zipPath = await workspaceRepository.BuildBundleZipAsync(workspace, proxyOrFlowName, ct);
         await emulatorClient.DeployBundleAsync(environment, zipPath, ct);
     }
 
     /// <summary>
-    /// Deploya o workspace inteiro (todos os proxies + shared flows + environments)
-    /// via endpoint de archive deploy no formato src/main/apigee/...
-    ///
-    /// NOTA: o emulator local (Cloud Code) suporta este formato via
-    /// POST /v1/organizations/{org}/environments/{env}:deployArchive
-    /// com o ZIP no body. Se o seu emulator usar outro endpoint,
-    /// ajuste IApigeeEmulatorClient.DeployArchiveAsync.
+    /// Deploya o workspace inteiro via archive deploy.
+    /// O ZIP terá a estrutura src/main/apigee/... esperada pelo
+    /// endpoint POST /v1/organizations/emulator/environments/{env}:deployArchive.
     /// </summary>
     public async Task ExecuteFullAsync(
         ApigeeWorkspace workspace,
