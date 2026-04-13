@@ -70,8 +70,6 @@ else
                         <button class="btn btn-primary btn-sm" @onclick="SaveFile">&#128190; Save</button>
                     </div>
                 </div>
-                <!-- Monaco mounts here. Height is driven by CSS (.monaco-container). -->
-                <!-- Ctrl+S inside Monaco dispatches 'monaco-save' which @on catches.  -->
                 <div id="monaco-editor-container"
                      class="monaco-container"
                      @onmonaco-save="SaveFile">
@@ -263,9 +261,7 @@ else
     private ApigeeWorkspace? _workspace;
     private WorkspaceItem?   _tree;
     private string?          _selectedFile;
-    // _fileContent is kept in sync via Monaco getValue() on save — not via bind
-    private string           _fileContent   = string.Empty;
-    private bool             _editorReady   = false;
+    private string           _fileContent = string.Empty;
 
     private bool   _showNewItem;
     private bool   _newItemIsDir;
@@ -306,44 +302,39 @@ else
             _tree = await WorkspaceRepo.LoadTreeAsync(_workspace);
     }
 
-    protected override async Task OnAfterRenderAsync(bool firstRender)
-    {
-        // If a file is selected and the editor container is now in the DOM, initialise Monaco.
-        if (_selectedFile is not null && !_editorReady)
-        {
-            await JS.InvokeVoidAsync(
-                "monacoInterop.create",
-                EditorId,
-                _fileContent,
-                _selectedFile);
-            _editorReady = true;
-        }
-    }
+    // OnAfterRenderAsync não cria o editor.
+    // LoadFile é a única fonte de criação/recriação do Monaco.
+    // Isso elimina a corrida entre OnAfterRenderAsync e LoadFile que causava
+    // dois editores empilhados no mesmo div (quebrando backspace e troca de arquivo).
+    protected override Task OnAfterRenderAsync(bool firstRender) => Task.CompletedTask;
 
     private async Task LoadFile(string path)
     {
-        _selectedFile  = path;
-        _fileContent   = await WorkspaceRepo.ReadFileAsync(path);
-        _editorReady   = false;   // force re-init on next render
-        StateHasChanged();
+        // 1. Descarta editor anterior se existir
+        await JS.InvokeVoidAsync("monacoInterop.dispose", EditorId);
 
-        // Give Blazor one render cycle to mount the container div, then init Monaco.
+        // 2. Atualiza estado
+        _selectedFile = path;
+        _fileContent  = await WorkspaceRepo.ReadFileAsync(path);
+
+        // 3. Força Blazor a renderizar o container div antes de criar o editor
+        StateHasChanged();
         await Task.Yield();
+
+        // 4. Cria o editor com o conteúdo correto
         await JS.InvokeVoidAsync(
             "monacoInterop.create",
             EditorId,
             _fileContent,
             _selectedFile);
-        _editorReady = true;
     }
 
     private async Task SaveFile()
     {
         if (_selectedFile is null) return;
-        // Pull latest content from Monaco (avoids stale _fileContent from bind)
         _fileContent = await JS.InvokeAsync<string>("monacoInterop.getValue", EditorId);
         await WorkspaceRepo.SaveFileAsync(_selectedFile, _fileContent);
-        Toast.ShowSuccess("\u2714 Arquivo salvo com sucesso!");
+        Toast.ShowSuccess("✔ Arquivo salvo com sucesso!");
     }
 
     private async Task FormatDocument()
@@ -363,16 +354,14 @@ else
         await WorkspaceRepo.DeleteFileAsync(_selectedFile);
         _selectedFile = null;
         _fileContent  = string.Empty;
-        _editorReady  = false;
         _tree         = await WorkspaceRepo.LoadTreeAsync(_workspace);
-        Toast.ShowSuccess("\u2714 Arquivo '" + fileName + "' removido.");
+        Toast.ShowSuccess("✔ Arquivo '" + fileName + "' removido.");
     }
 
     public async ValueTask DisposeAsync()
     {
-        // Dispose Monaco when Blazor unmounts the component
         try { await JS.InvokeVoidAsync("monacoInterop.dispose", EditorId); }
-        catch { /* ignore — JS runtime may already be disposed */ }
+        catch { /* JS runtime pode já estar descartado */ }
     }
 
     private void OpenNewItemDialog(bool isDir)
@@ -445,13 +434,13 @@ else
                 _quickTemplate.Name,
                 _quickParams);
 
-            _quickMessage = "\u2714 Criado: " + System.IO.Path.GetFileName(path);
+            _quickMessage = "✔ Criado: " + System.IO.Path.GetFileName(path);
             _tree = await WorkspaceRepo.LoadTreeAsync(_workspace);
             Toast.ShowSuccess("Política '" + System.IO.Path.GetFileName(path) + "' criada.");
             await LoadFile(path);
             CloseQuickAdd();
         }
-        catch (Exception ex) { _quickMessage = "\u2718 " + ex.Message; _quickError = true; }
+        catch (Exception ex) { _quickMessage = "✘ " + ex.Message; _quickError = true; }
         finally { _quickGenerating = false; }
     }
 
@@ -475,7 +464,7 @@ else
                 _tree = await WorkspaceRepo.LoadTreeAsync(_workspace);
             }
         }
-        catch (Exception ex) { _quickMessage = "\u2718 " + ex.Message; _quickError = true; }
+        catch (Exception ex) { _quickMessage = "✘ " + ex.Message; _quickError = true; }
     }
 
     private async Task ConfirmQuickSharedFlow()
@@ -516,12 +505,12 @@ else
             await WorkspaceRepo.SaveFileAsync(
                 System.IO.Path.Combine(resDir, "default.xml"), sharedFlowXml);
 
-            _quickMessage = "\u2714 Shared Flow '" + name + "' criado.";
+            _quickMessage = "✔ Shared Flow '" + name + "' criado.";
             _quickAddOpen = false;
             _tree = await WorkspaceRepo.LoadTreeAsync(_workspace);
             Toast.ShowSuccess("Shared Flow '" + name + "' criado.");
         }
-        catch (Exception ex) { _quickMessage = "\u2718 " + ex.Message; _quickError = true; }
+        catch (Exception ex) { _quickMessage = "✘ " + ex.Message; _quickError = true; }
     }
 
     private async Task ConfirmQuickEnvironment()
@@ -547,13 +536,13 @@ else
                 System.IO.Path.Combine(envDir, "targetservers.json"),
                 "[]\n");
 
-            _quickMessage = "\u2714 Environment '" + envName + "' criado.";
+            _quickMessage = "✔ Environment '" + envName + "' criado.";
             _quickAddOpen = false;
             _deployEnv    = envName;
             _tree = await WorkspaceRepo.LoadTreeAsync(_workspace);
             Toast.ShowSuccess("Environment '" + envName + "' criado.");
         }
-        catch (Exception ex) { _quickMessage = "\u2718 " + ex.Message; _quickError = true; }
+        catch (Exception ex) { _quickMessage = "✘ " + ex.Message; _quickError = true; }
     }
 
     private async Task CreateApiProxySkeletonAsync()
@@ -650,12 +639,12 @@ else
         try
         {
             await action();
-            _deployMessage = "\u2714 Deploy realizado com sucesso!";
+            _deployMessage = "✔ Deploy realizado com sucesso!";
             Toast.ShowSuccess("Deploy concluído com sucesso!");
         }
         catch (Exception ex)
         {
-            _deployMessage = "\u2718 Deploy falhou: " + ex.Message;
+            _deployMessage = "✘ Deploy falhou: " + ex.Message;
             _deployError = true;
             Toast.ShowError("Deploy falhou: " + ex.Message);
         }
