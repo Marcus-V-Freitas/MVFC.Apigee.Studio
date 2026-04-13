@@ -10,13 +10,13 @@ namespace ApigeeLocalDev.Blazor.Services;
 /// O TraceMiddleware chama Publish() a cada request interceptado;
 /// o TraceViewer.razor consome via ReadAllAsync().
 ///
-/// Usa um BroadcastChannel: cada chamada a ReadAllAsync() cria um
-/// Channel próprio registrado como subscriber — todos recebem as mesmas
-/// transações (útil caso múltiplas abas estejam abertas).
+/// Usa broadcast pattern: cada chamada a ReadAllAsync() registra um
+/// ChannelWriter próprio — todos os subscribers recebem as mesmas
+/// transações (suporta múltiplas abas abertas simultaneamente).
 /// </summary>
 public sealed class ProxyTraceService : IProxyTraceService
 {
-    private readonly Lock _lock = new();
+    private readonly object _lock = new();
     private readonly List<ChannelWriter<TraceTransaction>> _subscribers = [];
 
     public bool IsActive { get; private set; }
