@@ -15,6 +15,7 @@ public interface IWorkspaceRepository
     Task CreateFileAsync(string absolutePath, CancellationToken ct = default);
     Task CreateDirectoryAsync(string absolutePath, CancellationToken ct = default);
     Task DeleteFileAsync(string absolutePath, CancellationToken ct = default);
+    Task DeleteDirectoryAsync(string absolutePath, CancellationToken ct = default);
 
     Task<string> BuildBundleZipAsync(ApigeeWorkspace workspace, string proxyOrFlowName, CancellationToken ct = default);
     Task<string> BuildWorkspaceZipAsync(ApigeeWorkspace workspace, CancellationToken ct = default);
