@@ -2,13 +2,25 @@
 @using ApigeeLocalDev.Domain.Interfaces
 @implements IAsyncDisposable
 @inject IProxyTraceService TraceService
-@inject IApigeeTraceClient TraceClient
 @rendermode RenderMode.InteractiveServer
 
 <div class="card">
     <div class="card-header-row">
         <h3>Policy Trace</h3>
         <div class="trace-controls">
+            @if (AvailableProxies is { Count: > 0 })
+            {
+                <label class="input-label">
+                    PROXY
+                    <select class="input" @bind="_selectedProxy" disabled="@_tracing" style="width:160px">
+                        <option value="">-- todos --</option>
+                        @foreach (var p in AvailableProxies)
+                        {
+                            <option value="@p">@p</option>
+                        }
+                    </select>
+                </label>
+            }
             <label class="input-label">
                 ENVIRONMENT
                 <input class="input" @bind="_environment" placeholder="local" style="width:100px" disabled="@_tracing" />
@@ -39,14 +51,14 @@
         </p>
     }
 
-    @if (_transactions.Count == 0 && !_tracing)
+    @if (_visibleTransactions.Count == 0 && !_tracing)
     {
         <div class="empty-trace">
             <p class="help-text">Nenhuma transação capturada. Inicie o trace e faça uma requisição para o emulator.</p>
         </div>
     }
 
-    @foreach (var tx in _transactions)
+    @foreach (var tx in _visibleTransactions)
     {
         <div class="@TxClass(tx)">
             <div class="tx-summary">
@@ -79,15 +91,29 @@
 @code {
     [Parameter] public string DefaultEnvironment { get; set; } = "local";
 
-    private string _environment  = "local";
+    /// <summary>
+    /// Lista de API proxies disponíveis no workspace selecionado.
+    /// Quando fornecida, exibe um seletor para filtrar transações por proxy.
+    /// </summary>
+    [Parameter] public List<string>? AvailableProxies { get; set; }
+
+    private string _environment   = "local";
+    private string _selectedProxy = string.Empty;
     private bool   _tracing;
-    private string _errorMessage = string.Empty;
+    private string _errorMessage  = string.Empty;
 
     private readonly List<TraceTransaction> _transactions = [];
     private CancellationTokenSource? _cts;
 
     private bool _startDisabled => _tracing;
     private bool _stopDisabled  => !_tracing;
+
+    /// <summary>Filtra por proxy se um estiver selecionado.</summary>
+    private IEnumerable<TraceTransaction> _visibleTransactions =>
+        string.IsNullOrEmpty(_selectedProxy)
+            ? _transactions
+            : _transactions.Where(tx =>
+                tx.RequestPath.Contains(_selectedProxy, StringComparison.OrdinalIgnoreCase));
 
     private static string TxClass(TraceTransaction tx)    => tx.StatusCode >= 400 ? "trace-transaction tx-error" : "trace-transaction tx-ok";
     private static string BadgeClass(TraceTransaction tx) => tx.StatusCode >= 400 ? "badge badge-error" : "badge badge-success";
