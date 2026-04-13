@@ -19,9 +19,12 @@ public interface IWorkspaceRepository
     Task<string> BuildBundleZipAsync(ApigeeWorkspace workspace, string proxyOrFlowName, CancellationToken ct = default);
     Task<string> BuildWorkspaceZipAsync(ApigeeWorkspace workspace, CancellationToken ct = default);
 
-    /// <summary>Lista os nomes dos API proxies do workspace (subpastas de apiproxies/).</summary>
     IReadOnlyList<string> ListApiProxies(ApigeeWorkspace workspace);
-
-    /// <summary>Lista os nomes dos shared flows do workspace (subpastas de sharedflows/).</summary>
     IReadOnlyList<string> ListSharedFlows(ApigeeWorkspace workspace);
+
+    /// <summary>
+    /// Garante que a pasta src/main/apigee/environments/{envName}/ exista no disco.
+    /// Criada vazia se ainda não existir.
+    /// </summary>
+    Task EnsureEnvironmentAsync(ApigeeWorkspace workspace, string envName, CancellationToken ct = default);
 }

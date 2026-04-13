@@ -4,21 +4,22 @@ using ApigeeLocalDev.Domain.Interfaces;
 namespace ApigeeLocalDev.Application.UseCases;
 
 /// <summary>
-/// Orquestra o deploy de proxies/shared flows no Apigee Emulator local.
+/// Orquestra o deploy no Apigee Emulator local.
 ///
-/// O emulator usa a Management API padrão do Apigee Edge:
-///   1. Import  → POST /v1/organizations/emulator/apis?action=import&name={proxy}
-///   2. Deploy  → POST /v1/organizations/emulator/environments/{env}/apis/{proxy}/revisions/{rev}/deployments
+/// O endpoint do emulator é:
+///   POST /v1/emulator/deploy?environment={env}
+///   Body: ZIP do workspace inteiro com estrutura src/main/apigee/...
 ///
-/// IMPORTANTE: o emulator NÃO suporta deployArchive (requer GCS).
-/// Para deploy de workspace completo iteramos cada proxy individualmente.
+/// O emulator valida que exista a pasta src/main/apigee/environments/{env}/
+/// dentro do ZIP — sem ela retorna 400 InvalidEnvironment.
 /// </summary>
 public sealed class DeployToEmulatorUseCase(
     IWorkspaceRepository workspaceRepository,
     IApigeeEmulatorClient emulatorClient)
 {
     /// <summary>
-    /// Deploya um único proxy ou shared flow do workspace.
+    /// Deploya um único proxy ou shared flow (build de bundle individual).
+    /// Ainda usa o workspace ZIP completo pois o emulator exige o environment.
     /// </summary>
     public async Task ExecuteAsync(
         ApigeeWorkspace workspace,
@@ -30,61 +31,30 @@ public sealed class DeployToEmulatorUseCase(
             throw new ArgumentException(
                 "Informe o nome do proxy ou shared flow.", nameof(proxyOrFlowName));
 
-        var zipPath = await workspaceRepository.BuildBundleZipAsync(workspace, proxyOrFlowName, ct);
+        await workspaceRepository.EnsureEnvironmentAsync(workspace, environment, ct);
+        var zipPath = await workspaceRepository.BuildWorkspaceZipAsync(workspace, ct);
         await emulatorClient.DeployBundleAsync(environment, zipPath, ct);
     }
 
     /// <summary>
-    /// Deploya todos os proxies e shared flows do workspace, um por vez.
-    /// O emulator local não suporta deployArchive, por isso iteramos cada
-    /// bundle individualmente usando o mesmo fluxo import + deploy.
-    /// Retorna os nomes de todos os itens deployados com sucesso.
+    /// Deploya o workspace completo de uma vez.
+    /// O endpoint /v1/emulator/deploy recebe um único ZIP com toda a estrutura
+    /// src/main/apigee/... — não proxy-a-proxy.
     /// </summary>
     public async Task<IReadOnlyList<string>> ExecuteFullAsync(
         ApigeeWorkspace workspace,
         string environment,
         CancellationToken ct = default)
     {
-        var deployed = new List<string>();
-        var errors   = new List<string>();
+        // Garante que a pasta environments/{env}/ existe no disco antes de zipar
+        await workspaceRepository.EnsureEnvironmentAsync(workspace, environment, ct);
 
-        // Proxies
-        var proxies = workspaceRepository.ListApiProxies(workspace);
-        foreach (var proxy in proxies)
-        {
-            try
-            {
-                var zipPath = await workspaceRepository.BuildBundleZipAsync(workspace, proxy, ct);
-                await emulatorClient.DeployBundleAsync(environment, zipPath, ct);
-                deployed.Add(proxy);
-            }
-            catch (Exception ex)
-            {
-                errors.Add(proxy + ": " + ex.Message);
-            }
-        }
+        var zipPath = await workspaceRepository.BuildWorkspaceZipAsync(workspace, ct);
+        await emulatorClient.DeployBundleAsync(environment, zipPath, ct);
 
-        // Shared flows
+        // Retorna o que foi deployado
+        var proxies     = workspaceRepository.ListApiProxies(workspace);
         var sharedFlows = workspaceRepository.ListSharedFlows(workspace);
-        foreach (var sf in sharedFlows)
-        {
-            try
-            {
-                var zipPath = await workspaceRepository.BuildBundleZipAsync(workspace, sf, ct);
-                await emulatorClient.DeployBundleAsync(environment, zipPath, ct);
-                deployed.Add(sf);
-            }
-            catch (Exception ex)
-            {
-                errors.Add(sf + ": " + ex.Message);
-            }
-        }
-
-        if (errors.Count > 0)
-            throw new AggregateException(
-                "Deploy parcial. Falhas: " + string.Join("; ", errors),
-                errors.Select(e => new Exception(e)));
-
-        return deployed;
+        return proxies.Concat(sharedFlows).ToList();
     }
 }

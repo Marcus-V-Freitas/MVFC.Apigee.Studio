@@ -10,14 +10,11 @@ public sealed class WorkspaceFileSystemRepository(IConfiguration configuration) 
     private static readonly string[] ProxySubFolders =
         ["apiproxy", "apiproxy/policies", "apiproxy/proxies", "apiproxy/targets", "apiproxy/resources"];
 
-    // Prefixo exigido pelo Apigee Emulator dentro do ZIP e no disco
-    private const string ApigeeRelPath = "src/main/apigee";
-
     private string WorkspacesRoot =>
         configuration["WorkspacesRoot"] ?? Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "apigee-workspaces");
 
-    // Retorna o caminho src/main/apigee dentro do workspace
+    // Retorna {workspaceRoot}/src/main/apigee — raiz exigida pelo emulator
     private static string ApigeeRoot(ApigeeWorkspace workspace)
         => Path.Combine(workspace.RootPath, "src", "main", "apigee");
 
@@ -77,6 +74,15 @@ public sealed class WorkspaceFileSystemRepository(IConfiguration configuration) 
             Directory.Delete(workspace.RootPath, recursive: true);
     }
 
+    // ── environment ────────────────────────────────────────────────────────
+
+    public Task EnsureEnvironmentAsync(ApigeeWorkspace workspace, string envName, CancellationToken ct = default)
+    {
+        var envPath = Path.Combine(ApigeeRoot(workspace), "environments", envName);
+        Directory.CreateDirectory(envPath);
+        return Task.CompletedTask;
+    }
+
     // ── árvore e arquivos ────────────────────────────────────────────────────
 
     public Task<WorkspaceItem> LoadTreeAsync(ApigeeWorkspace workspace, CancellationToken ct = default)
@@ -110,9 +116,6 @@ public sealed class WorkspaceFileSystemRepository(IConfiguration configuration) 
 
     // ── ZIP helpers ──────────────────────────────────────────────────────────
 
-    /// <summary>
-    /// ZIP de um proxy/shared flow individual (usado para deploys avulsos futuros).
-    /// </summary>
     public Task<string> BuildBundleZipAsync(
         ApigeeWorkspace workspace, string proxyOrFlowName, CancellationToken ct = default)
     {
@@ -139,21 +142,18 @@ public sealed class WorkspaceFileSystemRepository(IConfiguration configuration) 
     }
 
     /// <summary>
-    /// ZIP do workspace completo mantendo a estrutura src/main/apigee/...
-    /// exigida pelo endpoint POST /v1/emulator/deploy?environment={env}.
+    /// Gera ZIP do workspace completo a partir de workspace.RootPath,
+    /// preservando a estrutura src/main/apigee/... exigida pelo emulator.
+    /// Pastas vazias são incluídas via entry de placeholder para que o
+    /// emulator reconheça environments/{envName}/ mesmo sem arquivos dentro.
     /// </summary>
     public Task<string> BuildWorkspaceZipAsync(ApigeeWorkspace workspace, CancellationToken ct = default)
     {
-        var apigeeRoot = ApigeeRoot(workspace);
-
         var zip = Path.Combine(Path.GetTempPath(),
             workspace.Name + "_full_" + DateTime.UtcNow.ToString("yyyyMMddHHmmss") + ".zip");
 
         using (var archive = ZipFile.Open(zip, ZipArchiveMode.Create))
-        {
-            // Zipa tudo a partir de workspace.RootPath para preservar src/main/apigee/...
-            AddDirectoryToZip(archive, workspace.RootPath, string.Empty);
-        }
+            AddDirectoryToZipIncludingEmpty(archive, workspace.RootPath, string.Empty);
 
         return Task.FromResult(zip);
     }
@@ -166,12 +166,35 @@ public sealed class WorkspaceFileSystemRepository(IConfiguration configuration) 
         {
             var relative = Path.GetRelativePath(sourceDir, file)
                                .Replace(Path.DirectorySeparatorChar, '/');
-
-            var entryName = string.IsNullOrEmpty(zipRoot)
-                ? relative
-                : zipRoot + "/" + relative;
-
+            var entryName = string.IsNullOrEmpty(zipRoot) ? relative : zipRoot + "/" + relative;
             archive.CreateEntryFromFile(file, entryName, CompressionLevel.Optimal);
+        }
+    }
+
+    /// <summary>
+    /// Igual ao anterior mas inclui pastas vazias como entries terminadas em '/'.
+    /// Necessário para que environments/{env}/ apareça no ZIP mesmo sem arquivos.
+    /// </summary>
+    private static void AddDirectoryToZipIncludingEmpty(ZipArchive archive, string sourceDir, string zipRoot)
+    {
+        foreach (var file in Directory.EnumerateFiles(sourceDir, "*", SearchOption.AllDirectories))
+        {
+            var relative = Path.GetRelativePath(sourceDir, file)
+                               .Replace(Path.DirectorySeparatorChar, '/');
+            var entryName = string.IsNullOrEmpty(zipRoot) ? relative : zipRoot + "/" + relative;
+            archive.CreateEntryFromFile(file, entryName, CompressionLevel.Optimal);
+        }
+
+        // Inclui pastas vazias
+        foreach (var dir in Directory.EnumerateDirectories(sourceDir, "*", SearchOption.AllDirectories))
+        {
+            if (!Directory.EnumerateFileSystemEntries(dir).Any())
+            {
+                var relative = Path.GetRelativePath(sourceDir, dir)
+                                   .Replace(Path.DirectorySeparatorChar, '/') + "/";
+                var entryName = string.IsNullOrEmpty(zipRoot) ? relative : zipRoot + "/" + relative;
+                archive.CreateEntry(entryName);
+            }
         }
     }
 
