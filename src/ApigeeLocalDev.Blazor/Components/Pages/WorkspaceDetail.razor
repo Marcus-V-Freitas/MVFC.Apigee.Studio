@@ -11,6 +11,7 @@
 @inject GeneratePolicyUseCase GeneratePolicy
 @inject ToastService Toast
 @inject IJSRuntime JS
+@implements IAsyncDisposable
 @rendermode RenderMode.InteractiveServer
 
 <h1>@WorkspaceName</h1>
@@ -57,18 +58,24 @@ else
             }
         </aside>
 
-        @* EDITOR *@
+        @* MONACO EDITOR *@
         <section class="file-editor">
             @if (_selectedFile is not null)
             {
                 <div class="editor-header">
                     <span class="editor-filename">@System.IO.Path.GetFileName(_selectedFile)</span>
                     <div class="editor-header-actions">
+                        <button class="btn btn-ghost btn-sm" title="Format (Alt+Shift+F)" @onclick="FormatDocument">&#10024; Format</button>
                         <button class="btn btn-ghost btn-sm btn-danger" @onclick="DeleteSelectedFile">&#128465; Delete</button>
                         <button class="btn btn-primary btn-sm" @onclick="SaveFile">&#128190; Save</button>
                     </div>
                 </div>
-                <textarea class="code-editor" @bind="_fileContent" @bind:event="oninput"></textarea>
+                <!-- Monaco mounts here. Height is driven by CSS (.monaco-container). -->
+                <!-- Ctrl+S inside Monaco dispatches 'monaco-save' which @on catches.  -->
+                <div id="monaco-editor-container"
+                     class="monaco-container"
+                     @onmonaco-save="SaveFile">
+                </div>
             }
             else
             {
@@ -247,6 +254,7 @@ else
 }
 
 @code {
+    private const string EditorId        = "monaco-editor-container";
     private const string DeployModeProxy = "proxy";
     private const string DeployModeFull  = "full";
 
@@ -255,7 +263,9 @@ else
     private ApigeeWorkspace? _workspace;
     private WorkspaceItem?   _tree;
     private string?          _selectedFile;
+    // _fileContent is kept in sync via Monaco getValue() on save — not via bind
     private string           _fileContent   = string.Empty;
+    private bool             _editorReady   = false;
 
     private bool   _showNewItem;
     private bool   _newItemIsDir;
@@ -296,17 +306,50 @@ else
             _tree = await WorkspaceRepo.LoadTreeAsync(_workspace);
     }
 
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        // If a file is selected and the editor container is now in the DOM, initialise Monaco.
+        if (_selectedFile is not null && !_editorReady)
+        {
+            await JS.InvokeVoidAsync(
+                "monacoInterop.create",
+                EditorId,
+                _fileContent,
+                _selectedFile);
+            _editorReady = true;
+        }
+    }
+
     private async Task LoadFile(string path)
     {
-        _selectedFile = path;
-        _fileContent  = await WorkspaceRepo.ReadFileAsync(path);
+        _selectedFile  = path;
+        _fileContent   = await WorkspaceRepo.ReadFileAsync(path);
+        _editorReady   = false;   // force re-init on next render
+        StateHasChanged();
+
+        // Give Blazor one render cycle to mount the container div, then init Monaco.
+        await Task.Yield();
+        await JS.InvokeVoidAsync(
+            "monacoInterop.create",
+            EditorId,
+            _fileContent,
+            _selectedFile);
+        _editorReady = true;
     }
 
     private async Task SaveFile()
     {
         if (_selectedFile is null) return;
+        // Pull latest content from Monaco (avoids stale _fileContent from bind)
+        _fileContent = await JS.InvokeAsync<string>("monacoInterop.getValue", EditorId);
         await WorkspaceRepo.SaveFileAsync(_selectedFile, _fileContent);
         Toast.ShowSuccess("\u2714 Arquivo salvo com sucesso!");
+    }
+
+    private async Task FormatDocument()
+    {
+        if (_selectedFile is null) return;
+        await JS.InvokeVoidAsync("monacoInterop.formatDocument", EditorId);
     }
 
     private async Task DeleteSelectedFile()
@@ -316,11 +359,20 @@ else
         var confirm  = await JS.InvokeAsync<bool>("confirm", "Remover arquivo '" + fileName + "'?");
         if (!confirm) return;
 
+        await JS.InvokeVoidAsync("monacoInterop.dispose", EditorId);
         await WorkspaceRepo.DeleteFileAsync(_selectedFile);
         _selectedFile = null;
         _fileContent  = string.Empty;
+        _editorReady  = false;
         _tree         = await WorkspaceRepo.LoadTreeAsync(_workspace);
         Toast.ShowSuccess("\u2714 Arquivo '" + fileName + "' removido.");
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        // Dispose Monaco when Blazor unmounts the component
+        try { await JS.InvokeVoidAsync("monacoInterop.dispose", EditorId); }
+        catch { /* ignore — JS runtime may already be disposed */ }
     }
 
     private void OpenNewItemDialog(bool isDir)
@@ -396,6 +448,8 @@ else
             _quickMessage = "\u2714 Criado: " + System.IO.Path.GetFileName(path);
             _tree = await WorkspaceRepo.LoadTreeAsync(_workspace);
             Toast.ShowSuccess("Política '" + System.IO.Path.GetFileName(path) + "' criada.");
+            await LoadFile(path);
+            CloseQuickAdd();
         }
         catch (Exception ex) { _quickMessage = "\u2718 " + ex.Message; _quickError = true; }
         finally { _quickGenerating = false; }
@@ -522,7 +576,6 @@ else
         await WorkspaceRepo.CreateDirectoryAsync(resourcesDir);
         await WorkspaceRepo.CreateDirectoryAsync(targetsDir);
 
-        // apiproxy descriptor
         var descriptorXml =
             "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n" +
             "<APIProxy name=\"" + name + "\">\n" +
@@ -531,7 +584,6 @@ else
             "</APIProxy>\n";
         await WorkspaceRepo.SaveFileAsync(System.IO.Path.Combine(apiproxyDir, name + ".xml"), descriptorXml);
 
-        // proxies/default.xml
         var proxyEndpointXml =
             "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n" +
             "<ProxyEndpoint name=\"default\">\n" +
@@ -555,7 +607,6 @@ else
             "</ProxyEndpoint>\n";
         await WorkspaceRepo.SaveFileAsync(System.IO.Path.Combine(proxiesDir, "default.xml"), proxyEndpointXml);
 
-        // targets/default.xml
         var targetEndpointXml =
             "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n" +
             "<TargetEndpoint name=\"default\">\n" +
