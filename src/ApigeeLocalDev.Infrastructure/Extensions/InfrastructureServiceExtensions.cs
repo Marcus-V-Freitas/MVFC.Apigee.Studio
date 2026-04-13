@@ -14,11 +14,18 @@ public static class InfrastructureServiceExtensions
         services.AddScoped<IWorkspaceRepository, WorkspaceFileSystemRepository>();
         services.AddSingleton<IPolicyTemplateRepository, PolicyTemplateRepository>();
 
+        var baseUrl = configuration["ApigeeEmulator:BaseUrl"] ?? "http://localhost:8080";
+
         services.AddHttpClient<IApigeeEmulatorClient, ApigeeEmulatorClient>(client =>
         {
-            var baseUrl = configuration["ApigeeEmulator:BaseUrl"] ?? "http://localhost:8080";
             client.BaseAddress = new Uri(baseUrl);
-            client.Timeout = TimeSpan.FromSeconds(30);
+            client.Timeout     = TimeSpan.FromSeconds(30);
+        });
+
+        services.AddHttpClient<IApigeeTraceClient, ApigeeTraceClient>(client =>
+        {
+            client.BaseAddress = new Uri(baseUrl);
+            client.Timeout     = TimeSpan.FromSeconds(30);
         });
 
         return services;

@@ -1,0 +1,233 @@
+@using ApigeeLocalDev.Domain.Entities
+@using ApigeeLocalDev.Domain.Interfaces
+@implements IAsyncDisposable
+@inject IApigeeTraceClient TraceClient
+@rendermode RenderMode.InteractiveServer
+
+<div class="card">
+    <div class="card-header-row">
+        <h3>Policy Trace</h3>
+        <div class="trace-controls">
+            <label class="input-label">
+                Proxy
+                <select class="input" @bind="_selectedProxy" @bind:after="OnProxyChanged">
+                    @foreach (var (proxy, _) in _deployedApis)
+                    {
+                        <option value="@proxy">@proxy</option>
+                    }
+                </select>
+            </label>
+            <label class="input-label">
+                Revision
+                <input class="input" @bind="_revision" placeholder="1" style="width:80px" />
+            </label>
+            <label class="input-label">
+                Environment
+                <input class="input" @bind="_environment" placeholder="local" style="width:100px" />
+            </label>
+            <button class="btn btn-primary" @onclick="StartTrace" disabled="@(_tracing || string.IsNullOrWhiteSpace(_selectedProxy))">
+                &#9654; Start Trace
+            </button>
+            <button class="btn btn-ghost btn-sm btn-danger" @onclick="StopTrace" disabled="@(!_tracing)">
+                &#9632; Stop
+            </button>
+            <button class="btn btn-ghost btn-sm" @onclick="ClearTransactions" disabled="@_tracing">
+                &#128465; Clear
+            </button>
+        </div>
+    </div>
+
+    @if (!string.IsNullOrEmpty(_errorMessage))
+    {
+        <p class="error-text mt-2">@_errorMessage</p>
+    }
+
+    @if (_tracing)
+    {
+        <p class="help-text mt-2">
+            <span class="status-dot dot-green"></span>
+            Capturando tráfego na sessão <code>@_sessionId</code>&hellip;
+        </p>
+    }
+
+    @if (_transactions.Count == 0 && !_tracing)
+    {
+        <div class="empty-trace">
+            <p class="help-text">Nenhuma transação capturada. Inicie o trace e faça uma requisição para o emulator.</p>
+        </div>
+    }
+
+    @foreach (var tx in _transactions)
+    {
+        <div class="trace-transaction @(tx.StatusCode >= 400 ? "tx-error" : "tx-ok")">
+            <div class="tx-summary">
+                <span class="tx-verb">@tx.Verb</span>
+                <code class="tx-path">@tx.RequestPath</code>
+                <span class="badge @(tx.StatusCode >= 400 ? "badge-error" : "badge-success")">@tx.StatusCode</span>
+                <span class="tx-id help-text">@tx.MessageId</span>
+            </div>
+            <div class="trace-timeline">
+                @foreach (var point in tx.Points)
+                {
+                    <div class="trace-point @(point.Error ? "point-error" : point.Executed ? "point-ok" : "point-skip")">
+                        <span class="policy-phase">@point.Phase</span>
+                        <span class="policy-name">@point.Policy</span>
+                        @if (point.DurationMs > 0)
+                        {
+                            <span class="duration">@point.DurationMs ms</span>
+                        }
+                        @if (point.Error)
+                        {
+                            <span class="point-error-badge">&#9888; ERRO</span>
+                        }
+                        else if (!point.Executed)
+                        {
+                            <span class="point-skip-badge">SKIP</span>
+                        }
+                    </div>
+                }
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public string DefaultEnvironment { get; set; } = "local";
+
+    private string _environment   = "local";
+    private string _selectedProxy = string.Empty;
+    private string _revision      = "1";
+    private string? _sessionId;
+    private bool _tracing;
+    private string _errorMessage  = string.Empty;
+
+    private List<TraceTransaction>              _transactions  = new();
+    private List<(string ApiProxy, string Rev)> _deployedApis  = new();
+
+    private CancellationTokenSource? _cts;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _environment = DefaultEnvironment;
+        await LoadDeployedApis();
+    }
+
+    private async Task LoadDeployedApis()
+    {
+        try
+        {
+            var apis = await TraceClient.ListDeployedApisAsync(_environment);
+            _deployedApis = [.. apis];
+            if (_deployedApis.Count > 0)
+            {
+                _selectedProxy = _deployedApis[0].ApiProxy;
+                _revision      = _deployedApis[0].Rev;
+            }
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = "Não foi possível listar APIs deployadas: " + ex.Message;
+        }
+    }
+
+    private async Task OnProxyChanged()
+    {
+        var match = _deployedApis.FirstOrDefault(d => d.ApiProxy == _selectedProxy);
+        if (match != default) _revision = match.Rev;
+        await Task.CompletedTask;
+    }
+
+    private async Task StartTrace()
+    {
+        if (string.IsNullOrWhiteSpace(_selectedProxy)) return;
+
+        _errorMessage = string.Empty;
+        _cts = new CancellationTokenSource();
+
+        try
+        {
+            var session = await TraceClient.CreateSessionAsync(
+                _environment, _selectedProxy, _revision, _cts.Token);
+            _sessionId = session.SessionId;
+            _tracing   = true;
+            _ = Task.Run(() => PollAsync(_cts.Token), _cts.Token);
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = "Erro ao iniciar trace: " + ex.Message;
+        }
+    }
+
+    private async Task StopTrace()
+    {
+        _tracing = false;
+        _cts?.Cancel();
+
+        if (_sessionId is not null)
+        {
+            try
+            {
+                await TraceClient.DeleteSessionAsync(
+                    _environment, _selectedProxy, _revision, _sessionId);
+            }
+            catch { /* best-effort */ }
+            _sessionId = null;
+        }
+    }
+
+    private void ClearTransactions() => _transactions.Clear();
+
+    private async Task PollAsync(CancellationToken ct)
+    {
+        while (!ct.IsCancellationRequested && _tracing)
+        {
+            try
+            {
+                var ids = await TraceClient.GetTransactionIdsAsync(
+                    _environment, _selectedProxy, _revision, _sessionId!, ct);
+
+                var existingIds = _transactions.Select(t => t.MessageId).ToHashSet();
+                var newIds = ids.Where(id => !existingIds.Contains(id)).ToList();
+
+                foreach (var msgId in newIds)
+                {
+                    var detail = await TraceClient.GetTransactionDetailAsync(
+                        _environment, _selectedProxy, _revision, _sessionId!, msgId, ct);
+                    _transactions.Add(detail);
+                }
+
+                if (newIds.Count > 0)
+                    await InvokeAsync(StateHasChanged);
+            }
+            catch (OperationCanceledException) { break; }
+            catch (Exception ex)
+            {
+                await InvokeAsync(() =>
+                {
+                    _errorMessage = "Erro no polling: " + ex.Message;
+                    StateHasChanged();
+                });
+                break;
+            }
+
+            await Task.Delay(2000, ct).ConfigureAwait(false);
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        _tracing = false;
+        _cts?.Cancel();
+        _cts?.Dispose();
+
+        if (_sessionId is not null)
+        {
+            try
+            {
+                await TraceClient.DeleteSessionAsync(
+                    _environment, _selectedProxy, _revision, _sessionId);
+            }
+            catch { /* best-effort */ }
+        }
+    }
+}
