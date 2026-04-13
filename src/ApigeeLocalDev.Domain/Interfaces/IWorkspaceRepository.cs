@@ -14,14 +14,14 @@ public interface IWorkspaceRepository
     Task SaveFileAsync(string absolutePath, string content, CancellationToken ct = default);
     Task CreateFileAsync(string absolutePath, CancellationToken ct = default);
     Task CreateDirectoryAsync(string absolutePath, CancellationToken ct = default);
-
-    /// <summary>
-    /// Remove um arquivo do workspace, se existir.
-    /// </summary>
     Task DeleteFileAsync(string absolutePath, CancellationToken ct = default);
 
     Task<string> BuildBundleZipAsync(ApigeeWorkspace workspace, string proxyOrFlowName, CancellationToken ct = default);
     Task<string> BuildWorkspaceZipAsync(ApigeeWorkspace workspace, CancellationToken ct = default);
 
+    /// <summary>Lista os nomes dos API proxies do workspace (subpastas de apiproxies/).</summary>
     IReadOnlyList<string> ListApiProxies(ApigeeWorkspace workspace);
+
+    /// <summary>Lista os nomes dos shared flows do workspace (subpastas de sharedflows/).</summary>
+    IReadOnlyList<string> ListSharedFlows(ApigeeWorkspace workspace);
 }
