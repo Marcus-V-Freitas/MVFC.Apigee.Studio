@@ -13,10 +13,13 @@ namespace ApigeeLocalDev.Infrastructure.Http;
 /// O emulator expõe a Management API do Apigee Edge na porta de controle (8080).
 /// Endpoints válidos confirmados:
 ///   GET  /v1/emulator/version
-///   POST /v1/organizations/{org}/apis?action=import&name={proxy}
+///   POST /v1/organizations/{org}/apis?action=import&amp;name={proxy}
+///        Body: multipart/form-data, campo "file" = ZIP bytes
 ///   POST /v1/organizations/{org}/environments/{env}/apis/{api}/revisions/{rev}/deployments
+///        Body: vazio (application/x-www-form-urlencoded)
 ///
-/// NOTA: ":deployArchive" NÃO é suportado pelo emulator local (requer GCS/Apigee cloud).
+/// IMPORTANTE: o endpoint de import NÃO aceita application/octet-stream raw —
+/// exige multipart/form-data com o ZIP no campo "file".
 /// </summary>
 public sealed class ApigeeEmulatorClient(
     HttpClient http,
@@ -40,13 +43,13 @@ public sealed class ApigeeEmulatorClient(
     }
 
     // ── Deploy proxy/sharedflow individual ────────────────────────────────────
-    // Passo 1: importar bundle ZIP
-    // POST /v1/organizations/{org}/apis?action=import&name={proxy}
-    //   Body: ZIP com Content-Type application/octet-stream
+    //
+    // Passo 1: importar bundle ZIP como multipart/form-data, campo "file"
+    //   POST /v1/organizations/{org}/apis?action=import&name={proxy}
     //   Response: { "revision": ["1"], ... }
     //
     // Passo 2: deployar revisão no environment
-    // POST /v1/organizations/{org}/environments/{env}/apis/{proxy}/revisions/{rev}/deployments
+    //   POST /v1/organizations/{org}/environments/{env}/apis/{proxy}/revisions/{rev}/deployments
     //   Body: vazio (application/x-www-form-urlencoded)
     public async Task DeployBundleAsync(string environment, string zipPath, CancellationToken ct = default)
     {
@@ -56,7 +59,7 @@ public sealed class ApigeeEmulatorClient(
         var proxyName = Path.GetFileNameWithoutExtension(zipPath)
                             .Split('_')[0]; // remove sufixo de timestamp gerado pelo repo
 
-        // ── Passo 1: import ───────────────────────────────────────────────────
+        // ── Passo 1: import via multipart/form-data ───────────────────────────
         var importUrl = "/v1/organizations/" + DefaultOrg
                       + "/apis?action=import&name=" + Uri.EscapeDataString(proxyName);
 
@@ -65,10 +68,14 @@ public sealed class ApigeeEmulatorClient(
         string revision;
         await using (var fs = File.OpenRead(zipPath))
         {
-            using var importContent = new StreamContent(fs);
-            importContent.Headers.ContentType = new MediaTypeHeaderValue("application/octet-stream");
+            // O Apigee Emulator exige multipart/form-data com o ZIP no campo "file"
+            var fileContent = new StreamContent(fs);
+            fileContent.Headers.ContentType = new MediaTypeHeaderValue("application/octet-stream");
 
-            using var importResp = await http.PostAsync(importUrl, importContent, ct);
+            using var form = new MultipartFormDataContent();
+            form.Add(fileContent, "file", Path.GetFileName(zipPath));
+
+            using var importResp = await http.PostAsync(importUrl, form, ct);
             var importBody = await importResp.Content.ReadAsStringAsync(ct);
 
             if (!importResp.IsSuccessStatusCode)
