@@ -36,7 +36,7 @@
             <div class="trace-control-actions">
                 @if (!_isTracing)
                 {
-                    @* disabled usa variável local para evitar o warning HTML0209 *@
+                    @* Variável local evita o warning HTML0209 com expressão complexa em disabled *@
                     var startDisabled = string.IsNullOrWhiteSpace(_proxyName) || _loading;
                     <button class="btn btn-primary" @onclick="StartTrace" disabled="@startDisabled">
                         @if (_loading)
@@ -106,11 +106,6 @@
 </div>
 
 @code {
-    // Revision padrão do emulator. Caso o proxy tenha outra revisão,
-    // expor um campo na UI e bindar em _revision.
-    private const string DefaultEnvironment = "local";
-    private const string DefaultRevision    = "0";
-
     private string  _proxyName = string.Empty;
     private bool    _isTracing = false;
     private bool    _loading   = false;
@@ -120,7 +115,7 @@
     private List<TraceTransaction> _transactions = [];
     private CancellationTokenSource? _pollCts    = null;
 
-    // ─── Start ───────────────────────────────────────────────────────────────
+    // ─── Start ─────────────────────────────────────────────────────────────
 
     private async Task StartTrace()
     {
@@ -130,7 +125,7 @@
 
         try
         {
-            _session      = await Emulator.StartTraceAsync(_proxyName, DefaultEnvironment, DefaultRevision);
+            _session      = await Emulator.StartTraceAsync(_proxyName);
             _isTracing    = true;
             _transactions = [];
 
@@ -150,7 +145,7 @@
         }
     }
 
-    // ─── Stop ────────────────────────────────────────────────────────────────
+    // ─── Stop ─────────────────────────────────────────────────────────────
 
     private async Task StopTrace()
     {
@@ -158,7 +153,7 @@
 
         if (_session is not null)
         {
-            try   { await Emulator.StopTraceAsync(_session.SessionId, _proxyName, DefaultEnvironment, DefaultRevision); }
+            try   { await Emulator.StopTraceAsync(_session.SessionId); }
             catch { /* best-effort */ }
         }
 
@@ -172,7 +167,7 @@
         StateHasChanged();
     }
 
-    // ─── Polling loop ─────────────────────────────────────────────────────────
+    // ─── Polling loop ────────────────────────────────────────────────────────
 
     private async Task PollLoopAsync(CancellationToken ct)
     {
@@ -180,8 +175,7 @@
         {
             try
             {
-                var txs = await Emulator.GetTraceTransactionsAsync(
-                    _session.SessionId, _proxyName, DefaultEnvironment, DefaultRevision, ct);
+                var txs = await Emulator.GetTraceTransactionsAsync(_session.SessionId, ct);
 
                 if (txs.Count != _transactions.Count)
                 {
@@ -214,7 +208,7 @@
         }
     }
 
-    // ─── Dispose ─────────────────────────────────────────────────────────────
+    // ─── Dispose ───────────────────────────────────────────────────────────
 
     public async ValueTask DisposeAsync()
     {
@@ -222,7 +216,7 @@
 
         if (_isTracing && _session is not null)
         {
-            try   { await Emulator.StopTraceAsync(_session.SessionId, _proxyName, DefaultEnvironment, DefaultRevision); }
+            try   { await Emulator.StopTraceAsync(_session.SessionId); }
             catch { /* best-effort */ }
         }
     }
