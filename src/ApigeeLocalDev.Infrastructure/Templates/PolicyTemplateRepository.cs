@@ -19,12 +19,12 @@ public sealed class PolicyTemplateRepository : IPolicyTemplateRepository
             "    <AssignTo createNew=\"false\" type=\"request\"/>\n" +
             "    <Set>\n" +
             "        <Headers>\n" +
-            "            <Header name=\"X-Custom-Header\">{{HeaderValue}}</Header>\n" +
+            "            <Header name=\"{{HeaderName}}\">{{HeaderValue}}</Header>\n" +
             "        </Headers>\n" +
             "    </Set>\n" +
             "    <IgnoreUnresolvedVariables>false</IgnoreUnresolvedVariables>\n" +
             "</AssignMessage>\n",
-            ["PolicyName", "HeaderValue"]),
+            ["PolicyName", "HeaderName", "HeaderValue"]),
 
         new PolicyTemplate(
             "ExtractVariables",
@@ -32,14 +32,14 @@ public sealed class PolicyTemplateRepository : IPolicyTemplateRepository
             "Mediation",
             "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n" +
             "<ExtractVariables name=\"{{PolicyName}}\">\n" +
-            "    <Source>request</Source>\n" +
+            "    <Source>{{Source}}</Source>\n" +
             "    <QueryParam name=\"{{QueryParam}}\">\n" +
             "        <Pattern ignoreCase=\"true\">{{Pattern}}</Pattern>\n" +
             "    </QueryParam>\n" +
             "    <VariablePrefix>{{VariablePrefix}}</VariablePrefix>\n" +
             "    <IgnoreUnresolvedVariables>true</IgnoreUnresolvedVariables>\n" +
             "</ExtractVariables>\n",
-            ["PolicyName", "QueryParam", "Pattern", "VariablePrefix"]),
+            ["PolicyName", "Source", "QueryParam", "Pattern", "VariablePrefix"]),
 
         new PolicyTemplate(
             "ResponseCache",
@@ -48,7 +48,7 @@ public sealed class PolicyTemplateRepository : IPolicyTemplateRepository
             "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n" +
             "<ResponseCache name=\"{{PolicyName}}\">\n" +
             "    <CacheKey>\n" +
-            "        <KeyFragment ref=\"request.uri\" type=\"string\"/>\n" +
+            "        <KeyFragment ref=\"{{CacheKeyRef}}\" type=\"string\"/>\n" +
             "    </CacheKey>\n" +
             "    <ExpirySettings>\n" +
             "        <TimeoutInSeconds>{{TimeoutSeconds}}</TimeoutInSeconds>\n" +
@@ -56,7 +56,7 @@ public sealed class PolicyTemplateRepository : IPolicyTemplateRepository
             "    <SkipCacheLookup>false</SkipCacheLookup>\n" +
             "    <SkipCachePopulation>false</SkipCachePopulation>\n" +
             "</ResponseCache>\n",
-            ["PolicyName", "TimeoutSeconds"]),
+            ["PolicyName", "CacheKeyRef", "TimeoutSeconds"]),
 
         new PolicyTemplate(
             "RaiseFault",
@@ -264,12 +264,12 @@ public sealed class PolicyTemplateRepository : IPolicyTemplateRepository
             "<Quota name=\"{{PolicyName}}\">\n" +
             "    <Allow count=\"{{AllowCount}}\" countRef=\"verifyapikey.{{VerifyAPIKeyPolicy}}.apiproduct.developer.quota.limit\"/>\n" +
             "    <Interval ref=\"verifyapikey.{{VerifyAPIKeyPolicy}}.apiproduct.developer.quota.interval\">1</Interval>\n" +
-            "    <TimeUnit ref=\"verifyapikey.{{VerifyAPIKeyPolicy}}.apiproduct.developer.quota.timeunit\">hour</TimeUnit>\n" +
+            "    <TimeUnit ref=\"verifyapikey.{{VerifyAPIKeyPolicy}}.apiproduct.developer.quota.timeunit\">{{TimeUnit}}</TimeUnit>\n" +
             "    <Identifier ref=\"request.queryparam.apikey\"/>\n" +
             "    <Distributed>false</Distributed>\n" +
             "    <Synchronous>false</Synchronous>\n" +
             "</Quota>\n",
-            ["PolicyName", "AllowCount", "VerifyAPIKeyPolicy"]),
+            ["PolicyName", "AllowCount", "VerifyAPIKeyPolicy", "TimeUnit"]),
 
         new PolicyTemplate(
             "ConcurrentRateLimit",

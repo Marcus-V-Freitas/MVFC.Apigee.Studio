@@ -14,12 +14,13 @@ public sealed class GeneratePolicyUseCase(
         string absolutePoliciesFolder,
         string templateName,
         IDictionary<string, string> parameters,
+        string? forcedXmlContent = null,
         CancellationToken ct = default)
     {
         var template = templateRepository.GetByName(templateName)
             ?? throw new InvalidOperationException($"Template '{templateName}' not found.");
 
-        var xml        = templateRepository.GeneratePolicyXml(template, parameters);
+        var xml        = !string.IsNullOrWhiteSpace(forcedXmlContent) ? forcedXmlContent : templateRepository.GeneratePolicyXml(template, parameters);
         var policyName = parameters.TryGetValue("PolicyName", out var n) && !string.IsNullOrWhiteSpace(n)
             ? n
             : templateName;
@@ -40,9 +41,10 @@ public sealed class GeneratePolicyUseCase(
         string policyFolderRelative,
         string templateName,
         IDictionary<string, string> parameters,
+        string? forcedXmlContent = null,
         CancellationToken ct = default)
     {
         var absoluteFolder = Path.Combine(workspaceRoot, proxyName, policyFolderRelative);
-        return ExecuteAtPathAsync(absoluteFolder, templateName, parameters, ct);
+        return ExecuteAtPathAsync(absoluteFolder, templateName, parameters, forcedXmlContent, ct);
     }
 }
