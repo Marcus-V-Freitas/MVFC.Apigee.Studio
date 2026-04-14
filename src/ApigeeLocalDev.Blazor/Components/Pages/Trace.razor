@@ -4,6 +4,7 @@
 @using ApigeeLocalDev.Blazor.Components.Shared
 @using ApigeeLocalDev.Blazor.Services
 @inject IApigeeEmulatorClient Emulator
+@inject IWorkspaceRepository WorkspaceRepo
 @inject ToastService Toast
 @implements IAsyncDisposable
 @rendermode RenderMode.InteractiveServer
@@ -26,11 +27,25 @@
     <div class="card trace-control-card">
         <div class="trace-control-row">
             <div class="form-group" style="flex:1">
-                <label class="form-label">Proxy Name</label>
-                <input class="form-input"
-                       placeholder="ex: hello-world"
-                       @bind="_proxyName"
-                       disabled="@_isTracing" />
+                <label class="form-label">Workspace</label>
+                <select class="form-input" @onchange="OnWorkspaceChanged" disabled="@_isTracing">
+                    <option value="">-- Selecione o Workspace --</option>
+                    @foreach (var ws in _workspaces)
+                    {
+                        <option value="@ws.RootPath">@ws.Name</option>
+                    }
+                </select>
+            </div>
+
+            <div class="form-group" style="flex:1">
+                <label class="form-label">Proxy</label>
+                <select class="form-input" @onchange="OnProxyChanged" disabled="@(string.IsNullOrEmpty(_selectedWorkspacePath) || _isTracing)">
+                    <option value="">-- Selecione o Proxy --</option>
+                    @foreach (var p in _proxies)
+                    {
+                        <option value="@p">@p</option>
+                    }
+                </select>
             </div>
 
             <div class="trace-control-actions">
@@ -38,7 +53,7 @@
                 {
                     @* Variável local evita o warning HTML0209 com expressão complexa em disabled *@
                     var startDisabled = string.IsNullOrWhiteSpace(_proxyName) || _loading;
-                    <button class="btn btn-primary" @onclick="StartTrace" disabled="@startDisabled">
+                    <button @key="_loading" class="btn btn-primary" @onclick="StartTrace" disabled="@startDisabled">
                         @if (_loading)
                         {
                             <i data-lucide="loader-2" class="spin"></i>
@@ -110,6 +125,33 @@
     private bool    _isTracing = false;
     private bool    _loading   = false;
     private string? _error     = null;
+
+    private IReadOnlyList<ApigeeWorkspace> _workspaces = [];
+    private IReadOnlyList<string>          _proxies    = [];
+    private string? _selectedWorkspacePath;
+
+    protected override void OnInitialized()
+    {
+        _workspaces = WorkspaceRepo.ListAll();
+    }
+
+    private void OnWorkspaceChanged(ChangeEventArgs e)
+    {
+        _selectedWorkspacePath = e.Value?.ToString();
+        _proxyName             = string.Empty;
+        _proxies               = [];
+
+        var ws = _workspaces.FirstOrDefault(w => w.RootPath == _selectedWorkspacePath);
+        if (ws is not null)
+        {
+            _proxies = WorkspaceRepo.ListApiProxies(ws);
+        }
+    }
+
+    private void OnProxyChanged(ChangeEventArgs e)
+    {
+        _proxyName = e.Value?.ToString() ?? string.Empty;
+    }
 
     private TraceSession?          _session      = null;
     private List<TraceTransaction> _transactions = [];

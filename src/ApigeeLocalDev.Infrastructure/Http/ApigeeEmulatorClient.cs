@@ -254,15 +254,37 @@ public sealed class ApigeeEmulatorClient(
         {
             foreach (var result in results.EnumerateArray())
             {
-                if (!result.TryGetProperty("properties", out var props)) continue;
-                if (!props.TryGetProperty("property", out var propArray)) continue;
+                var actionResult = TryGetString(result, "ActionResult");
 
-                foreach (var prop in propArray.EnumerateArray())
+                if (result.TryGetProperty("properties", out var props) && props.TryGetProperty("property", out var propArray))
                 {
-                    var name  = TryGetString(prop, "name");
-                    var value = TryGetString(prop, "value");
-                    if (name is not null && value is not null)
-                        variables.TryAdd(name, value);
+                    foreach (var prop in propArray.EnumerateArray())
+                    {
+                        var name  = TryGetString(prop, "name");
+                        var value = TryGetString(prop, "value");
+                        if (name is not null && value is not null)
+                            variables.TryAdd(name, value);
+                    }
+                }
+
+                if (result.TryGetProperty("headers", out var headersArray))
+                {
+                    var prefix = actionResult == "RequestMessage" ? "request.header." : 
+                                 actionResult == "ResponseMessage" ? "response.header." : "message.header.";
+                    foreach (var header in headersArray.EnumerateArray())
+                    {
+                        var name  = TryGetString(header, "name");
+                        var value = TryGetString(header, "value");
+                        if (name is not null && value is not null)
+                            variables.TryAdd($"{prefix}{name}", value);
+                    }
+                }
+
+                if (result.TryGetProperty("content", out var bodyEl) && bodyEl.ValueKind == JsonValueKind.String)
+                {
+                    var prefix = actionResult == "RequestMessage" ? "request." : 
+                                 actionResult == "ResponseMessage" ? "response." : "message.";
+                    variables.TryAdd($"{prefix}content", bodyEl.GetString() ?? string.Empty);
                 }
             }
         }

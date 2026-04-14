@@ -1,5 +1,7 @@
 @using ApigeeLocalDev.Domain.Entities
 @using Microsoft.AspNetCore.Components
+@using Microsoft.JSInterop
+@inject IJSRuntime JSRuntime
 
 <div class="trace-viewer">
     @if (!Transactions.Any())
@@ -30,7 +32,7 @@
 
                 <div class="trace-tx @(isExpanded ? "trace-tx--open" : "")">
 
-                    <button class="trace-tx-header" @onclick="() => Toggle(tx.MessageId)">
+                    <button @key="isExpanded" class="trace-tx-header" @onclick="() => Toggle(tx.MessageId)">
                         <span class="tx-method @methodClass">@tx.RequestMethod</span>
                         <span class="tx-uri">@tx.RequestUri</span>
                         <div class="tx-meta">
@@ -49,55 +51,243 @@
 
                     @if (isExpanded)
                     {
-                        <div class="trace-timeline">
-                            @foreach (var pt in tx.Points)
+                        var groups = GroupPointsByPhase(tx.Points);
+                        var selectedPt = GetSelectedPoint(tx.MessageId, tx.Points);
+
+                        <div class="trace-flow-container">
+                            @* ── Horizontal Flow Pipeline ── *@
+                            <div class="trace-pipeline">
+                                <div class="pipeline-scroll">
+                                    @foreach (var group in groups)
+                                    {
+                                        var phaseClr  = PhaseColorClass(group.PhaseName);
+                                        var phaseIcon = PhaseIcon(group.PhaseName);
+                                        var phaseLabel = PhaseDisplayName(group.PhaseName);
+
+                                        <div class="pipeline-phase @phaseClr">
+                                            <div class="pipeline-phase-header">
+                                                <i data-lucide="@phaseIcon" class="pipeline-phase-icon"></i>
+                                                <span class="pipeline-phase-name">@phaseLabel</span>
+                                            </div>
+
+                                            <div class="pipeline-steps">
+                                                @foreach (var pt in group.Points)
+                                                {
+                                                    var isSelected = selectedPt == pt;
+                                                    var stepClass = pt.PointType switch
+                                                    {
+                                                        "Condition" => "step-condition",
+                                                        "Execution" => pt.HasError ? "step-error" : "step-execution",
+                                                        _           => "step-state"
+                                                    };
+                                                    var stepIcon = pt.PointType switch
+                                                    {
+                                                        "Condition" => pt.Description?.Equals("true", StringComparison.OrdinalIgnoreCase) == true
+                                                            ? "check-circle-2" : "x-circle",
+                                                        "Execution" => pt.HasError ? "alert-circle" : "circle-dot",
+                                                        _           => "chevrons-right"
+                                                    };
+
+                                                    <button @key="pt" class="pipeline-step @stepClass @(isSelected ? "step-active" : "")"
+                                                            @onclick="() => SelectPoint(tx.MessageId, pt)"
+                                                            @onclick:stopPropagation="true"
+                                                            title="@pt.PolicyName">
+                                                        <i data-lucide="@stepIcon" class="step-icon"></i>
+                                                        <span class="step-name">@TruncateName(pt.PolicyName)</span>
+                                                    </button>
+                                                }
+                                            </div>
+                                        </div>
+
+                                        @if (group != groups.Last())
+                                        {
+                                            <div class="pipeline-connector">
+                                                <i data-lucide="chevron-right" class="connector-arrow"></i>
+                                            </div>
+                                        }
+                                    }
+                                </div>
+                            </div>
+
+                            @* ── Details Panel ── *@
+                            @if (selectedPt is not null)
                             {
-                                @if (pt.PointType == "StateChange")
-                                {
-                                    <div class="tl-phase-divider">
-                                        <span class="tl-phase-line"></span>
-                                        <span class="tl-phase-label @PhaseClass(pt.PolicyName)">
-                                            <i data-lucide="@PhaseIcon(pt.PolicyName)" style="width:10px;height:10px"></i>
-                                            @pt.PolicyName
-                                        </span>
-                                        <span class="tl-phase-line"></span>
+                                <div class="trace-details">
+                                    <div class="trace-details-header">
+                                        <div @key="selectedPt" class="trace-details-title">
+                                            @{
+                                                var detailIcon = selectedPt.PointType switch
+                                                {
+                                                    "Condition" => selectedPt.Description?.Equals("true", StringComparison.OrdinalIgnoreCase) == true
+                                                        ? "check-circle-2" : "x-circle",
+                                                    "Execution" => selectedPt.HasError ? "alert-circle" : "circle-dot",
+                                                    _ => "chevrons-right"
+                                                };
+                                                var detailTypeClass = selectedPt.PointType switch
+                                                {
+                                                    "Condition" => selectedPt.Description?.Equals("true", StringComparison.OrdinalIgnoreCase) == true
+                                                        ? "detail-cond-pass" : "detail-cond-fail",
+                                                    "Execution" => selectedPt.HasError ? "detail-error" : "detail-exec",
+                                                    _ => "detail-state"
+                                                };
+                                            }
+                                            <i data-lucide="@detailIcon" class="detail-icon @detailTypeClass"></i>
+                                            <span class="detail-name">@selectedPt.PolicyName</span>
+                                            <span class="detail-type-badge">@selectedPt.PointType</span>
+                                        </div>
+                                        <button class="btn btn-ghost btn-sm" @onclick="() => ClearSelection(tx.MessageId)"
+                                                @onclick:stopPropagation="true">
+                                            <i data-lucide="x" style="width:12px;height:12px"></i>
+                                        </button>
                                     </div>
-                                }
-                                else if (pt.PointType == "Condition")
-                                {
-                                    var condPassed = pt.Description?.Equals("true", StringComparison.OrdinalIgnoreCase) == true;
-                                    <div class="tl-row tl-condition @(condPassed ? "cond-pass" : "cond-fail")">
-                                        <span class="tl-connector"></span>
-                                        <span class="tl-dot dot-cond"></span>
-                                        <i data-lucide="@(condPassed ? "check-circle-2" : "x-circle")" class="tl-icon"></i>
-                                        <span class="tl-label">@pt.PolicyName</span>
-                                        <span class="tl-cond-badge @(condPassed ? "cond-true" : "cond-false")">
-                                            @(condPassed ? "true" : "false")
-                                        </span>
+
+                                    <div class="trace-details-body">
+                                        @* ── Summary Info ── *@
+                                        <div class="detail-section">
+                                            <div class="detail-props">
+                                                @if (!string.IsNullOrWhiteSpace(selectedPt.Phase))
+                                                {
+                                                    <div class="detail-prop">
+                                                        <span class="prop-key">Phase</span>
+                                                        <span class="prop-val">@selectedPt.Phase</span>
+                                                    </div>
+                                                }
+                                                @if (!string.IsNullOrWhiteSpace(selectedPt.Description))
+                                                {
+                                                    <div class="detail-prop">
+                                                        <span class="prop-key">Description</span>
+                                                        <span class="prop-val">@selectedPt.Description</span>
+                                                    </div>
+                                                }
+                                                @if (selectedPt.ElapsedTimeMs > 0)
+                                                {
+                                                    <div class="detail-prop">
+                                                        <span class="prop-key">Elapsed Time</span>
+                                                        <span class="prop-val prop-val-time">@selectedPt.ElapsedTimeMs ms</span>
+                                                    </div>
+                                                }
+                                                @if (selectedPt.HasError)
+                                                {
+                                                    <div class="detail-prop detail-prop-error">
+                                                        <span class="prop-key">Status</span>
+                                                        <span class="prop-val prop-val-error">
+                                                            <i data-lucide="alert-triangle" style="width:11px;height:11px"></i>
+                                                            Error
+                                                        </span>
+                                                    </div>
+                                                }
+                                                @if (selectedPt.PointType == "Condition")
+                                                {
+                                                    var condResult = selectedPt.Description?.Equals("true", StringComparison.OrdinalIgnoreCase) == true;
+                                                    <div class="detail-prop">
+                                                        <span class="prop-key">Result</span>
+                                                        <span class="prop-val @(condResult ? "prop-val-pass" : "prop-val-fail")">
+                                                            @(condResult ? "✓ true" : "✗ false")
+                                                        </span>
+                                                    </div>
+                                                }
+                                            </div>
+                                        </div>
+
+                                        @* ── Headers & Variables ── *@
+                                        @if (selectedPt.Variables.Any())
+                                        {
+                                            var reqHeaders = selectedPt.Variables.Where(v => v.Key.StartsWith("request.header.", StringComparison.OrdinalIgnoreCase)).ToList();
+                                            var resHeaders = selectedPt.Variables.Where(v => v.Key.StartsWith("response.header.", StringComparison.OrdinalIgnoreCase)).ToList();
+                                            var msgHeaders = selectedPt.Variables.Where(v => v.Key.StartsWith("message.header.", StringComparison.OrdinalIgnoreCase)).ToList();
+                                            var otherVars  = selectedPt.Variables.Where(v => !v.Key.StartsWith("request.header.") 
+                                                                                          && !v.Key.StartsWith("response.header.")
+                                                                                          && !v.Key.StartsWith("message.header.")).ToList();
+
+                                            @if (reqHeaders.Any() || resHeaders.Any() || msgHeaders.Any())
+                                            {
+                                                if (reqHeaders.Any())
+                                                {
+                                                    <div class="detail-section">
+                                                        <div class="detail-section-header">
+                                                            <i data-lucide="log-in" style="width:12px;height:12px"></i>
+                                                            <span>Request Headers (@reqHeaders.Count)</span>
+                                                        </div>
+                                                        <div class="detail-vars">
+                                                            @foreach (var kv in reqHeaders)
+                                                            {
+                                                                var headerName = kv.Key.Substring(15); @* len("request.header.") *@
+                                                                <div class="var-row">
+                                                                    <span class="var-key">@headerName</span>
+                                                                    <span class="var-val">@kv.Value</span>
+                                                                </div>
+                                                            }
+                                                        </div>
+                                                    </div>
+                                                }
+                                                if (resHeaders.Any())
+                                                {
+                                                    <div class="detail-section">
+                                                        <div class="detail-section-header">
+                                                            <i data-lucide="log-out" style="width:12px;height:12px"></i>
+                                                            <span>Response Headers (@resHeaders.Count)</span>
+                                                        </div>
+                                                        <div class="detail-vars">
+                                                            @foreach (var kv in resHeaders)
+                                                            {
+                                                                var headerName = kv.Key.Substring(16); @* len("response.header.") *@
+                                                                <div class="var-row">
+                                                                    <span class="var-key">@headerName</span>
+                                                                    <span class="var-val">@kv.Value</span>
+                                                                </div>
+                                                            }
+                                                        </div>
+                                                    </div>
+                                                }
+                                                if (msgHeaders.Any())
+                                                {
+                                                    <div class="detail-section">
+                                                        <div class="detail-section-header">
+                                                            <i data-lucide="message-square" style="width:12px;height:12px"></i>
+                                                            <span>Message Headers (@msgHeaders.Count)</span>
+                                                        </div>
+                                                        <div class="detail-vars">
+                                                            @foreach (var kv in msgHeaders)
+                                                            {
+                                                                var headerName = kv.Key.Substring(15); @* len("message.header.") *@
+                                                                <div class="var-row">
+                                                                    <span class="var-key">@headerName</span>
+                                                                    <span class="var-val">@kv.Value</span>
+                                                                </div>
+                                                            }
+                                                        </div>
+                                                    </div>
+                                                }
+                                            }
+
+                                            if (otherVars.Any())
+                                            {
+                                                <div class="detail-section">
+                                                    <div class="detail-section-header">
+                                                        <i data-lucide="braces" style="width:12px;height:12px"></i>
+                                                        <span>Properties & Variables (@otherVars.Count)</span>
+                                                    </div>
+                                                    <div class="detail-vars">
+                                                        @foreach (var kv in otherVars)
+                                                        {
+                                                            <div class="var-row">
+                                                                <span class="var-key">@kv.Key</span>
+                                                                <span class="var-val">@kv.Value</span>
+                                                            </div>
+                                                        }
+                                                    </div>
+                                                </div>
+                                            }
+                                        }
                                     </div>
-                                }
-                                else
-                                {
-                                    var execClass = pt.HasError ? "exec-error" : "exec-ok";
-                                    <div class="tl-row tl-execution @execClass">
-                                        <span class="tl-connector"></span>
-                                        <span class="tl-dot @(pt.HasError ? "dot-error" : "dot-exec")"></span>
-                                        <i data-lucide="@(pt.HasError ? "x-circle" : "play-circle")" class="tl-icon"></i>
-                                        <span class="tl-label">@pt.PolicyName</span>
-                                        @if (!string.IsNullOrWhiteSpace(pt.Phase))
-                                        {
-                                            <span class="tl-phase-badge">@pt.Phase</span>
-                                        }
-                                        @if (!string.IsNullOrWhiteSpace(pt.Description))
-                                        {
-                                            <span class="tl-desc">@pt.Description</span>
-                                        }
-                                        @if (pt.ElapsedTimeMs > 0)
-                                        {
-                                            <span class="tl-elapsed">@pt.ElapsedTimeMs ms</span>
-                                        }
-                                    </div>
-                                }
+                                </div>
+                            }
+                            else
+                            {
+                                <div class="trace-details trace-details-hint">
+                                    <i data-lucide="mouse-pointer-click" style="width:20px;height:20px"></i>
+                                    <span>Clique em um step no pipeline para ver os detalhes.</span>
+                                </div>
                             }
                         </div>
                     }
@@ -111,34 +301,125 @@
     [Parameter] public IReadOnlyList<TraceTransaction> Transactions { get; set; } = [];
 
     private readonly HashSet<string> _expanded = [];
+    private readonly Dictionary<string, TracePoint> _selectedPoints = [];
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        try
+        {
+            await JSRuntime.InvokeVoidAsync("initLucide");
+        }
+        catch
+        {
+            // Ignore pre-rendering exceptions
+        }
+    }
 
     private void Toggle(string messageId)
     {
         if (!_expanded.Add(messageId))
+        {
             _expanded.Remove(messageId);
+            _selectedPoints.Remove(messageId);
+        }
     }
 
-    private static string PhaseClass(string phase) => phase switch
+    private void SelectPoint(string messageId, TracePoint pt)
     {
-        "REQ_HEADERS_PARSED" or "PROXY_REQ_FLOW"  => "phase-proxy-req",
-        "TARGET_REQ_FLOW"    or "REQ_SENT"         => "phase-target-req",
-        "RESP_START"         or "TARGET_RESP_FLOW" => "phase-target-resp",
-        "PROXY_RESP_FLOW"    or "RESP_SENT"
-            or "PROXY_POST_RESP_SENT"               => "phase-proxy-resp",
-        "END"                                       => "phase-end",
-        "DEBUG_SESSION"                             => "phase-debug",
-        _ => "phase-generic"
+        _selectedPoints[messageId] = pt;
+    }
+
+    private void ClearSelection(string messageId)
+    {
+        _selectedPoints.Remove(messageId);
+    }
+
+    private TracePoint? GetSelectedPoint(string messageId, IReadOnlyList<TracePoint> points)
+    {
+        return _selectedPoints.TryGetValue(messageId, out var pt) ? pt : null;
+    }
+
+    // ─── Grouping Logic ────────────────────────────────────────────────────
+    private sealed record PhaseGroup(string PhaseName, List<TracePoint> Points);
+
+    private static List<PhaseGroup> GroupPointsByPhase(IReadOnlyList<TracePoint> points)
+    {
+        var groups = new List<PhaseGroup>();
+        PhaseGroup? current = null;
+
+        foreach (var pt in points)
+        {
+            if (pt.PointType == "StateChange")
+            {
+                current = new PhaseGroup(pt.PolicyName, []);
+                groups.Add(current);
+            }
+            else if (current is not null)
+            {
+                current.Points.Add(pt);
+            }
+            else
+            {
+                // Points before any StateChange → fallback group
+                current = new PhaseGroup("START", [pt]);
+                groups.Add(current);
+            }
+        }
+
+        // Remove empty groups (StateChange-only phases with no children)
+        // Actually keep them to show the phase in the pipeline
+        return groups;
+    }
+
+    // ─── Helpers ────────────────────────────────────────────────────────────
+
+    private static string TruncateName(string name)
+    {
+        if (name.Length <= 22) return name;
+        return name[..20] + "…";
+    }
+
+    private static string PhaseColorClass(string phase) => phase switch
+    {
+        "REQ_HEADERS_PARSED"                          => "phase-clr-proxy-req",
+        "PROXY_REQ_FLOW"                              => "phase-clr-proxy-req",
+        "TARGET_REQ_FLOW"                             => "phase-clr-target-req",
+        "REQ_SENT"                                    => "phase-clr-target-req",
+        "RESP_START"                                  => "phase-clr-target-resp",
+        "TARGET_RESP_FLOW"                            => "phase-clr-target-resp",
+        "PROXY_RESP_FLOW"                             => "phase-clr-proxy-resp",
+        "RESP_SENT"                                   => "phase-clr-proxy-resp",
+        "PROXY_POST_RESP_SENT"                        => "phase-clr-post-resp",
+        "END"                                         => "phase-clr-end",
+        "DEBUG_SESSION"                               => "phase-clr-debug",
+        _                                             => "phase-clr-generic"
+    };
+
+    private static string PhaseDisplayName(string phase) => phase switch
+    {
+        "REQ_HEADERS_PARSED"   => "Request Received",
+        "PROXY_REQ_FLOW"       => "Proxy Request",
+        "TARGET_REQ_FLOW"      => "Target Request",
+        "REQ_SENT"             => "Request Sent",
+        "RESP_START"           => "Response Start",
+        "TARGET_RESP_FLOW"     => "Target Response",
+        "PROXY_RESP_FLOW"      => "Proxy Response",
+        "RESP_SENT"            => "Response Sent",
+        "PROXY_POST_RESP_SENT" => "PostClient Flow",
+        "END"                  => "End",
+        "DEBUG_SESSION"        => "Debug Session",
+        _                      => phase
     };
 
     private static string PhaseIcon(string phase) => phase switch
     {
-        "REQ_HEADERS_PARSED"   => "file-input",
-        "PROXY_REQ_FLOW"       => "arrow-right-circle",
+        "REQ_HEADERS_PARSED"   => "log-in",
+        "PROXY_REQ_FLOW"       => "arrow-right",
         "TARGET_REQ_FLOW"      => "send",
-        "REQ_SENT"             => "send-horizontal",
-        "RESP_START"           => "arrow-down-circle",
+        "REQ_SENT"             => "upload",
+        "RESP_START"           => "download",
         "TARGET_RESP_FLOW"     => "inbox",
-        "PROXY_RESP_FLOW"      => "arrow-left-circle",
+        "PROXY_RESP_FLOW"      => "arrow-left",
         "RESP_SENT"            => "check-circle",
         "PROXY_POST_RESP_SENT" => "zap",
         "END"                  => "flag",

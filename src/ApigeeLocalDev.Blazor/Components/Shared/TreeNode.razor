@@ -37,6 +37,9 @@
     {
         var isActive = string.Equals(Item.FullPath, SelectedFilePath, StringComparison.OrdinalIgnoreCase);
         <div class="tree-file @(isActive ? "active" : "")" 
+             draggable="true"
+             ondragstart="event.dataTransfer.setData('text/plain', this.getAttribute('data-payload')); event.dataTransfer.setData('application/vnd.apigee.item', this.getAttribute('data-payload'));"
+             data-payload="@GetDragPayload(Item)"
              @onclick="() => OnFileSelected.InvokeAsync(Item.FullPath)"
              @oncontextmenu="e => HandleContextMenu(e, Item)" @oncontextmenu:preventDefault="true">
             <span class="tree-file-icon">&#128196;</span> @Item.Name
@@ -82,4 +85,25 @@
 
     private Task HandleContextMenu(Microsoft.AspNetCore.Components.Web.MouseEventArgs e, WorkspaceItem item)
         => OnContextMenu.InvokeAsync((e, item));
+
+    private string GetDragPayload(WorkspaceItem item)
+    {
+        var nameWithoutExt = System.IO.Path.GetFileNameWithoutExtension(item.Name);
+        var dirName = System.IO.Path.GetFileName(System.IO.Path.GetDirectoryName(item.FullPath))?.ToLowerInvariant();
+
+        if (dirName == "policies")
+        {
+            return $"<Step>\n    <Name>{nameWithoutExt}</Name>\n</Step>";
+        }
+        if (dirName == "targets")
+        {
+            return $"<RouteRule name=\"{nameWithoutExt}\">\n    <TargetEndpoint>{nameWithoutExt}</TargetEndpoint>\n</RouteRule>";
+        }
+        if (dirName == "sharedflows")
+        {
+            return $"<FlowCallout name=\"FlowCallout_{nameWithoutExt}\">\n    <SharedFlowBundle>{nameWithoutExt}</SharedFlowBundle>\n</FlowCallout>";
+        }
+
+        return nameWithoutExt;
+    }
 }

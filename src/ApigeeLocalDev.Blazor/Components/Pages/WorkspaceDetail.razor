@@ -186,6 +186,8 @@ else
                                         </label>
                                     }
                                 </div>
+                                
+                                <textarea class="xml-preview code-editor" style="width: 100%; min-height: 280px; flex-shrink: 0; font-size: 12px; margin-bottom: 24px; resize: vertical;" @bind="_quickXmlEditable" @bind:event="oninput"></textarea>
 
                                 <button class="btn btn-primary" @onclick="ConfirmQuickPolicy"
                                         disabled="@_quickGenerating">
@@ -367,6 +369,7 @@ else
     private Dictionary<string, string> _quickParams = [];
     private string _quickFileName   = string.Empty;
     private string _quickMessage    = string.Empty;
+    private string _quickXmlEditable= string.Empty;
     private bool   _quickError;
     private bool   _quickGenerating;
 
@@ -730,10 +733,21 @@ else
         _quickTemplate = t;
         _quickParams   = t.Parameters.ToDictionary(p => p, _ => string.Empty);
         if (_quickParams.ContainsKey("PolicyName")) _quickParams["PolicyName"] = t.Name + "Policy";
+        UpdateLivePreview();
     }
 
     private string GetQParam(string k) => _quickParams.TryGetValue(k, out var v) ? v : string.Empty;
-    private void   SetQParam(string k, string v) => _quickParams[k] = v;
+    private void   SetQParam(string k, string v)
+    {
+        _quickParams[k] = v;
+        UpdateLivePreview();
+    }
+
+    private void UpdateLivePreview()
+    {
+        if (_quickTemplate is not null)
+            _quickXmlEditable = TemplateRepo.GeneratePolicyXml(_quickTemplate, _quickParams);
+    }
 
     private async Task ConfirmQuickPolicy()
     {
@@ -746,7 +760,8 @@ else
             var path = await GeneratePolicy.ExecuteAtPathAsync(
                 _quickAddPath,
                 _quickTemplate.Name,
-                _quickParams);
+                _quickParams,
+                _quickXmlEditable);
 
             _quickMessage = "✔ Criado: " + System.IO.Path.GetFileName(path);
             _tree = await WorkspaceRepo.LoadTreeAsync(_workspace);

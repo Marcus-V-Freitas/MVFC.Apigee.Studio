@@ -421,6 +421,28 @@ window.monacoInterop = (function () {
                 return symbols;
             }
         });
+
+        // ── Native Drag & Drop Formatter ──────────────────────────────────────
+        // Intercepta de forma nativa o que for arrastado pelo Blazor para formatar automaticamente.
+        if (monaco.languages.registerDocumentDropEditProvider) {
+            monaco.languages.registerDocumentDropEditProvider('*', {
+                provideDocumentDropEdits(model, position, dataTransfer, token) {
+                    const item = dataTransfer.get('application/vnd.apigee.item');
+                    if (item) {
+                        const snippetStr = typeof item.asString === 'function' ? item.asString() : item.value;
+                        return Promise.resolve(snippetStr).then(snippet => {
+                            if (!snippet) return null;
+                            return {
+                                insertText: snippet,
+                                insertTextFormat: monaco.languages.InsertTextFormat.Snippet,
+                                handledMimeType: 'application/vnd.apigee.item'
+                            };
+                        });
+                    }
+                    return null;
+                }
+            });
+        }
     }
 
     // Cria o editor Monaco no container assim que ele tiver dimensões reais.
@@ -521,6 +543,8 @@ window.monacoInterop = (function () {
                             model:             model,
                             theme:             'apigee-dark',
                             automaticLayout:   true,
+                            dragAndDrop:       true,
+                            dropIntoEditor:    { enabled: true },
                             fontSize:          13,
                             fontFamily:        '"JetBrains Mono", "Fira Code", monospace',
                             fontLigatures:     true,
