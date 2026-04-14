@@ -66,6 +66,13 @@ public static class DebugSessionXmlParser
                 .Equals("phase", StringComparison.OrdinalIgnoreCase) == true)
             ?.Value ?? string.Empty;
 
+        var condition = debugInfo
+            ?.Element("Properties")
+            ?.Elements("Property")
+            .FirstOrDefault(p => p.Attribute("name")?.Value
+                .Equals("condition", StringComparison.OrdinalIgnoreCase) == true)
+            ?.Value;
+
         var executed = debugInfo
             ?.Element("Results")
             ?.Elements("Result")
@@ -92,6 +99,13 @@ public static class DebugSessionXmlParser
             .GroupBy(v => v.Name!, StringComparer.OrdinalIgnoreCase)
             .ToDictionary(g => g.Key, g => g.First().Value ?? string.Empty);
 
-        return new TracePoint(policyId, phase, executed, hasError, durationMs, variables);
+        return new TracePoint(
+            Policy:     policyId,
+            Phase:      phase,
+            Executed:   executed,
+            Error:      hasError,
+            DurationMs: durationMs,
+            Condition:  condition,
+            Variables:  variables);
     }
 }
