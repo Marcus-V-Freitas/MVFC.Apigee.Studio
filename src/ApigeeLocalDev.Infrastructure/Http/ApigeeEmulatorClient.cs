@@ -35,7 +35,6 @@ public sealed class ApigeeEmulatorClient(
             using var response = await http.GetAsync("/v1/emulator/healthz", ct);
             if (response.IsSuccessStatusCode) return true;
 
-            // fallback para o endpoint de versão usado originalmente
             using var v = await http.GetAsync("/v1/emulator/version", ct);
             return v.IsSuccessStatusCode;
         }
@@ -211,15 +210,17 @@ public sealed class ApigeeEmulatorClient(
                 foreach (var tp in tps.EnumerateArray())
                     points.Add(ParseTracePoint(tp));
 
-            result.Add(new TraceTransaction
-            {
-                MessageId     = TryGetString(msg, "messageId")     ?? string.Empty,
-                RequestMethod = TryGetString(msg, "requestMethod") ?? string.Empty,
-                RequestUri    = TryGetString(msg, "requestURI")    ?? string.Empty,
-                ResponseCode  = msg.TryGetProperty("responseCode", out var rc) ? rc.GetInt32() : 0,
-                TotalTimeMs   = msg.TryGetProperty("totalTime",    out var tt) ? tt.GetInt64()  : 0,
-                Points        = points
-            });
+            // TraceTransaction é positional record:
+            // (MessageId, RequestPath, Verb, StatusCode, DurationMs, RequestBody, ResponseBody, Points)
+            result.Add(new TraceTransaction(
+                MessageId:    TryGetString(msg, "messageId")     ?? string.Empty,
+                RequestPath:  TryGetString(msg, "requestURI")    ?? string.Empty,
+                Verb:         TryGetString(msg, "requestMethod") ?? string.Empty,
+                StatusCode:   msg.TryGetProperty("responseCode", out var rc) ? rc.GetInt32() : 0,
+                DurationMs:   msg.TryGetProperty("totalTime",    out var tt) ? tt.GetInt64()  : 0,
+                RequestBody:  null,
+                ResponseBody: null,
+                Points:       points));
         }
 
         return result;
@@ -233,16 +234,22 @@ public sealed class ApigeeEmulatorClient(
             foreach (var p in props.EnumerateObject())
                 variables[p.Name] = p.Value.ToString();
 
-        return new TracePoint
-        {
-            PointType     = TryGetString(tp, "pointType")   ?? string.Empty,
-            PolicyName    = TryGetString(tp, "id")           ?? TryGetString(tp, "policyName") ?? string.Empty,
-            Phase         = TryGetString(tp, "properties", "TO") ?? TryGetString(tp, "phase") ?? string.Empty,
-            Description   = TryGetString(tp, "description") ?? string.Empty,
-            ElapsedTimeMs = tp.TryGetProperty("elapsedTime", out var el) ? el.GetInt64() : 0,
-            HasError      = tp.TryGetProperty("pointType",   out var pt) && pt.GetString() == "Error",
-            Variables     = variables
-        };
+        // TracePoint é positional record:
+        // (Policy, Phase, Executed, Error, DurationMs, Condition, Variables)
+        var policyName = TryGetString(tp, "id") ?? TryGetString(tp, "policyName") ?? string.Empty;
+        var phase      = TryGetString(tp, "properties", "TO") ?? TryGetString(tp, "phase") ?? string.Empty;
+        var hasError   = tp.TryGetProperty("pointType", out var pt) && pt.GetString() == "Error";
+        var elapsed    = tp.TryGetProperty("elapsedTime", out var el) ? el.GetInt64() : 0L;
+        var condition  = TryGetString(tp, "condition");
+
+        return new TracePoint(
+            Policy:    policyName,
+            Phase:     phase,
+            Executed:  !hasError,
+            Error:     hasError,
+            DurationMs: elapsed,
+            Condition: condition,
+            Variables: variables);
     }
 
     private static string? TryGetString(JsonElement el, string key)
