@@ -13,20 +13,20 @@
         @foreach (var tx in Transactions)
         {
             var isExpanded  = _expanded.Contains(tx.MessageId);
-            var statusClass = tx.StatusCode >= 500 ? "tx-error"
-                            : tx.StatusCode >= 400 ? "tx-warn"
+            var statusClass = tx.ResponseCode >= 500 ? "tx-error"
+                            : tx.ResponseCode >= 400 ? "tx-warn"
                             : "tx-ok";
 
             <div class="trace-tx @statusClass">
                 <button class="trace-tx-header" @onclick="() => Toggle(tx.MessageId)">
-                    <span class="tx-method @(tx.Verb == "GET" ? "method-get" : tx.Verb == "POST" ? "method-post" : tx.Verb == "DELETE" ? "method-delete" : "method-other")">@tx.Verb</span>
-                    <span class="tx-uri">@tx.RequestPath</span>
-                    <span class="tx-badge badge-@(tx.StatusCode / 100)xx">@tx.StatusCode</span>
-                    @if (tx.DurationMs > 0)
+                    <span class="tx-method @(tx.RequestMethod == \"GET\" ? \"method-get\" : tx.RequestMethod == \"POST\" ? \"method-post\" : tx.RequestMethod == \"DELETE\" ? \"method-delete\" : \"method-other\")">@tx.RequestMethod</span>
+                    <span class="tx-uri">@tx.RequestUri</span>
+                    <span class="tx-badge badge-@(tx.ResponseCode / 100)xx">@tx.ResponseCode</span>
+                    @if (tx.TotalTimeMs > 0)
                     {
-                        <span class="tx-time">@tx.DurationMs ms</span>
+                        <span class="tx-time">@tx.TotalTimeMs ms</span>
                     }
-                    <i data-lucide="@(isExpanded ? "chevron-up" : "chevron-down")" class="tx-chevron"></i>
+                    <i data-lucide="@(isExpanded ? \"chevron-up\" : \"chevron-down\")" class="tx-chevron"></i>
                 </button>
 
                 @if (isExpanded)
@@ -34,7 +34,7 @@
                     <div class="trace-timeline">
 
                         @* StateChanges — separadores de fase *@
-                        @foreach (var pt in tx.Points.Where(p => string.IsNullOrEmpty(p.Policy)))
+                        @foreach (var pt in tx.Points.Where(p => p.PointType == "StateChange"))
                         {
                             <div class="trace-phase-divider">
                                 <i data-lucide="arrow-right" style="width:12px;height:12px"></i>
@@ -42,20 +42,20 @@
                             </div>
                         }
 
-                        @* Políticas executadas *@
-                        @foreach (var pt in tx.Points.Where(p => !string.IsNullOrEmpty(p.Policy)))
+                        @* Políticas executadas (Execution) e condições (Condition) *@
+                        @foreach (var pt in tx.Points.Where(p => p.PointType != "StateChange"))
                         {
-                            var ptClass = pt.Error    ? "pt-error"
-                                        : pt.Executed ? "pt-exec"
+                            var ptClass = pt.HasError ? "pt-error"
+                                        : pt.PointType == "Execution" ? "pt-exec"
                                         : "pt-skip";
 
                             <div class="trace-point @ptClass">
                                 <span class="pt-icon">
-                                    @if (pt.Error)
+                                    @if (pt.HasError)
                                     {
                                         <i data-lucide="x-circle"></i>
                                     }
-                                    else if (pt.Executed)
+                                    else if (pt.PointType == "Execution")
                                     {
                                         <i data-lucide="play-circle"></i>
                                     }
@@ -64,25 +64,16 @@
                                         <i data-lucide="minus-circle"></i>
                                     }
                                 </span>
-                                <span class="pt-name">@pt.Policy</span>
+                                <span class="pt-name">@pt.PolicyName</span>
                                 @if (!string.IsNullOrWhiteSpace(pt.Phase))
                                 {
                                     <span class="pt-phase">@pt.Phase</span>
                                 }
-                                @if (!string.IsNullOrWhiteSpace(pt.Condition))
+                                @if (!string.IsNullOrWhiteSpace(pt.Description))
                                 {
-                                    <span class="pt-type">@pt.Condition</span>
+                                    <span class="pt-type">@pt.Description</span>
                                 }
                             </div>
-                        }
-
-                        @* Response body (colapsado) *@
-                        @if (!string.IsNullOrWhiteSpace(tx.ResponseBody))
-                        {
-                            <details class="trace-response-body">
-                                <summary>Response body</summary>
-                                <pre>@tx.ResponseBody</pre>
-                            </details>
                         }
                     </div>
                 }
