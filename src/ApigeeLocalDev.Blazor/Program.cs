@@ -23,6 +23,7 @@ builder.Services.AddScoped<GeneratePolicyUseCase>();
 
 // UI services
 builder.Services.AddScoped<ToastService>();
+builder.Services.AddScoped<ApigeeLintService>();
 
 // Trace service — singleton para sobreviver entre requests do middleware
 builder.Services.AddSingleton<IProxyTraceService, ProxyTraceService>();

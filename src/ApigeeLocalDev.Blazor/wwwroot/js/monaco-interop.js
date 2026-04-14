@@ -326,6 +326,38 @@ window.monacoInterop = (function () {
             },
         });
 
+        // ── XML: Variáveis Nativas Apigee (IntelliSense) ──────────────────────
+        monaco.languages.registerCompletionItemProvider('xml', {
+            triggerCharacters: ['.', '{', '>'],
+            provideCompletionItems(model, position) {
+                const word = model.getWordUntilPosition(position);
+                const range = {
+                    startLineNumber: position.lineNumber,
+                    endLineNumber: position.lineNumber,
+                    startColumn: word.startColumn,
+                    endColumn: word.endColumn,
+                };
+                
+                const apigeeVars = [
+                    'request.header.', 'request.queryparam.', 'request.content', 'request.verb', 'request.path', 
+                    'response.header.', 'response.content', 'response.status.code',
+                    'proxy.pathsuffix', 'proxy.basepath', 'proxy.url',
+                    'system.time', 'system.timestamp', 'system.uuid',
+                    'target.host', 'target.port', 'target.url', 'target.ip'
+                ];
+
+                const suggestions = apigeeVars.map(v => ({
+                    label: v,
+                    kind: monaco.languages.CompletionItemKind.Variable,
+                    insertText: v,
+                    documentation: 'Apigee built-in flow variable',
+                    range: range
+                }));
+
+                return { suggestions: suggestions };
+            }
+        });
+
         // ── JSON: snippets Apigee ─────────────────────────────────────────────
         monaco.languages.registerCompletionItemProvider('json', {
             triggerCharacters: ['"', '{'],
@@ -653,5 +685,32 @@ window.monacoInterop = (function () {
         clearDirty(elementId) {
             _dirty[elementId] = false;
         },
+
+        setMarkers(elementId, markersData) {
+            try {
+                const ed = _editors[elementId];
+                if (!ed) return;
+                
+                _withMonaco(function (monaco) {
+                    const model = ed.getModel();
+                    if (!model) return;
+
+                    const monacoMarkers = markersData.map(function (m) {
+                        return {
+                            startLineNumber: m.line,
+                            endLineNumber: m.line,
+                            startColumn: m.column,
+                            endColumn: m.column + 5, // aprox
+                            message: m.message,
+                            severity: m.severity === 1 ? monaco.MarkerSeverity.Warning : monaco.MarkerSeverity.Error
+                        };
+                    });
+
+                    monaco.editor.setModelMarkers(model, "apigeelint", monacoMarkers);
+                });
+            } catch (e) {
+                console.error('[monacoInterop] setMarkers failed:', e);
+            }
+        }
     };
 })();

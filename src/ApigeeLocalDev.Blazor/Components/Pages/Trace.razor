@@ -23,104 +23,115 @@
 
 <div class="trace-page">
 
-    <!-- ── Painel de controle ── -->
-    <div class="card trace-control-card">
-        <div class="trace-control-row">
-            <div class="form-group" style="flex:1">
-                <label class="form-label">Workspace</label>
-                <select class="form-input" @onchange="OnWorkspaceChanged" disabled="@_isTracing">
-                    <option value="">-- Selecione o Workspace --</option>
-                    @foreach (var ws in _workspaces)
-                    {
-                        <option value="@ws.RootPath">@ws.Name</option>
-                    }
-                </select>
-            </div>
-
-            <div class="form-group" style="flex:1">
-                <label class="form-label">Proxy</label>
-                <select class="form-input" @onchange="OnProxyChanged" disabled="@(string.IsNullOrEmpty(_selectedWorkspacePath) || _isTracing)">
-                    <option value="">-- Selecione o Proxy --</option>
-                    @foreach (var p in _proxies)
-                    {
-                        <option value="@p">@p</option>
-                    }
-                </select>
-            </div>
-
-            <div class="trace-control-actions">
-                @if (!_isTracing)
-                {
-                    @* Variável local evita o warning HTML0209 com expressão complexa em disabled *@
-                    var startDisabled = string.IsNullOrWhiteSpace(_proxyName) || _loading;
-                    <button @key="_loading" class="btn btn-primary" @onclick="StartTrace" disabled="@startDisabled">
-                        @if (_loading)
-                        {
-                            <i data-lucide="loader-2" class="spin"></i>
-                            <span>Iniciando...</span>
-                        }
-                        else
-                        {
-                            <i data-lucide="play"></i>
-                            <span>Iniciar Trace</span>
-                        }
-                    </button>
-                }
-                else
-                {
-                    <div class="trace-status-badge">
-                        <span class="pulse-dot"></span>
-                        <span>Capturando</span>
-                    </div>
-                    <button class="btn btn-ghost" @onclick="StopTrace">
-                        <i data-lucide="square"></i>
-                        <span>Parar</span>
-                    </button>
-                    <button class="btn btn-ghost" @onclick="ClearTransactions" title="Limpar transações">
-                        <i data-lucide="trash-2"></i>
-                    </button>
-                }
-            </div>
-        </div>
-
-        @if (_session is not null)
-        {
-            <div class="trace-session-info">
-                <span class="badge">Session: @_session.SessionId</span>
-                <span class="badge">Proxy: @_session.Application</span>
-                <span class="badge">Iniciado: @_session.StartedAt.ToLocalTime().ToString("HH:mm:ss")</span>
-                <span class="badge">@_transactions.Count transação(ões)</span>
-            </div>
-        }
-
-        @if (!string.IsNullOrWhiteSpace(_error))
-        {
-            <div class="alert alert-error">
-                <i data-lucide="alert-circle"></i>
-                <span>@_error</span>
-            </div>
-        }
+    <div class="tabs" style="display: flex; gap: var(--space-4); margin-bottom: var(--space-4); border-bottom: 1px solid var(--border-color);">
+        <button class="nav-item @(_activeTab == "trace" ? "active" : "")" style="background: none; border: none; padding: var(--space-2) var(--space-4); cursor: pointer;" @onclick='() => _activeTab = "trace"'>Trace Viewer</button>
+        <button class="nav-item @(_activeTab == "client" ? "active" : "")" style="background: none; border: none; padding: var(--space-2) var(--space-4); cursor: pointer;" @onclick='() => _activeTab = "client"'>HTTP Client</button>
     </div>
 
-    <!-- ── Timeline de transações ── -->
-    <div class="card">
-        <div class="card-header">
-            <h2 class="card-title">
-                <i data-lucide="list"></i>
-                Transações
-            </h2>
-            @if (_transactions.Any())
+    <div style="display: @(_activeTab == "trace" ? "block" : "none");">
+        <!-- ── Painel de controle ── -->
+        <div class="card trace-control-card">
+            <div class="trace-control-row">
+                <div class="form-group" style="flex:1">
+                    <label class="form-label">Workspace</label>
+                    <select class="form-input" @onchange="OnWorkspaceChanged" disabled="@_isTracing">
+                        <option value="">-- Selecione o Workspace --</option>
+                        @foreach (var ws in _workspaces)
+                        {
+                            <option value="@ws.RootPath">@ws.Name</option>
+                        }
+                    </select>
+                </div>
+
+                <div class="form-group" style="flex:1">
+                    <label class="form-label">Proxy</label>
+                    <select class="form-input" @onchange="OnProxyChanged" disabled="@(string.IsNullOrEmpty(_selectedWorkspacePath) || _isTracing)">
+                        <option value="">-- Selecione o Proxy --</option>
+                        @foreach (var p in _proxies)
+                        {
+                            <option value="@p">@p</option>
+                        }
+                    </select>
+                </div>
+
+                <div class="trace-control-actions">
+                    @if (!_isTracing)
+                    {
+                        var startDisabled = string.IsNullOrWhiteSpace(_proxyName) || _loading;
+                        <button @key="_loading" class="btn btn-primary" @onclick="StartTrace" disabled="@startDisabled">
+                            @if (_loading)
+                            {
+                                <i data-lucide="loader-2" class="spin"></i>
+                                <span>Iniciando...</span>
+                            }
+                            else
+                            {
+                                <i data-lucide="play"></i>
+                                <span>Iniciar Trace</span>
+                            }
+                        </button>
+                    }
+                    else
+                    {
+                        <div class="trace-status-badge">
+                            <span class="pulse-dot"></span>
+                            <span>Capturando</span>
+                        </div>
+                        <button class="btn btn-ghost" @onclick="StopTrace">
+                            <i data-lucide="square"></i>
+                            <span>Parar</span>
+                        </button>
+                        <button class="btn btn-ghost" @onclick="ClearTransactions" title="Limpar transações">
+                            <i data-lucide="trash-2"></i>
+                        </button>
+                    }
+                </div>
+            </div>
+
+            @if (_session is not null)
             {
-                <span class="badge badge-primary">@_transactions.Count</span>
+                <div class="trace-session-info">
+                    <span class="badge">Session: @_session.SessionId</span>
+                    <span class="badge">Proxy: @_session.Application</span>
+                    <span class="badge">Iniciado: @_session.StartedAt.ToLocalTime().ToString("HH:mm:ss")</span>
+                    <span class="badge">@_transactions.Count transação(ões)</span>
+                </div>
+            }
+
+            @if (!string.IsNullOrWhiteSpace(_error))
+            {
+                <div class="alert alert-error">
+                    <i data-lucide="alert-circle"></i>
+                    <span>@_error</span>
+                </div>
             }
         </div>
-        <div class="card-body">
-            <TraceViewer Transactions="_transactions" />
+
+        <!-- ── Timeline de transações ── -->
+        <div class="card">
+            <div class="card-header">
+                <h2 class="card-title">
+                    <i data-lucide="list"></i>
+                    Transações
+                </h2>
+                @if (_transactions.Any())
+                {
+                    <span class="badge badge-primary">@_transactions.Count</span>
+                }
+            </div>
+            <div class="card-body">
+                <TraceViewer Transactions="_transactions" />
+            </div>
         </div>
+    </div>
+
+    <div style="display: @(_activeTab == "client" ? "block" : "none");">
+        <ApiClient />
     </div>
 </div>
 
 @code {
+    private string _activeTab = "trace";
     private string  _proxyName = string.Empty;
     private bool    _isTracing = false;
     private bool    _loading   = false;

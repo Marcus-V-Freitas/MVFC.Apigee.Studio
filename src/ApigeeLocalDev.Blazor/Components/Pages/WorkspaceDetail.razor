@@ -10,6 +10,7 @@
 @inject IPolicyTemplateRepository TemplateRepo
 @inject GeneratePolicyUseCase GeneratePolicy
 @inject ToastService Toast
+@inject ApigeeLintService LintService
 @inject IJSRuntime JS
 @implements IAsyncDisposable
 @rendermode RenderMode.InteractiveServer
@@ -584,6 +585,21 @@ else
             await JS.InvokeVoidAsync("monacoInterop.clearDirty", EditorId);
             _activeTab.IsDirty = false;
             Toast.ShowSuccess("✔ Arquivo salvo com sucesso!");
+            
+            // Run Apigeelint locally
+            if (_workspace != null && _activeTab.FullPath.EndsWith(".xml"))
+            {
+                var lintResults = await LintService.RunLintAsync(_workspace);
+                var activeFileLint = lintResults.FirstOrDefault(r => r.FilePath.Replace("\\", "/").EndsWith(_activeTab.FileName));
+                if (activeFileLint != null && activeFileLint.Messages.Any())
+                {
+                    await JS.InvokeVoidAsync("monacoInterop.setMarkers", EditorId, activeFileLint.Messages);
+                }
+                else
+                {
+                    await JS.InvokeVoidAsync("monacoInterop.setMarkers", EditorId, Array.Empty<object>());
+                }
+            }
         }
         catch (Exception ex)
         {
