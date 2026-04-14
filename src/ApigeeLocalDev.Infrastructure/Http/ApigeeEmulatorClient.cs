@@ -27,14 +27,12 @@ public sealed class ApigeeEmulatorClient(
 {
     private const string DefaultContainerName = "apigee-emulator";
 
-    // ── Health check ───────────────────────────────────────────────────────
     public async Task<bool> IsAliveAsync(CancellationToken ct = default)
     {
         try
         {
             using var r1 = await http.GetAsync("/v1/emulator/healthz", ct);
             if (r1.IsSuccessStatusCode) return true;
-
             using var r2 = await http.GetAsync("/v1/emulator/version", ct);
             return r2.IsSuccessStatusCode;
         }
@@ -45,7 +43,6 @@ public sealed class ApigeeEmulatorClient(
         }
     }
 
-    // ── Deploy ────────────────────────────────────────────────────────────
     public async Task DeployBundleAsync(string environment, string zipPath, CancellationToken ct = default)
     {
         if (!File.Exists(zipPath))
@@ -62,12 +59,10 @@ public sealed class ApigeeEmulatorClient(
         if (!resp.IsSuccessStatusCode)
         {
             var body = await resp.Content.ReadAsStringAsync(ct);
-            throw new HttpRequestException(
-                $"Deploy falhou ({(int)resp.StatusCode}): {body}");
+            throw new HttpRequestException($"Deploy falhou ({(int)resp.StatusCode}): {body}");
         }
     }
 
-    // ── Docker ──────────────────────────────────────────────────────────
     public Task<IReadOnlyList<string>> ListImagesAsync(CancellationToken ct = default)
     {
         var images = new List<string>
@@ -126,7 +121,6 @@ public sealed class ApigeeEmulatorClient(
         }
 
         var json = await response.Content.ReadFromJsonAsync<JsonElement>(cancellationToken: ct);
-
         var sessionId   = TryGetString(json, "name")        ?? TryGetString(json, "sessionId") ?? Guid.NewGuid().ToString("N");
         var application = TryGetString(json, "application") ?? proxyName;
 
@@ -168,6 +162,14 @@ public sealed class ApigeeEmulatorClient(
     }
 
     // ── Parsing ───────────────────────────────────────────────────────────
+    //
+    // O JSON do emulator tem um array "point" por mensagem. Cada entry tem um "id"
+    // que pode ser: StateChange, FlowInfo, Condition, Execution, Paused, Resumed.
+    // Mantemos a ORDEM original do array e filtramos apenas os tipos relevantes.
+    //
+    // StateChange  → separador de fase (From → To)
+    // Condition    → avaliação de condição de flow/rota
+    // Execution    → política executada
 
     private static IReadOnlyList<TraceTransaction> ParseTransactions(JsonElement root)
     {
@@ -181,8 +183,12 @@ public sealed class ApigeeEmulatorClient(
             if (!msg.TryGetProperty("point", out var pointArray))
                 continue;
 
-            var points = new List<TracePoint>();
-            string verb = "", uri = "", statusCode = "";
+            var points     = new List<TracePoint>();
+            string verb    = "", uri = "", statusCode = "";
+            long totalMs   = 0;
+
+            // timestamps para calcular duração total
+            long firstTs = 0, lastTs = 0;
 
             foreach (var point in pointArray.EnumerateArray())
             {
@@ -191,34 +197,49 @@ public sealed class ApigeeEmulatorClient(
                 if (!point.TryGetProperty("results", out var results))
                     continue;
 
-                foreach (var resul in results.EnumerateArray())
+                // ── Extrai verb/uri/statusCode de RequestMessage / ResponseMessage ──
+                foreach (var res in results.EnumerateArray())
                 {
-                    var actionResult = TryGetString(resul, "ActionResult");
+                    var actionResult = TryGetString(res, "ActionResult");
 
                     if (actionResult == "RequestMessage" && string.IsNullOrEmpty(verb))
                     {
-                        verb = TryGetString(resul, "verb") ?? string.Empty;
-                        uri = TryGetString(resul, "uRI") ?? string.Empty;
+                        verb = TryGetString(res, "verb") ?? string.Empty;
+                        uri  = TryGetString(res, "uRI")  ?? string.Empty;
                     }
 
                     if (actionResult == "ResponseMessage" && string.IsNullOrEmpty(statusCode))
-                        statusCode = TryGetString(resul, "statusCode") ?? string.Empty;
+                        statusCode = TryGetString(res, "statusCode") ?? string.Empty;
+
+                    // captura timestamp do primeiro DebugInfo para calcular duração
+                    if (actionResult == "DebugInfo")
+                    {
+                        var ts = TryGetString(res, "timestamp");
+                        if (ts is not null && TryParseEmulatorTimestamp(ts, out var ms))
+                        {
+                            if (firstTs == 0) firstTs = ms;
+                            lastTs = ms;
+                        }
+                    }
                 }
 
-                if (pointId is "Execution" or "StateChange" or "Condition")
-                    points.Add(ParseTracePoint(point, pointId));
+                // ── Só processa tipos relevantes para a timeline ──
+                if (pointId is not ("StateChange" or "Condition" or "Execution"))
+                    continue;
+
+                points.Add(ParseTracePoint(point, pointId));
             }
 
-            var completed = msg.TryGetProperty("completed", out var c) && c.GetBoolean();
+            totalMs = lastTs > firstTs ? lastTs - firstTs : 0;
 
             result.Add(new TraceTransaction
             {
-                MessageId = Guid.NewGuid().ToString("N"),
+                MessageId     = Guid.NewGuid().ToString("N"),
                 RequestMethod = verb,
-                RequestUri = uri,
-                ResponseCode = int.TryParse(statusCode, out var sc) ? sc : 0,
-                TotalTimeMs = 0,
-                Points = points
+                RequestUri    = uri,
+                ResponseCode  = int.TryParse(statusCode, out var sc) ? sc : 0,
+                TotalTimeMs   = totalMs,
+                Points        = points
             });
         }
 
@@ -227,7 +248,7 @@ public sealed class ApigeeEmulatorClient(
 
     private static TracePoint ParseTracePoint(JsonElement point, string pointId)
     {
-        var variables = new Dictionary<string, string>();
+        var variables = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
         if (point.TryGetProperty("results", out var results))
         {
@@ -238,7 +259,7 @@ public sealed class ApigeeEmulatorClient(
 
                 foreach (var prop in propArray.EnumerateArray())
                 {
-                    var name = TryGetString(prop, "name");
+                    var name  = TryGetString(prop, "name");
                     var value = TryGetString(prop, "value");
                     if (name is not null && value is not null)
                         variables.TryAdd(name, value);
@@ -246,38 +267,70 @@ public sealed class ApigeeEmulatorClient(
             }
         }
 
-        var policyName = variables.GetValueOrDefault("stepDefinition-name")
-                      ?? variables.GetValueOrDefault("Expression")
-                      ?? pointId;
+        // ── Determina PolicyName por tipo ──────────────────────────────────
+        // Execution  → stepDefinition-name (nome da política)
+        // Condition  → Expression (ex: "\"default\" equals proxy.name")
+        // StateChange→ "From → To" como label de fase
+        string policyName;
+        string phase;
+        string description;
 
-        var phase = variables.GetValueOrDefault("enforcement")  // "request" / "response"
-                 ?? variables.GetValueOrDefault("To")            // StateChange
-                 ?? string.Empty;
+        if (pointId == "StateChange")
+        {
+            var from = variables.GetValueOrDefault("From", string.Empty);
+            var to   = variables.GetValueOrDefault("To",   string.Empty);
+            policyName  = to;                       // label principal = destino
+            phase       = to;
+            description = string.IsNullOrEmpty(from) ? to : $"{from} → {to}";
+        }
+        else if (pointId == "Condition")
+        {
+            policyName  = variables.GetValueOrDefault("Expression", "Condition");
+            phase       = string.Empty;
+            description = variables.GetValueOrDefault("ExpressionResult", string.Empty);
+        }
+        else // Execution
+        {
+            policyName  = variables.GetValueOrDefault("stepDefinition-name",
+                          variables.GetValueOrDefault("policy.name", pointId));
+            phase       = variables.GetValueOrDefault("enforcement",
+                          variables.GetValueOrDefault("current.flow.direction", string.Empty));
+            description = variables.GetValueOrDefault("type", string.Empty);
+        }
 
-        var hasError = variables.GetValueOrDefault("result") == "false";
+        var hasError = variables.GetValueOrDefault("result") == "false"
+                    || variables.GetValueOrDefault("failed")  == "true";
 
         return new TracePoint
         {
-            PointType = pointId,
-            PolicyName = policyName,
-            Phase = phase,
-            Description = variables.GetValueOrDefault("type") ?? string.Empty,
+            PointType     = pointId,
+            PolicyName    = policyName,
+            Phase         = phase,
+            Description   = description,
             ElapsedTimeMs = 0,
-            HasError = hasError,
-            Variables = variables
+            HasError      = hasError,
+            Variables     = variables
         };
+    }
+
+    /// <summary>Parse do formato "dd-MM-yy HH:mm:ss:fff" em milissegundos epoch.</summary>
+    private static bool TryParseEmulatorTimestamp(string ts, out long epochMs)
+    {
+        epochMs = 0;
+        if (DateTime.TryParseExact(ts, "dd-MM-yy HH:mm:ss:fff",
+            System.Globalization.CultureInfo.InvariantCulture,
+            System.Globalization.DateTimeStyles.None, out var dt))
+        {
+            epochMs = new DateTimeOffset(dt, TimeSpan.Zero).ToUnixTimeMilliseconds();
+            return true;
+        }
+        return false;
     }
 
     private static string? TryGetString(JsonElement el, string key)
         => el.TryGetProperty(key, out var v) && v.ValueKind == JsonValueKind.String
             ? v.GetString()
             : null;
-
-    private static string? TryGetString(JsonElement el, string outer, string inner)
-    {
-        if (!el.TryGetProperty(outer, out var o)) return null;
-        return TryGetString(o, inner);
-    }
 
     private static async Task RunDockerAsync(string args, CancellationToken ct)
     {

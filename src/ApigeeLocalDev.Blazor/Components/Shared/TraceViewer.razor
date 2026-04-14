@@ -6,80 +6,101 @@
     {
         <div class="trace-empty">
             <i data-lucide="radio" style="width:32px;height:32px;color:var(--color-text-faint)"></i>
-            <p>Nenhuma transação capturada ainda.<br/>Faça uma requisição ao proxy enquanto o trace estiver ativo.</p>
+            <p>Nenhuma transação capturada ainda.<br />Faça uma requisição ao proxy enquanto o trace estiver ativo.</p>
         </div>
     }
     else
     {
-        @foreach (var tx in Transactions)
-        {
-            var isExpanded  = _expanded.Contains(tx.MessageId);
-            var statusClass = tx.ResponseCode >= 500 ? "tx-error"
-                            : tx.ResponseCode >= 400 ? "tx-warn"
-                            : "tx-ok";
-
-            <div class="trace-tx @statusClass">
-                <button class="trace-tx-header" @onclick="() => Toggle(tx.MessageId)">
-                    <span class="tx-method @(tx.RequestMethod == "GET" ? "method-get" : tx.RequestMethod == "POST" ? "method-post" : tx.RequestMethod == "DELETE" ? "method-delete" : "method-other")">@tx.RequestMethod</span>
-                    <span class="tx-uri">@tx.RequestUri</span>
-                    <span class="tx-badge badge-@(tx.ResponseCode / 100)xx">@tx.ResponseCode</span>
-                    @if (tx.TotalTimeMs > 0)
-                    {
-                        <span class="tx-time">@tx.TotalTimeMs ms</span>
-                    }
-                    <i data-lucide="@(isExpanded ? "chevron-up" : "chevron-down")" class="tx-chevron"></i>
-                </button>
-
-                @if (isExpanded)
+        <div class="trace-list">
+            @foreach (var tx in Transactions)
+            {
+                var isExpanded  = _expanded.Contains(tx.MessageId);
+                var statusClass = tx.ResponseCode >= 500 ? "status-5xx"
+                                : tx.ResponseCode >= 400 ? "status-4xx"
+                                : "status-2xx";
+                var methodClass = tx.RequestMethod switch
                 {
-                    <div class="trace-timeline">
+                    "GET"    => "method-get",
+                    "POST"   => "method-post",
+                    "PUT"    => "method-put",
+                    "DELETE" => "method-delete",
+                    "PATCH"  => "method-patch",
+                    _        => "method-other"
+                };
 
-                        @* StateChanges — separadores de fase *@
-                        @foreach (var pt in tx.Points.Where(p => p.PointType == "StateChange"))
-                        {
-                            <div class="trace-phase-divider">
-                                <i data-lucide="arrow-right" style="width:12px;height:12px"></i>
-                                <span>@pt.Phase</span>
-                            </div>
-                        }
+                <div class="trace-tx">
 
-                        @* Políticas executadas (Execution) e condições (Condition) *@
-                        @foreach (var pt in tx.Points.Where(p => p.PointType != "StateChange"))
-                        {
-                            var ptClass = pt.HasError ? "pt-error"
-                                        : pt.PointType == "Execution" ? "pt-exec"
-                                        : "pt-skip";
+                    @* ── Cabeçalho da transação (clicável) ── *@
+                    <button class="trace-tx-header @statusClass" @onclick="() => Toggle(tx.MessageId)">
+                        <span class="tx-method @methodClass">@tx.RequestMethod</span>
+                        <span class="tx-uri">@tx.RequestUri</span>
+                        <div class="tx-meta">
+                            <span class="tx-badge @statusClass">@tx.ResponseCode</span>
+                            @if (tx.TotalTimeMs > 0)
+                            {
+                                <span class="tx-time">@tx.TotalTimeMs ms</span>
+                            }
+                            <span class="tx-points-count">@tx.Points.Count step(s)</span>
+                        </div>
+                        <i data-lucide="@(isExpanded ? "chevron-up" : "chevron-down")" class="tx-chevron"></i>
+                    </button>
 
-                            <div class="trace-point @ptClass">
-                                <span class="pt-icon">
-                                    @if (pt.HasError)
-                                    {
-                                        <i data-lucide="x-circle"></i>
-                                    }
-                                    else if (pt.PointType == "Execution")
-                                    {
-                                        <i data-lucide="play-circle"></i>
-                                    }
-                                    else
-                                    {
-                                        <i data-lucide="minus-circle"></i>
-                                    }
-                                </span>
-                                <span class="pt-name">@pt.PolicyName</span>
-                                @if (!string.IsNullOrWhiteSpace(pt.Phase))
+                    @* ── Timeline expandida ── *@
+                    @if (isExpanded)
+                    {
+                        <div class="trace-timeline">
+                            @foreach (var pt in tx.Points)
+                            {
+                                @if (pt.PointType == "StateChange")
                                 {
-                                    <span class="pt-phase">@pt.Phase</span>
+                                    @* Separador de fase — linha horizontal com label *@
+                                    <div class="tl-phase-divider">
+                                        <span class="tl-phase-line"></span>
+                                        <span class="tl-phase-label @PhaseClass(pt.PolicyName)">@pt.PolicyName</span>
+                                        <span class="tl-phase-line"></span>
+                                    </div>
                                 }
-                                @if (!string.IsNullOrWhiteSpace(pt.Description))
+                                else if (pt.PointType == "Condition")
                                 {
-                                    <span class="pt-type">@pt.Description</span>
+                                    @* Condição avaliada — ícone de filtro com expressão *@
+                                    var condPassed = pt.Description?.Equals("true", StringComparison.OrdinalIgnoreCase) == true;
+                                    <div class="tl-row tl-condition @(condPassed ? "cond-pass" : "cond-fail")">
+                                        <span class="tl-connector"></span>
+                                        <span class="tl-dot dot-cond"></span>
+                                        <i data-lucide="@(condPassed ? "check" : "x")" class="tl-icon"></i>
+                                        <span class="tl-label">@pt.PolicyName</span>
+                                        <span class="tl-badge cond-badge">@(condPassed ? "true" : "false")</span>
+                                    </div>
                                 }
-                            </div>
-                        }
-                    </div>
-                }
-            </div>
-        }
+                                else
+                                {
+                                    @* Execution — política executada *@
+                                    var execClass = pt.HasError ? "exec-error" : "exec-ok";
+                                    <div class="tl-row tl-execution @execClass">
+                                        <span class="tl-connector"></span>
+                                        <span class="tl-dot @(pt.HasError ? "dot-error" : "dot-exec")"></span>
+                                        <i data-lucide="@(pt.HasError ? "x-circle" : "play-circle")" class="tl-icon"></i>
+                                        <span class="tl-label">@pt.PolicyName</span>
+                                        @if (!string.IsNullOrWhiteSpace(pt.Phase))
+                                        {
+                                            <span class="tl-badge phase-badge">@pt.Phase</span>
+                                        }
+                                        @if (!string.IsNullOrWhiteSpace(pt.Description))
+                                        {
+                                            <span class="tl-type">@pt.Description</span>
+                                        }
+                                        @if (pt.ElapsedTimeMs > 0)
+                                        {
+                                            <span class="tl-time">@pt.ElapsedTimeMs ms</span>
+                                        }
+                                    </div>
+                                }
+                            }
+                        </div>
+                    }
+                </div>
+            }
+        </div>
     }
 </div>
 
@@ -93,4 +114,13 @@
         if (!_expanded.Add(messageId))
             _expanded.Remove(messageId);
     }
+
+    private static string PhaseClass(string phase) => phase switch
+    {
+        "REQ_HEADERS_PARSED" or "PROXY_REQ_FLOW" => "phase-proxy-req",
+        "TARGET_REQ_FLOW"    or "REQ_SENT"        => "phase-target-req",
+        "RESP_START"         or "TARGET_RESP_FLOW"=> "phase-target-resp",
+        "PROXY_RESP_FLOW"    or "RESP_SENT"       => "phase-proxy-resp",
+        _ => "phase-generic"
+    };
 }
