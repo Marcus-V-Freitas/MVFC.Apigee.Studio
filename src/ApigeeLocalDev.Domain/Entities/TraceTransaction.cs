@@ -16,19 +16,3 @@ public sealed record TraceTransaction(
     string? RequestBody,
     string? ResponseBody,
     IReadOnlyList<TracePoint> Points);
-
-/// <summary>
-/// Um ponto de execução dentro de uma transação.
-///
-/// Originado de DebugMessage.point[] onde:
-///   - id == "Execution"   → política executada (Policy preenchido)
-///   - id == "StateChange" → transição de fase do flow (Phase preenchido, Policy vazio)
-/// </summary>
-public sealed record TracePoint(
-    string  Policy,
-    string  Phase,
-    bool    Executed,
-    bool    Error,
-    long    DurationMs,
-    string? Condition,
-    IReadOnlyDictionary<string, string> Variables);
