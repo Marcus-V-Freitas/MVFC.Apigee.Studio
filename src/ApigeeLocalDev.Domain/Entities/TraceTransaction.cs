@@ -2,17 +2,15 @@ namespace ApigeeLocalDev.Domain.Entities;
 
 /// <summary>
 /// Uma transação capturada dentro de uma sessão de trace.
-///
-/// Mapeada de DebugSessionResponse.Messages[] retornado pelo emulator.
-/// O emulator NÃO expõe messageId individual — o índice do array (tx-0, tx-1, ...)
-/// é usado como identificador único.
+/// Mapeada de DebugSession.Messages[] retornado pelo emulator.
 /// </summary>
-public sealed record TraceTransaction(
-    string MessageId,
-    string RequestPath,
-    string Verb,
-    int    StatusCode,
-    long   DurationMs,
-    string? RequestBody,
-    string? ResponseBody,
-    IReadOnlyList<TracePoint> Points);
+public sealed class TraceTransaction
+{
+    public string MessageId     { get; init; } = string.Empty;
+    public string RequestMethod { get; init; } = string.Empty;
+    public string RequestUri    { get; init; } = string.Empty;
+    public int    ResponseCode  { get; init; }
+    public long   TotalTimeMs   { get; init; }
+
+    public IReadOnlyList<TracePoint> Points { get; init; } = [];
+}
