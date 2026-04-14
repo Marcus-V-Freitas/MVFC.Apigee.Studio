@@ -95,7 +95,6 @@ public sealed class BundleFlowReader(ILogger<BundleFlowReader> logger) : IBundle
                 Description   = condition ?? string.Empty,
                 ElapsedTimeMs = 0,
                 HasError      = false,
-                Variables     = []
             });
         }
     }
@@ -129,7 +128,6 @@ public sealed class BundleFlowReader(ILogger<BundleFlowReader> logger) : IBundle
                     Description   = condition ?? string.Empty,
                     ElapsedTimeMs = 0,
                     HasError      = false,
-                    Variables     = []
                 });
             }
         }
