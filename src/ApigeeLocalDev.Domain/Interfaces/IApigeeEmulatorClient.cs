@@ -5,17 +5,18 @@ namespace ApigeeLocalDev.Domain.Interfaces;
 /// <summary>
 /// Contrato para comunicação com o Apigee Emulator (container Docker local).
 ///
-/// Endpoints usados:
-///   GET    /v1/emulator/healthz                                   — liveness check
-///   POST   /v1/emulator/deploy?environment=                       — bundle deploy
-///   POST   /v1/emulator/deployArchive?environment=                — archive deploy
-///   POST   /v1/emulator/trace?proxyName=                          — inicia sessão de trace
-///   GET    /v1/emulator/trace/transactions?sessionid=             — polling de transações
-///   DELETE /v1/emulator/trace?sessionid=                          — encerra sessão
+/// Endpoints do emulator:
+///   GET    /v1/emulator/healthz
+///   POST   /v1/emulator/deploy?environment=
+///
+/// Endpoints da Management API (porta 8080 — mesmos do Apigee Edge/Hybrid):
+///   POST   /v1/organizations/emulator/environments/{env}/apis/{proxy}/revisions/{rev}/debugsessions
+///   GET    /v1/organizations/emulator/environments/{env}/apis/{proxy}/revisions/{rev}/debugsessions/{sessionId}/data
+///   DELETE /v1/organizations/emulator/environments/{env}/apis/{proxy}/revisions/{rev}/debugsessions/{sessionId}
 /// </summary>
 public interface IApigeeEmulatorClient
 {
-    /// <summary>Verifica se o emulator está acessível via GET /v1/emulator/healthz.</summary>
+    /// <summary>Verifica se o emulator está acessível.</summary>
     Task<bool> IsAliveAsync(CancellationToken ct = default);
 
     /// <summary>Importa e deploya um bundle individual (proxy ou shared flow).</summary>
@@ -33,21 +34,37 @@ public interface IApigeeEmulatorClient
     // ─── TRACE ───────────────────────────────────────────────────────────────
 
     /// <summary>
-    /// Inicia uma sessão de trace para o proxy informado.
-    /// POST /v1/emulator/trace?proxyName={proxyName}
+    /// Inicia uma debug session via Management API:
+    ///   POST /v1/organizations/emulator/environments/{env}/apis/{proxy}/revisions/{rev}/debugsessions
+    /// Retorna a sessão criada com SessionId para polling posterior.
     /// </summary>
-    Task<TraceSession> StartTraceAsync(string proxyName, CancellationToken ct = default);
+    Task<TraceSession> StartTraceAsync(
+        string proxyName,
+        string environment = "local",
+        string revision    = "0",
+        CancellationToken ct = default);
 
     /// <summary>
-    /// Busca as transações capturadas até o momento para a sessão ativa.
-    /// GET /v1/emulator/trace/transactions?sessionid={sessionId}
+    /// Busca o payload completo da debug session (Messages[].point[]) via:
+    ///   GET /v1/organizations/emulator/environments/{env}/apis/{proxy}/revisions/{rev}/debugsessions/{sessionId}/data
+    /// O emulator retorna TODAS as transações inline — não há endpoint por messageId.
     /// Deve ser chamado em polling (~2 s) enquanto a sessão estiver ativa.
     /// </summary>
-    Task<IReadOnlyList<TraceTransaction>> GetTraceTransactionsAsync(string sessionId, CancellationToken ct = default);
+    Task<IReadOnlyList<TraceTransaction>> GetTraceTransactionsAsync(
+        string sessionId,
+        string proxyName,
+        string environment = "local",
+        string revision    = "0",
+        CancellationToken ct = default);
 
     /// <summary>
-    /// Encerra a sessão de trace ativa.
-    /// DELETE /v1/emulator/trace?sessionid={sessionId}
+    /// Encerra a debug session:
+    ///   DELETE /v1/organizations/emulator/environments/{env}/apis/{proxy}/revisions/{rev}/debugsessions/{sessionId}
     /// </summary>
-    Task StopTraceAsync(string sessionId, CancellationToken ct = default);
+    Task StopTraceAsync(
+        string sessionId,
+        string proxyName,
+        string environment = "local",
+        string revision    = "0",
+        CancellationToken ct = default);
 }
