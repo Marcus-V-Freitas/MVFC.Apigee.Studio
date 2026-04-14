@@ -9,8 +9,7 @@ namespace ApigeeLocalDev.Infrastructure.Parsers;
 ///   &lt;DebugSession&gt; → &lt;Messages&gt; → &lt;Message&gt; → &lt;point id="..."&gt; → &lt;DebugInfo&gt;
 ///
 /// Nota: este parser é mantido por compatibilidade futura.
-/// O trace primário agora é capturado pelo TraceMiddleware (proxy reverso),
-/// portanto RequestBody/ResponseBody vêm do middleware, não do XML.
+/// O trace primário agora é capturado via JSON pelo ApigeeEmulatorClient.
 /// </summary>
 public static class DebugSessionXmlParser
 {
@@ -41,21 +40,21 @@ public static class DebugSessionXmlParser
             .Cast<TracePoint>()
             .ToList();
 
-        return new TraceTransaction(
-            MessageId:    messageId,
-            RequestPath:  path,
-            Verb:         verb,
-            StatusCode:   statusCode,
-            DurationMs:   0,
-            RequestBody:  null,
-            ResponseBody: null,
-            Points:       points);
+        return new TraceTransaction
+        {
+            MessageId     = messageId,
+            RequestMethod = verb,
+            RequestUri    = path,
+            ResponseCode  = statusCode,
+            TotalTimeMs   = 0,
+            Points        = points
+        };
     }
 
     private static TracePoint? ParsePoint(XElement point)
     {
-        var policyId = point.Attribute("id")?.Value;
-        if (string.IsNullOrWhiteSpace(policyId)) return null;
+        var pointId = point.Attribute("id")?.Value;
+        if (string.IsNullOrWhiteSpace(pointId)) return null;
 
         var debugInfo = point.Element("DebugInfo");
 
@@ -66,18 +65,19 @@ public static class DebugSessionXmlParser
                 .Equals("phase", StringComparison.OrdinalIgnoreCase) == true)
             ?.Value ?? string.Empty;
 
-        var condition = debugInfo
+        var description = debugInfo
             ?.Element("Properties")
             ?.Elements("Property")
             .FirstOrDefault(p => p.Attribute("name")?.Value
-                .Equals("condition", StringComparison.OrdinalIgnoreCase) == true)
-            ?.Value;
+                .Equals("type", StringComparison.OrdinalIgnoreCase) == true)
+            ?.Value ?? string.Empty;
 
-        var executed = debugInfo
-            ?.Element("Results")
-            ?.Elements("Result")
-            .Any(r => r.Attribute("executed")?.Value
-                .Equals("true", StringComparison.OrdinalIgnoreCase) == true) ?? false;
+        var policyName = debugInfo
+            ?.Element("Properties")
+            ?.Elements("Property")
+            .FirstOrDefault(p => p.Attribute("name")?.Value
+                .Equals("stepDefinition-name", StringComparison.OrdinalIgnoreCase) == true)
+            ?.Value ?? pointId;
 
         var hasError = point.Descendants("Error").Any() ||
                        point.Descendants("Fault").Any();
@@ -99,13 +99,15 @@ public static class DebugSessionXmlParser
             .GroupBy(v => v.Name!, StringComparer.OrdinalIgnoreCase)
             .ToDictionary(g => g.Key, g => g.First().Value ?? string.Empty);
 
-        return new TracePoint(
-            Policy:     policyId,
-            Phase:      phase,
-            Executed:   executed,
-            Error:      hasError,
-            DurationMs: durationMs,
-            Condition:  condition,
-            Variables:  variables);
+        return new TracePoint
+        {
+            PointType     = pointId,
+            PolicyName    = policyName,
+            Phase         = phase,
+            Description   = description,
+            ElapsedTimeMs = durationMs,
+            HasError      = hasError,
+            Variables     = variables
+        };
     }
 }

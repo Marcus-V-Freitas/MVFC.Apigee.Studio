@@ -7,7 +7,7 @@ namespace ApigeeLocalDev.Infrastructure.Parsers;
 
 /// <summary>
 /// Lê o ProxyEndpoint.xml do bundle no disco e extrai os steps das políticas
-/// em ordem de execução, inferindo Executed/Error pelo status code.
+/// em ordem de execução, inferindo HasError pelo status code.
 ///
 /// Estrutura esperada no disco:
 ///   {workspaceRoot}/src/main/apigee/apiproxies/{proxyName}/apiproxy/proxies/default.xml
@@ -77,10 +77,8 @@ public sealed class BundleFlowReader(ILogger<BundleFlowReader> logger) : IBundle
         var steps = root
             .Descendants(flowName)
             .FirstOrDefault()
-            ?.
-            Element(direction)
-            ?.
-            Elements("Step")
+            ?.Element(direction)
+            ?.Elements("Step")
             ?? Enumerable.Empty<XElement>();
 
         foreach (var step in steps)
@@ -89,19 +87,16 @@ public sealed class BundleFlowReader(ILogger<BundleFlowReader> logger) : IBundle
             var condition = step.Element("Condition")?.Value;
             if (string.IsNullOrWhiteSpace(name)) continue;
 
-            // Inferencia: steps de erro só executam quando isError
-            var executed = phase == "ProxyRequest"
-                ? !isError          // request steps não executam em short-circuit de erro
-                : !isError;         // response steps idem
-
-            points.Add(new TracePoint(
-                Policy:    name,
-                Phase:     phase,
-                Executed:  executed,
-                Error:     false,
-                DurationMs: 0,
-                Condition: condition,
-                Variables: []));
+            points.Add(new TracePoint
+            {
+                PointType     = "Execution",
+                PolicyName    = name,
+                Phase         = phase,
+                Description   = condition ?? string.Empty,
+                ElapsedTimeMs = 0,
+                HasError      = false,
+                Variables     = []
+            });
         }
     }
 
@@ -111,8 +106,7 @@ public sealed class BundleFlowReader(ILogger<BundleFlowReader> logger) : IBundle
     {
         var flows = root
             .Element("Flows")
-            ?.
-            Elements("Flow")
+            ?.Elements("Flow")
             ?? Enumerable.Empty<XElement>();
 
         foreach (var flow in flows)
@@ -127,14 +121,16 @@ public sealed class BundleFlowReader(ILogger<BundleFlowReader> logger) : IBundle
                 var condition = step.Element("Condition")?.Value ?? flowCondition;
                 if (string.IsNullOrWhiteSpace(name)) continue;
 
-                points.Add(new TracePoint(
-                    Policy:    name,
-                    Phase:     phase,
-                    Executed:  !isError,
-                    Error:     false,
-                    DurationMs: 0,
-                    Condition: condition,
-                    Variables: []));
+                points.Add(new TracePoint
+                {
+                    PointType     = "Execution",
+                    PolicyName    = name,
+                    Phase         = phase,
+                    Description   = condition ?? string.Empty,
+                    ElapsedTimeMs = 0,
+                    HasError      = false,
+                    Variables     = []
+                });
             }
         }
     }

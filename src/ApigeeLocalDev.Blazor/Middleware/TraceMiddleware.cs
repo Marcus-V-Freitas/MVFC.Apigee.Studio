@@ -30,7 +30,7 @@ public sealed class TraceMiddleware(RequestDelegate next, IProxyTraceService tra
         var verb      = context.Request.Method;
         var path      = remaining.HasValue ? remaining.Value! : "/";
 
-        // ── Captura request body ────────────────────────────────────
+        // ── Captura request body ─────────────────────────────────────────
         context.Request.EnableBuffering();
         string? requestBody = null;
         if (context.Request.ContentLength is > 0)
@@ -43,7 +43,7 @@ public sealed class TraceMiddleware(RequestDelegate next, IProxyTraceService tra
             context.Request.Body.Position = 0;
         }
 
-        // ── Proxy para o emulator runtime ───────────────────────────
+        // ── Proxy para o emulator runtime ─────────────────────────
         var client = httpClientFactory.CreateClient("EmulatorRuntime");
         using var proxyRequest = BuildProxyRequest(context, path);
 
@@ -89,7 +89,7 @@ public sealed class TraceMiddleware(RequestDelegate next, IProxyTraceService tra
 
         sw.Stop();
 
-        // ── Resolve policies do bundle no disco ───────────────────────
+        // ── Resolve policies do bundle no disco ─────────────────────
         List<TracePoint> points = [];
         var activeProxy = traceService.ActiveProxy;
         if (activeProxy is { } ap)
@@ -105,16 +105,16 @@ public sealed class TraceMiddleware(RequestDelegate next, IProxyTraceService tra
             }
         }
 
-        // ── Publica no trace ──────────────────────────────────────
-        traceService.Publish(new TraceTransaction(
-            MessageId:    messageId,
-            RequestPath:  path,
-            Verb:         verb,
-            StatusCode:   statusCode,
-            DurationMs:   sw.ElapsedMilliseconds,
-            RequestBody:  requestBody,
-            ResponseBody: responseBody,
-            Points:       points));
+        // ── Publica no trace ───────────────────────────────────
+        traceService.Publish(new TraceTransaction
+        {
+            MessageId     = messageId,
+            RequestMethod = verb,
+            RequestUri    = path,
+            ResponseCode  = statusCode,
+            TotalTimeMs   = sw.ElapsedMilliseconds,
+            Points        = points
+        });
     }
 
     private static HttpRequestMessage BuildProxyRequest(HttpContext context, string path)
