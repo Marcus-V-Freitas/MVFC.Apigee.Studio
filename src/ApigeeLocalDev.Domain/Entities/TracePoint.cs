@@ -1,19 +1,37 @@
 namespace ApigeeLocalDev.Domain.Entities;
 
 /// <summary>
-/// Representa a execução (ou definição) de uma política individual
-/// dentro de uma transação de trace.
+/// Um ponto de execução dentro de uma transação.
+/// Mapeado de Messages[].point[] do payload do emulator.
 ///
-/// Quando capturado via proxy reverso (sem Debug API), Executed é inferido:
-///   - ProxyRequest steps: sempre true se StatusCode &lt; 500
-///   - ProxyResponse steps: sempre true se StatusCode &lt; 500
-///   - Error flow steps: true se StatusCode >= 400
+/// PointType possíveis : StateChange | Execution | Condition
+/// Phase     possíveis : "request" | "response"  (Execution → enforcement)
+///                       valor de "To"            (StateChange, ex: "PROXY_REQ_FLOW")
 /// </summary>
-public record TracePoint(
-    string Policy,
-    string Phase,
-    bool Executed,
-    bool Error,
-    long DurationMs,
-    string? Condition,
-    Dictionary<string, string> Variables);
+public sealed class TracePoint
+{
+    /// <summary>StateChange | Execution | Condition</summary>
+    public string PointType     { get; init; } = string.Empty;
+
+    /// <summary>
+    /// Execution   → stepDefinition-name  (ex: "AM-InjetarHeader")
+    /// Condition   → Expression           (ex: "\"default\" equals proxy.name")
+    /// StateChange → To                   (ex: "PROXY_REQ_FLOW")
+    /// </summary>
+    public string PolicyName    { get; init; } = string.Empty;
+
+    /// <summary>
+    /// Execution   → enforcement ("request" | "response")
+    /// StateChange → To          (ex: "TARGET_REQ_FLOW")
+    /// </summary>
+    public string Phase         { get; init; } = string.Empty;
+
+    /// <summary>Valor de "type" nas properties (ex: "AssignMessageExecution").</summary>
+    public string Description   { get; init; } = string.Empty;
+
+    public long ElapsedTimeMs   { get; init; }
+    public bool HasError        { get; init; }
+
+    public IReadOnlyDictionary<string, string> Variables { get; init; }
+        = new Dictionary<string, string>();
+}
