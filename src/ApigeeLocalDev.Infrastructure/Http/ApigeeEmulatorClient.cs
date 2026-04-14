@@ -191,18 +191,18 @@ public sealed class ApigeeEmulatorClient(
                 if (!point.TryGetProperty("results", out var results))
                     continue;
 
-                foreach (var result in results.EnumerateArray())
+                foreach (var resul in results.EnumerateArray())
                 {
-                    var actionResult = TryGetString(result, "ActionResult");
+                    var actionResult = TryGetString(resul, "ActionResult");
 
                     if (actionResult == "RequestMessage" && string.IsNullOrEmpty(verb))
                     {
-                        verb = TryGetString(result, "verb") ?? string.Empty;
-                        uri = TryGetString(result, "uRI") ?? string.Empty;
+                        verb = TryGetString(resul, "verb") ?? string.Empty;
+                        uri = TryGetString(resul, "uRI") ?? string.Empty;
                     }
 
                     if (actionResult == "ResponseMessage" && string.IsNullOrEmpty(statusCode))
-                        statusCode = TryGetString(result, "statusCode") ?? string.Empty;
+                        statusCode = TryGetString(resul, "statusCode") ?? string.Empty;
                 }
 
                 if (pointId is "Execution" or "StateChange" or "Condition")

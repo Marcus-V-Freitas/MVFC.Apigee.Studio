@@ -1,4 +1,5 @@
 @using ApigeeLocalDev.Domain.Entities
+@using Microsoft.AspNetCore.Components
 
 <div class="trace-viewer">
     @if (!Transactions.Any())
@@ -17,33 +18,23 @@
                             : tx.ResponseCode >= 400 ? "tx-warn"
                             : "tx-ok";
 
-            var methodClass = tx.RequestMethod switch
-            {
-                "GET"    => "method-get",
-                "POST"   => "method-post",
-                "PUT"    => "method-put",
-                "DELETE" => "method-delete",
-                _        => "method-other"
-            };
-
-            var chevron = isExpanded ? "chevron-up" : "chevron-down";
-
             <div class="trace-tx @statusClass">
                 <button class="trace-tx-header" @onclick="() => Toggle(tx.MessageId)">
-                    <span class="tx-method @methodClass">@tx.RequestMethod</span>
+                    <span class="tx-method @(tx.RequestMethod == "GET" ? "method-get" : tx.RequestMethod == "POST" ? "method-post" : tx.RequestMethod == "DELETE" ? "method-delete" : "method-other")">@tx.RequestMethod</span>
                     <span class="tx-uri">@tx.RequestUri</span>
-                    <span class="tx-badge">@tx.ResponseCode</span>
+                    <span class="tx-badge badge-@(tx.ResponseCode / 100)xx">@tx.ResponseCode</span>
                     @if (tx.TotalTimeMs > 0)
                     {
                         <span class="tx-time">@tx.TotalTimeMs ms</span>
                     }
-                    <i data-lucide="@chevron" class="tx-chevron"></i>
+                    <i data-lucide="@(isExpanded ? "chevron-up" : "chevron-down")" class="tx-chevron"></i>
                 </button>
 
                 @if (isExpanded)
                 {
                     <div class="trace-timeline">
 
+                        @* StateChanges — separadores de fase *@
                         @foreach (var pt in tx.Points.Where(p => p.PointType == "StateChange"))
                         {
                             <div class="trace-phase-divider">
@@ -52,9 +43,10 @@
                             </div>
                         }
 
+                        @* Políticas executadas (Execution) e condições (Condition) *@
                         @foreach (var pt in tx.Points.Where(p => p.PointType != "StateChange"))
                         {
-                            var ptClass = pt.HasError           ? "pt-error"
+                            var ptClass = pt.HasError ? "pt-error"
                                         : pt.PointType == "Execution" ? "pt-exec"
                                         : "pt-skip";
 
@@ -84,7 +76,6 @@
                                 }
                             </div>
                         }
-
                     </div>
                 }
             </div>
