@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Net.Http.Headers;
+using System.Net.Http.Json;
 using System.Text.Json;
 using ApigeeLocalDev.Domain.Entities;
 using ApigeeLocalDev.Domain.Interfaces;
@@ -170,56 +171,101 @@ public sealed class ApigeeEmulatorClient(
 
     private static IReadOnlyList<TraceTransaction> ParseTransactions(JsonElement root)
     {
-        var result  = new List<TraceTransaction>();
-        var session = root.TryGetProperty("DebugSession", out var ds) ? ds : root;
+        var result = new List<TraceTransaction>();
 
-        if (!session.TryGetProperty("Messages", out var messages))
+        if (!root.TryGetProperty("Messages", out var messages))
             return result;
 
         foreach (var msg in messages.EnumerateArray())
         {
+            if (!msg.TryGetProperty("point", out var pointArray))
+                continue;
+
             var points = new List<TracePoint>();
+            string verb = "", uri = "", statusCode = "";
 
-            if (msg.TryGetProperty("tracePoints", out var tps))
-                foreach (var tp in tps.EnumerateArray())
-                    points.Add(ParseTracePoint(tp));
+            foreach (var point in pointArray.EnumerateArray())
+            {
+                var pointId = TryGetString(point, "id") ?? string.Empty;
 
-            result.Add(new TraceTransaction(
-                MessageId:    TryGetString(msg, "messageId")     ?? string.Empty,
-                RequestPath:  TryGetString(msg, "requestURI")    ?? string.Empty,
-                Verb:         TryGetString(msg, "requestMethod") ?? string.Empty,
-                StatusCode:   msg.TryGetProperty("responseCode", out var rc) ? rc.GetInt32() : 0,
-                DurationMs:   msg.TryGetProperty("totalTime",    out var tt) ? tt.GetInt64()  : 0,
-                RequestBody:  null,
-                ResponseBody: null,
-                Points:       points));
+                if (!point.TryGetProperty("results", out var results))
+                    continue;
+
+                foreach (var result in results.EnumerateArray())
+                {
+                    var actionResult = TryGetString(result, "ActionResult");
+
+                    if (actionResult == "RequestMessage" && string.IsNullOrEmpty(verb))
+                    {
+                        verb = TryGetString(result, "verb") ?? string.Empty;
+                        uri = TryGetString(result, "uRI") ?? string.Empty;
+                    }
+
+                    if (actionResult == "ResponseMessage" && string.IsNullOrEmpty(statusCode))
+                        statusCode = TryGetString(result, "statusCode") ?? string.Empty;
+                }
+
+                if (pointId is "Execution" or "StateChange" or "Condition")
+                    points.Add(ParseTracePoint(point, pointId));
+            }
+
+            var completed = msg.TryGetProperty("completed", out var c) && c.GetBoolean();
+
+            result.Add(new TraceTransaction
+            {
+                MessageId = Guid.NewGuid().ToString("N"),
+                RequestMethod = verb,
+                RequestUri = uri,
+                ResponseCode = int.TryParse(statusCode, out var sc) ? sc : 0,
+                TotalTimeMs = 0,
+                Points = points
+            });
         }
 
         return result;
     }
 
-    private static TracePoint ParseTracePoint(JsonElement tp)
+    private static TracePoint ParseTracePoint(JsonElement point, string pointId)
     {
         var variables = new Dictionary<string, string>();
 
-        if (tp.TryGetProperty("properties", out var props))
-            foreach (var p in props.EnumerateObject())
-                variables[p.Name] = p.Value.ToString();
+        if (point.TryGetProperty("results", out var results))
+        {
+            foreach (var result in results.EnumerateArray())
+            {
+                if (!result.TryGetProperty("properties", out var props)) continue;
+                if (!props.TryGetProperty("property", out var propArray)) continue;
 
-        var policyName = TryGetString(tp, "id")          ?? TryGetString(tp, "policyName") ?? string.Empty;
-        var phase      = TryGetString(tp, "properties", "TO") ?? TryGetString(tp, "phase") ?? string.Empty;
-        var hasError   = tp.TryGetProperty("pointType", out var pt) && pt.GetString() == "Error";
-        var elapsed    = tp.TryGetProperty("elapsedTime", out var el) ? el.GetInt64() : 0L;
-        var condition  = TryGetString(tp, "condition");
+                foreach (var prop in propArray.EnumerateArray())
+                {
+                    var name = TryGetString(prop, "name");
+                    var value = TryGetString(prop, "value");
+                    if (name is not null && value is not null)
+                        variables.TryAdd(name, value);
+                }
+            }
+        }
 
-        return new TracePoint(
-            Policy:    policyName,
-            Phase:     phase,
-            Executed:  !hasError,
-            Error:     hasError,
-            DurationMs: elapsed,
-            Condition: condition,
-            Variables: variables);
+        var policyName = variables.GetValueOrDefault("stepDefinition-name")
+                      ?? variables.GetValueOrDefault("Expression")
+                      ?? pointId;
+
+        var phase = variables.GetValueOrDefault("enforcement")  // "request" / "response"
+                 ?? variables.GetValueOrDefault("To")            // StateChange
+                 ?? string.Empty;
+
+        var hasError = variables.GetValueOrDefault("result") == "false";
+
+        return new TracePoint
+        {
+            PointType = pointId,
+            PolicyName = policyName,
+            Phase = phase,
+            Description = variables.GetValueOrDefault("type") ?? string.Empty,
+            ElapsedTimeMs = 0,
+            HasError = hasError,
+            Variables = variables
+        };
     }
 
     private static string? TryGetString(JsonElement el, string key)
