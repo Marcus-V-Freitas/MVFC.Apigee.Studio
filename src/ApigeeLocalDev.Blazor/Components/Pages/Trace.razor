@@ -36,8 +36,9 @@
             <div class="trace-control-actions">
                 @if (!_isTracing)
                 {
-                    <button class="btn btn-primary" @onclick="StartTrace"
-                            disabled="@(string.IsNullOrWhiteSpace(_proxyName) || _loading)">
+                    @* disabled usa variável local para evitar o warning HTML0209 *@
+                    var startDisabled = string.IsNullOrWhiteSpace(_proxyName) || _loading;
+                    <button class="btn btn-primary" @onclick="StartTrace" disabled="@startDisabled">
                         @if (_loading)
                         {
                             <i data-lucide="loader-2" class="spin"></i>
@@ -60,7 +61,7 @@
                         <i data-lucide="square"></i>
                         <span>Parar</span>
                     </button>
-                    <button class="btn btn-ghost" @onclick="ClearTransactions" title="Limpar transacões">
+                    <button class="btn btn-ghost" @onclick="ClearTransactions" title="Limpar transações">
                         <i data-lucide="trash-2"></i>
                     </button>
                 }
@@ -105,14 +106,19 @@
 </div>
 
 @code {
+    // Revision padrão do emulator. Caso o proxy tenha outra revisão,
+    // expor um campo na UI e bindar em _revision.
+    private const string DefaultEnvironment = "local";
+    private const string DefaultRevision    = "0";
+
     private string  _proxyName = string.Empty;
     private bool    _isTracing = false;
     private bool    _loading   = false;
     private string? _error     = null;
 
-    private TraceSession?            _session      = null;
-    private List<TraceTransaction>   _transactions = [];
-    private CancellationTokenSource? _pollCts      = null;
+    private TraceSession?          _session      = null;
+    private List<TraceTransaction> _transactions = [];
+    private CancellationTokenSource? _pollCts    = null;
 
     // ─── Start ───────────────────────────────────────────────────────────────
 
@@ -124,7 +130,7 @@
 
         try
         {
-            _session      = await Emulator.StartTraceAsync(_proxyName);
+            _session      = await Emulator.StartTraceAsync(_proxyName, DefaultEnvironment, DefaultRevision);
             _isTracing    = true;
             _transactions = [];
 
@@ -152,7 +158,7 @@
 
         if (_session is not null)
         {
-            try   { await Emulator.StopTraceAsync(_session.SessionId); }
+            try   { await Emulator.StopTraceAsync(_session.SessionId, _proxyName, DefaultEnvironment, DefaultRevision); }
             catch { /* best-effort */ }
         }
 
@@ -174,7 +180,8 @@
         {
             try
             {
-                var txs = await Emulator.GetTraceTransactionsAsync(_session.SessionId, ct);
+                var txs = await Emulator.GetTraceTransactionsAsync(
+                    _session.SessionId, _proxyName, DefaultEnvironment, DefaultRevision, ct);
 
                 if (txs.Count != _transactions.Count)
                 {
@@ -215,7 +222,7 @@
 
         if (_isTracing && _session is not null)
         {
-            try   { await Emulator.StopTraceAsync(_session.SessionId); }
+            try   { await Emulator.StopTraceAsync(_session.SessionId, _proxyName, DefaultEnvironment, DefaultRevision); }
             catch { /* best-effort */ }
         }
     }
