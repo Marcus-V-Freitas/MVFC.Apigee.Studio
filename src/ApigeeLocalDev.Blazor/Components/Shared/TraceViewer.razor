@@ -13,16 +13,16 @@
         @foreach (var tx in Transactions)
         {
             var isExpanded = _expanded.Contains(tx.MessageId);
-            var statusClass = tx.ResponseCode >= 500 ? "tx-error"
-                            : tx.ResponseCode >= 400 ? "tx-warn"
+            var statusClass = tx.StatusCode >= 500 ? "tx-error"
+                            : tx.StatusCode >= 400 ? "tx-warn"
                             : "tx-ok";
 
             <div class="trace-tx @statusClass">
                 <button class="trace-tx-header" @onclick="() => Toggle(tx.MessageId)">
-                    <span class="tx-method">@tx.RequestMethod</span>
-                    <span class="tx-uri">@tx.RequestUri</span>
-                    <span class="tx-badge @statusClass">@tx.ResponseCode</span>
-                    <span class="tx-time">@tx.TotalTimeMs ms</span>
+                    <span class="tx-method">@tx.Verb</span>
+                    <span class="tx-uri">@tx.RequestPath</span>
+                    <span class="tx-badge @statusClass">@tx.StatusCode</span>
+                    <span class="tx-time">@tx.DurationMs ms</span>
                     <i data-lucide="@(isExpanded ? "chevron-up" : "chevron-down")" class="tx-chevron"></i>
                 </button>
 
@@ -31,30 +31,28 @@
                     <div class="trace-timeline">
                         @foreach (var pt in tx.Points)
                         {
-                            var ptClass = pt.HasError                     ? "pt-error"
-                                        : pt.PointType == "Execution"     ? "pt-exec"
-                                        : pt.PointType == "Condition"     ? "pt-cond"
-                                        : "pt-state";
+                            var ptClass = pt.Error    ? "pt-error"
+                                        : pt.Executed ? "pt-exec"
+                                        : "pt-skip";
 
                             <div class="trace-point @ptClass">
                                 <span class="pt-icon">
-                                    @if (pt.HasError)                      { <i data-lucide="x-circle"></i>            }
-                                    else if (pt.PointType == "Execution")  { <i data-lucide="play-circle"></i>        }
-                                    else if (pt.PointType == "Condition")  { <i data-lucide="git-branch"></i>         }
-                                    else                                   { <i data-lucide="arrow-right-circle"></i>  }
+                                    @if (pt.Error)    { <i data-lucide="x-circle"></i>           }
+                                    else if (pt.Executed) { <i data-lucide="play-circle"></i>    }
+                                    else              { <i data-lucide="minus-circle"></i>        }
                                 </span>
-                                <span class="pt-name">@(string.IsNullOrWhiteSpace(pt.PolicyName) ? pt.PointType : pt.PolicyName)</span>
+                                <span class="pt-name">@(string.IsNullOrWhiteSpace(pt.Policy) ? pt.Phase : pt.Policy)</span>
                                 @if (!string.IsNullOrWhiteSpace(pt.Phase))
                                 {
                                     <span class="pt-phase">@pt.Phase</span>
                                 }
-                                @if (pt.ElapsedTimeMs > 0)
+                                @if (pt.DurationMs > 0)
                                 {
-                                    <span class="pt-ms">@pt.ElapsedTimeMs ms</span>
+                                    <span class="pt-ms">@pt.DurationMs ms</span>
                                 }
-                                @if (!string.IsNullOrWhiteSpace(pt.Description))
+                                @if (!string.IsNullOrWhiteSpace(pt.Condition))
                                 {
-                                    <span class="pt-desc">@pt.Description</span>
+                                    <span class="pt-desc">@pt.Condition</span>
                                 }
                             </div>
                         }
