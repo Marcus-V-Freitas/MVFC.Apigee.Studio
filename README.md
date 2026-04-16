@@ -1,4 +1,4 @@
-# Apigee Local Dev — Blazor Server
+# MVFC.Apigee.Studio — Blazor Server
 
 Blazor Server UI para gerenciamento local de workspaces Apigee, deploy de bundles no Apigee Emulator e geração de políticas a partir de templates.
 
@@ -6,10 +6,10 @@ Blazor Server UI para gerenciamento local de workspaces Apigee, deploy de bundle
 
 ```
 src/
-  ApigeeLocalDev.Domain          → Entidades e interfaces (sem dependências externas)
-  ApigeeLocalDev.Application     → Casos de uso
-  ApigeeLocalDev.Infrastructure  → FileSystem, HttpClient para o emulator, policy templates
-  ApigeeLocalDev.Blazor          → UI Blazor Server (páginas, componentes, CSS)
+  MVFC.Apigee.Studio.Domain          → Entidades e interfaces (sem dependências externas)
+  MVFC.Apigee.Studio.Application     → Casos de uso
+  MVFC.Apigee.Studio.Infrastructure  → FileSystem, HttpClient para o emulator, policy templates
+  MVFC.Apigee.Studio.Blazor          → UI Blazor Server (páginas, componentes, CSS)
 ```
 
 ## Como rodar
@@ -24,7 +24,7 @@ docker run -p 8080:8080 gcr.io/apigee-release/hybrid/apigee-emulator:latest
 
 ### Configuração
 
-Edite `src/ApigeeLocalDev.Blazor/appsettings.Development.json`:
+Edite `src/MVFC.Apigee.Studio.Blazor/appsettings.Development.json`:
 
 ```json
 {
@@ -40,7 +40,7 @@ Edite `src/ApigeeLocalDev.Blazor/appsettings.Development.json`:
 ### Rodar
 
 ```bash
-cd src/ApigeeLocalDev.Blazor
+cd src/MVFC.Apigee.Studio.Blazor
 dotnet run
 ```
 

@@ -1,0 +1,11 @@
+﻿<Project Sdk="Microsoft.NET.Sdk.Web">
+  <PropertyGroup>
+	  <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\MVFC.Apigee.Studio.Application\MVFC.Apigee.Studio.Application.csproj" />
+    <ProjectReference Include="..\MVFC.Apigee.Studio.Infrastructure\MVFC.Apigee.Studio.Infrastructure.csproj" />
+  </ItemGroup>
+</Project>
