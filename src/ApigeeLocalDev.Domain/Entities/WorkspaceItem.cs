@@ -1,7 +1,5 @@
 namespace ApigeeLocalDev.Domain.Entities;
 
-public enum WorkspaceItemType { ApiProxy, SharedFlow, Environment, File, Directory }
-
 public sealed record WorkspaceItem(
     string Name,
     string FullPath,

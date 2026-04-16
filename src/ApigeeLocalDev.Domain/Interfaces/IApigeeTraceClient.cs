@@ -1,5 +1,3 @@
-using ApigeeLocalDev.Domain.Entities;
-
 namespace ApigeeLocalDev.Domain.Interfaces;
 
 /// <summary>
@@ -10,6 +8,5 @@ namespace ApigeeLocalDev.Domain.Interfaces;
 public interface IApigeeTraceClient
 {
     /// <summary>Lista APIs deployadas em um ambiente (Management API :8080).</summary>
-    Task<IReadOnlyList<(string ApiProxy, string Revision)>> ListDeployedApisAsync(
-        string environment, CancellationToken ct = default);
+    Task<IReadOnlyList<(string ApiProxy, string Revision)>> ListDeployedApisAsync(string environment, CancellationToken ct = default);
 }

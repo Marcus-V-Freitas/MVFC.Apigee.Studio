@@ -1,15 +1,18 @@
-using ApigeeLocalDev.Application.UseCases;
-using ApigeeLocalDev.Blazor.Middleware;
-using ApigeeLocalDev.Blazor.Services;
-using ApigeeLocalDev.Domain.Interfaces;
-using ApigeeLocalDev.Infrastructure.Extensions;
-
+/// <summary>
+/// Entry point for the ApigeeLocalDev Blazor application.
+/// Configures services, middleware, and application pipeline.
+/// </summary>
 var builder = WebApplication.CreateBuilder(args);
 
+/// <summary>
+/// Adds Blazor server-side components and infrastructure services.
+/// </summary>
 builder.Services.AddRazorComponents().AddInteractiveServerComponents();
 builder.Services.AddInfrastructure(builder.Configuration);
 
-// Proxy reverso para o emulator runtime (:8998)
+/// <summary>
+/// Configures a named HttpClient ("EmulatorRuntime") for reverse proxy to the emulator runtime (default: http://localhost:8998).
+/// </summary>
 var runtimeUrl = builder.Configuration["EmulatorRuntime:BaseUrl"] ?? "http://localhost:8998";
 builder.Services.AddHttpClient("EmulatorRuntime", client =>
 {
@@ -17,28 +20,39 @@ builder.Services.AddHttpClient("EmulatorRuntime", client =>
     client.Timeout     = TimeSpan.FromSeconds(30);
 });
 
+/// <summary>
+/// Registers application use cases for dependency injection.
+/// </summary>
 builder.Services.AddScoped<CreateWorkspaceUseCase>();
 builder.Services.AddScoped<DeployToEmulatorUseCase>();
 builder.Services.AddScoped<GeneratePolicyUseCase>();
 
-// UI services
+/// <summary>
+/// Registers UI and linting services for dependency injection.
+/// </summary>
 builder.Services.AddScoped<ToastService>();
 builder.Services.AddScoped<ApigeeLintService>();
 
-// Trace service — singleton para sobreviver entre requests do middleware
+/// <summary>
+/// Registers the proxy trace service as a singleton to persist across middleware requests.
+/// </summary>
 builder.Services.AddSingleton<IProxyTraceService, ProxyTraceService>();
 
 var app = builder.Build();
 
+/// <summary>
+/// Configures error handling for non-development environments.
+/// </summary>
 if (!app.Environment.IsDevelopment())
     app.UseExceptionHandler("/Error");
 
 app.UseStaticFiles();
 app.UseAntiforgery();
 
-// TraceMiddleware intercepta /emulator-runtime/**
-app.UseMiddleware<TraceMiddleware>();
 
+/// <summary>
+/// Maps the root Blazor component and enables interactive server render mode.
+/// </summary>
 app.MapRazorComponents<ApigeeLocalDev.Blazor.Components.App>().AddInteractiveServerRenderMode();
 
-app.Run();
+await app.RunAsync();

@@ -1,35 +1,41 @@
-using ApigeeLocalDev.Domain.Entities;
-using ApigeeLocalDev.Domain.Interfaces;
-
 namespace ApigeeLocalDev.Application.UseCases;
 
 /// <summary>
-/// Orquestra o deploy no Apigee Emulator local.
+/// Orchestrates deployment to the local Apigee Emulator.
 ///
-/// O endpoint do emulator é:
+/// The emulator endpoint is:
 ///   POST /v1/emulator/deploy?environment={env}
-///   Body: ZIP do workspace inteiro com estrutura src/main/apigee/...
+///   Body: ZIP file of the entire workspace with structure src/main/apigee/...
 ///
-/// O emulator valida que exista a pasta src/main/apigee/environments/{env}/
-/// dentro do ZIP — sem ela retorna 400 InvalidEnvironment.
+/// The emulator validates that the folder src/main/apigee/environments/{env}/
+/// exists inside the ZIP — if not, it returns 400 InvalidEnvironment.
 /// </summary>
 public sealed class DeployToEmulatorUseCase(
     IWorkspaceRepository workspaceRepository,
     IApigeeEmulatorClient emulatorClient)
 {
     /// <summary>
-    /// Deploya um único proxy ou shared flow (build de bundle individual).
-    /// Ainda usa o workspace ZIP completo pois o emulator exige o environment.
+    /// Deploys a single proxy or shared flow (builds an individual bundle).
+    /// Still uses the complete workspace ZIP because the emulator requires the environment.
     /// </summary>
+    /// <param name="workspace">The workspace to deploy from.</param>
+    /// <param name="proxyOrFlowName">The name of the proxy or shared flow to deploy.</param>
+    /// <param name="environment">The target environment for deployment.</param>
+    /// <param name="ct">Optional. Cancellation token for the operation.</param>
+    /// <exception cref="ArgumentNullException">Thrown if <paramref name="proxyOrFlowName"/> is null or whitespace.</exception>
+    /// <remarks>
+    /// Example:
+    /// <code>
+    /// await useCase.ExecuteAsync(workspace, "my-proxy", "test");
+    /// </code>
+    /// </remarks>
     public async Task ExecuteAsync(
         ApigeeWorkspace workspace,
         string proxyOrFlowName,
         string environment,
         CancellationToken ct = default)
     {
-        if (string.IsNullOrWhiteSpace(proxyOrFlowName))
-            throw new ArgumentException(
-                "Informe o nome do proxy ou shared flow.", nameof(proxyOrFlowName));
+        ArgumentNullException.ThrowIfNullOrWhiteSpace(proxyOrFlowName);
 
         await workspaceRepository.EnsureEnvironmentAsync(workspace, environment, ct);
         var zipPath = await workspaceRepository.BuildWorkspaceZipAsync(workspace, ct);
@@ -37,24 +43,35 @@ public sealed class DeployToEmulatorUseCase(
     }
 
     /// <summary>
-    /// Deploya o workspace completo de uma vez.
-    /// O endpoint /v1/emulator/deploy recebe um único ZIP com toda a estrutura
-    /// src/main/apigee/... — não proxy-a-proxy.
+    /// Deploys the entire workspace at once.
+    /// The endpoint /v1/emulator/deploy receives a single ZIP with the full structure
+    /// src/main/apigee/... — not proxy-by-proxy.
     /// </summary>
+    /// <param name="workspace">The workspace to deploy from.</param>
+    /// <param name="environment">The target environment for deployment.</param>
+    /// <param name="ct">Optional. Cancellation token for the operation.</param>
+    /// <returns>A list of deployed proxies and shared flows.</returns>
+    /// <remarks>
+    /// Example:
+    /// <code>
+    /// var deployed = await useCase.ExecuteFullAsync(workspace, "test");
+    /// </code>
+    /// </remarks>
     public async Task<IReadOnlyList<string>> ExecuteFullAsync(
         ApigeeWorkspace workspace,
         string environment,
         CancellationToken ct = default)
     {
-        // Garante que a pasta environments/{env}/ existe no disco antes de zipar
+        // Ensures that the environments/{env}/ folder exists on disk before zipping
         await workspaceRepository.EnsureEnvironmentAsync(workspace, environment, ct);
 
         var zipPath = await workspaceRepository.BuildWorkspaceZipAsync(workspace, ct);
         await emulatorClient.DeployBundleAsync(environment, zipPath, ct);
 
-        // Retorna o que foi deployado
+        // Returns what was deployed
         var proxies     = workspaceRepository.ListApiProxies(workspace);
         var sharedFlows = workspaceRepository.ListSharedFlows(workspace);
-        return proxies.Concat(sharedFlows).ToList();
+
+        return [.. proxies, .. sharedFlows];
     }
 }

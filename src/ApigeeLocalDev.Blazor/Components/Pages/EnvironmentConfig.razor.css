@@ -1,0 +1,44 @@
+.config-header-row {
+    display: flex;
+    gap: var(--space-4);
+    align-items: flex-end;
+}
+
+.new-env-form {
+    display: flex;
+    gap: var(--space-2);
+}
+
+.new-env-input {
+    width: 150px;
+}
+
+.config-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--space-4);
+}
+
+.card-title-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.config-textarea {
+    height: 200px;
+    font-family: var(--font-mono);
+    resize: vertical;
+}
+
+.full-width {
+    grid-column: 1/ -1;
+}
+
+.mb-4 {
+    margin-bottom: var(--space-4);
+}
+
+.mt-2 {
+    margin-top: var(--space-2);
+}

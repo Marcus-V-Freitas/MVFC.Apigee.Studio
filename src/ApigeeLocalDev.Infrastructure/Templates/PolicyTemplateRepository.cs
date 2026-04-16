@@ -1,3 +1,4 @@
+using System.Xml.Linq;
 using ApigeeLocalDev.Domain.Entities;
 using ApigeeLocalDev.Domain.Interfaces;
 
@@ -5,293 +6,214 @@ namespace ApigeeLocalDev.Infrastructure.Templates;
 
 public sealed class PolicyTemplateRepository : IPolicyTemplateRepository
 {
-    // All XML built via explicit string concatenation so there are zero
-    // hidden carriage-returns or verbatim-string indentation artifacts.
+    private static readonly IReadOnlyDictionary<string, Func<IDictionary<string, string>, XElement>> _builders = 
+        new Dictionary<string, Func<IDictionary<string, string>, XElement>>(StringComparer.OrdinalIgnoreCase)
+    {
+        ["AssignMessage"] = p => new XElement("AssignMessage",
+            new XAttribute("name", p["PolicyName"]),
+            new XElement("AssignTo", new XAttribute("createNew", "false"), new XAttribute("type", "request")),
+            new XElement("Set",
+                new XElement("Headers",
+                    new XElement("Header", new XAttribute("name", p["HeaderName"]), p["HeaderValue"])
+                )
+            ),
+            new XElement("IgnoreUnresolvedVariables", "false")
+        ),
+
+        ["ExtractVariables"] = p => new XElement("ExtractVariables",
+            new XAttribute("name", p["PolicyName"]),
+            new XElement("Source", p["Source"]),
+            new XElement("QueryParam", new XAttribute("name", p["QueryParam"]),
+                new XElement("Pattern", new XAttribute("ignoreCase", "true"), p["Pattern"])
+            ),
+            new XElement("VariablePrefix", p["VariablePrefix"]),
+            new XElement("IgnoreUnresolvedVariables", "true")
+        ),
+
+        ["ResponseCache"] = p => new XElement("ResponseCache",
+            new XAttribute("name", p["PolicyName"]),
+            new XElement("CacheKey",
+                new XElement("KeyFragment", new XAttribute("ref", p["CacheKeyRef"]), new XAttribute("type", "string"))
+            ),
+            new XElement("ExpirySettings",
+                new XElement("TimeoutInSeconds", p["TimeoutSeconds"])
+            ),
+            new XElement("SkipCacheLookup", "false"),
+            new XElement("SkipCachePopulation", "false")
+        ),
+
+        ["RaiseFault"] = p => new XElement("RaiseFault",
+            new XAttribute("name", p["PolicyName"]),
+            new XElement("FaultResponse",
+                new XElement("Set",
+                    new XElement("StatusCode", p["StatusCode"]),
+                    new XElement("ReasonPhrase", p["ReasonPhrase"]),
+                    new XElement("Payload", new XAttribute("contentType", "application/json"),
+                        $"{{\"error\":\"{p["ReasonPhrase"]}\"}}"
+                    )
+                )
+            ),
+            new XElement("IgnoreUnresolvedVariables", "true")
+        ),
+
+        ["MessageLogging"] = p => new XElement("MessageLogging",
+            new XAttribute("name", p["PolicyName"]),
+            new XElement("Syslog",
+                new XElement("Message", p["MessageTemplate"]),
+                new XElement("Host", p["SyslogHost"]),
+                new XElement("Port", p["SyslogPort"]),
+                new XElement("Protocol", "UDP"),
+                new XElement("FormatMessage", "true")
+            ),
+            new XElement("logLevel", "INFO")
+        ),
+
+        ["ServiceCallout"] = p => new XElement("ServiceCallout",
+            new XAttribute("name", p["PolicyName"]),
+            new XElement("Request", new XAttribute("variable", p["RequestVar"])),
+            new XElement("Response", p["ResponseVar"]),
+            new XElement("HTTPTargetConnection",
+                new XElement("URL", p["TargetURL"])
+            )
+        ),
+
+        ["JSONToXML"] = p => new XElement("JSONToXML",
+            new XAttribute("name", p["PolicyName"]),
+            new XElement("Source", p["Source"]),
+            new XElement("OutputVariable", p["OutputVariable"]),
+            new XElement("Options",
+                new XElement("OmitXMLDeclaration", "true"),
+                new XElement("DefaultNamespaceNodeName", "nil"),
+                new XElement("NamespaceSeparator", ":")
+            )
+        ),
+
+        ["XMLToJSON"] = p => new XElement("XMLToJSON",
+            new XAttribute("name", p["PolicyName"]),
+            new XElement("Source", p["Source"]),
+            new XElement("OutputVariable", p["OutputVariable"]),
+            new XElement("Options",
+                new XElement("RecognizeNumber", "true"),
+                new XElement("RecognizeBoolean", "true"),
+                new XElement("RecognizeNull", "true")
+            )
+        ),
+
+        ["KeyValueMapOperations"] = p => new XElement("KeyValueMapOperations",
+            new XAttribute("name", p["PolicyName"]),
+            new XAttribute("mapIdentifier", p["MapName"]),
+            new XElement("Scope", "environment"),
+            new XElement("Get", new XAttribute("assignTo", p["AssignTo"]), new XAttribute("index", "1"),
+                new XElement("Key",
+                    new XElement("Parameter", p["KeyName"])
+                )
+            )
+        ),
+
+        ["VerifyAPIKey"] = p => new XElement("VerifyAPIKey",
+            new XAttribute("name", p["PolicyName"]),
+            new XElement("APIKey", new XAttribute("ref", "request.queryparam.apikey"))
+        ),
+
+        ["OAuthV2-VerifyToken"] = p => new XElement("OAuthV2",
+            new XAttribute("name", p["PolicyName"]),
+            new XElement("Operation", "VerifyAccessToken")
+        ),
+
+        ["OAuthV2-GenerateAccessToken"] = p => new XElement("OAuthV2",
+            new XAttribute("name", p["PolicyName"]),
+            new XElement("Operation", "GenerateAccessToken"),
+            new XElement("ExpiresIn", p["ExpiresInMs"]),
+            new XElement("SupportedGrantTypes",
+                new XElement("GrantType", "client_credentials")
+            ),
+            new XElement("GenerateResponse", new XAttribute("enabled", "true"))
+        ),
+
+        ["OAuthV2-RefreshToken"] = p => new XElement("OAuthV2",
+            new XAttribute("name", p["PolicyName"]),
+            new XElement("Operation", "RefreshAccessToken"),
+            new XElement("ExpiresIn", p["ExpiresInMs"]),
+            new XElement("GenerateResponse", new XAttribute("enabled", "true"))
+        ),
+
+        ["BasicAuthentication-Encode"] = p => new XElement("BasicAuthentication",
+            new XAttribute("name", p["PolicyName"]),
+            new XElement("Operation", "Encode"),
+            new XElement("IgnoreUnresolvedVariables", "false"),
+            new XElement("User", new XAttribute("ref", p["UserVar"])),
+            new XElement("Password", new XAttribute("ref", p["PasswordVar"])),
+            new XElement("AssignTo", new XAttribute("createNew", "false"), "request.header.Authorization")
+        ),
+
+        ["AccessControl"] = p => new XElement("AccessControl",
+            new XAttribute("name", p["PolicyName"]),
+            new XElement("IPRules", new XAttribute("noRuleMatchAction", "ALLOW"),
+                new XElement("MatchRule", new XAttribute("action", "DENY"),
+                    new XElement("SourceAddress", new XAttribute("mask", p["CIDRMask"]), p["IPAddress"])
+                )
+            )
+        ),
+
+        ["HMAC"] = p => new XElement("HMAC",
+            new XAttribute("name", p["PolicyName"]),
+            new XElement("Algorithm", "SHA-256"),
+            new XElement("SecretKey", new XAttribute("ref", p["SecretKeyRef"])),
+            new XElement("Message", new XAttribute("ref", p["MessageRef"])),
+            new XElement("Output", new XAttribute("encoding", "base64"), p["OutputVar"])
+        ),
+
+        ["SpikeArrest"] = p => new XElement("SpikeArrest",
+            new XAttribute("name", p["PolicyName"]),
+            new XElement("Rate", p["Rate"]),
+            new XElement("UseEffectiveCount", "true")
+        ),
+
+        ["Quota"] = p => new XElement("Quota",
+            new XAttribute("name", p["PolicyName"]),
+            new XElement("Allow", new XAttribute("count", p["AllowCount"]), new XAttribute("countRef", $"verifyapikey.{p["VerifyAPIKeyPolicy"]}.apiproduct.developer.quota.limit")),
+            new XElement("Interval", new XAttribute("ref", $"verifyapikey.{p["VerifyAPIKeyPolicy"]}.apiproduct.developer.quota.interval"), "1"),
+            new XElement("TimeUnit", new XAttribute("ref", $"verifyapikey.{p["VerifyAPIKeyPolicy"]}.apiproduct.developer.quota.timeunit"), p["TimeUnit"]),
+            new XElement("Identifier", new XAttribute("ref", "request.queryparam.apikey")),
+            new XElement("Distributed", "false"),
+            new XElement("Synchronous", "false")
+        ),
+
+        ["ConcurrentRateLimit"] = p => new XElement("ConcurrentRateLimit",
+            new XAttribute("name", p["PolicyName"]),
+            new XElement("AllowConnections", new XAttribute("count", p["MaxConnections"])),
+            new XElement("Distributed", "false")
+        ),
+
+        ["JavaScript"] = p => new XElement("Javascript",
+            new XAttribute("name", p["PolicyName"]),
+            new XAttribute("timeLimit", "200"),
+            new XElement("ResourceURL", $"jsc://{p["ScriptFile"]}")
+        )
+    };
+
     private static readonly IReadOnlyList<PolicyTemplate> _templates =
     [
-        // ── Mediation ────────────────────────────────────────────────────
-        new PolicyTemplate(
-            "AssignMessage",
-            "Sets or modifies HTTP request/response headers and body.",
-            "Mediation",
-            "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n" +
-            "<AssignMessage name=\"{{PolicyName}}\">\n" +
-            "    <AssignTo createNew=\"false\" type=\"request\"/>\n" +
-            "    <Set>\n" +
-            "        <Headers>\n" +
-            "            <Header name=\"{{HeaderName}}\">{{HeaderValue}}</Header>\n" +
-            "        </Headers>\n" +
-            "    </Set>\n" +
-            "    <IgnoreUnresolvedVariables>false</IgnoreUnresolvedVariables>\n" +
-            "</AssignMessage>\n",
-            ["PolicyName", "HeaderName", "HeaderValue"]),
-
-        new PolicyTemplate(
-            "ExtractVariables",
-            "Extracts content from request/response into variables.",
-            "Mediation",
-            "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n" +
-            "<ExtractVariables name=\"{{PolicyName}}\">\n" +
-            "    <Source>{{Source}}</Source>\n" +
-            "    <QueryParam name=\"{{QueryParam}}\">\n" +
-            "        <Pattern ignoreCase=\"true\">{{Pattern}}</Pattern>\n" +
-            "    </QueryParam>\n" +
-            "    <VariablePrefix>{{VariablePrefix}}</VariablePrefix>\n" +
-            "    <IgnoreUnresolvedVariables>true</IgnoreUnresolvedVariables>\n" +
-            "</ExtractVariables>\n",
-            ["PolicyName", "Source", "QueryParam", "Pattern", "VariablePrefix"]),
-
-        new PolicyTemplate(
-            "ResponseCache",
-            "Caches backend responses to reduce latency.",
-            "Mediation",
-            "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n" +
-            "<ResponseCache name=\"{{PolicyName}}\">\n" +
-            "    <CacheKey>\n" +
-            "        <KeyFragment ref=\"{{CacheKeyRef}}\" type=\"string\"/>\n" +
-            "    </CacheKey>\n" +
-            "    <ExpirySettings>\n" +
-            "        <TimeoutInSeconds>{{TimeoutSeconds}}</TimeoutInSeconds>\n" +
-            "    </ExpirySettings>\n" +
-            "    <SkipCacheLookup>false</SkipCacheLookup>\n" +
-            "    <SkipCachePopulation>false</SkipCachePopulation>\n" +
-            "</ResponseCache>\n",
-            ["PolicyName", "CacheKeyRef", "TimeoutSeconds"]),
-
-        new PolicyTemplate(
-            "RaiseFault",
-            "Generates a custom HTTP error response.",
-            "Mediation",
-            "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n" +
-            "<RaiseFault name=\"{{PolicyName}}\">\n" +
-            "    <FaultResponse>\n" +
-            "        <Set>\n" +
-            "            <StatusCode>{{StatusCode}}</StatusCode>\n" +
-            "            <ReasonPhrase>{{ReasonPhrase}}</ReasonPhrase>\n" +
-            "            <Payload contentType=\"application/json\">\n" +
-            "                {\"error\":\"{{ReasonPhrase}}\"}\n" +
-            "            </Payload>\n" +
-            "        </Set>\n" +
-            "    </FaultResponse>\n" +
-            "    <IgnoreUnresolvedVariables>true</IgnoreUnresolvedVariables>\n" +
-            "</RaiseFault>\n",
-            ["PolicyName", "StatusCode", "ReasonPhrase"]),
-
-        new PolicyTemplate(
-            "MessageLogging",
-            "Logs request/response data to a Syslog or file endpoint.",
-            "Mediation",
-            "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n" +
-            "<MessageLogging name=\"{{PolicyName}}\">\n" +
-            "    <Syslog>\n" +
-            "        <Message>{{MessageTemplate}}</Message>\n" +
-            "        <Host>{{SyslogHost}}</Host>\n" +
-            "        <Port>{{SyslogPort}}</Port>\n" +
-            "        <Protocol>UDP</Protocol>\n" +
-            "        <FormatMessage>true</FormatMessage>\n" +
-            "    </Syslog>\n" +
-            "    <logLevel>INFO</logLevel>\n" +
-            "</MessageLogging>\n",
-            ["PolicyName", "MessageTemplate", "SyslogHost", "SyslogPort"]),
-
-        new PolicyTemplate(
-            "ServiceCallout",
-            "Calls an external service mid-flow and stores the response.",
-            "Mediation",
-            "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n" +
-            "<ServiceCallout name=\"{{PolicyName}}\">\n" +
-            "    <Request variable=\"{{RequestVar}}\"/>\n" +
-            "    <Response>{{ResponseVar}}</Response>\n" +
-            "    <HTTPTargetConnection>\n" +
-            "        <URL>{{TargetURL}}</URL>\n" +
-            "    </HTTPTargetConnection>\n" +
-            "</ServiceCallout>\n",
-            ["PolicyName", "RequestVar", "ResponseVar", "TargetURL"]),
-
-        new PolicyTemplate(
-            "JSONToXML",
-            "Converts a JSON payload to XML.",
-            "Mediation",
-            "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n" +
-            "<JSONToXML name=\"{{PolicyName}}\">\n" +
-            "    <Source>{{Source}}</Source>\n" +
-            "    <OutputVariable>{{OutputVariable}}</OutputVariable>\n" +
-            "    <Options>\n" +
-            "        <OmitXMLDeclaration>true</OmitXMLDeclaration>\n" +
-            "        <DefaultNamespaceNodeName>nil</DefaultNamespaceNodeName>\n" +
-            "        <NamespaceSeparator>:</NamespaceSeparator>\n" +
-            "    </Options>\n" +
-            "</JSONToXML>\n",
-            ["PolicyName", "Source", "OutputVariable"]),
-
-        new PolicyTemplate(
-            "XMLToJSON",
-            "Converts an XML payload to JSON.",
-            "Mediation",
-            "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n" +
-            "<XMLToJSON name=\"{{PolicyName}}\">\n" +
-            "    <Source>{{Source}}</Source>\n" +
-            "    <OutputVariable>{{OutputVariable}}</OutputVariable>\n" +
-            "    <Options>\n" +
-            "        <RecognizeNumber>true</RecognizeNumber>\n" +
-            "        <RecognizeBoolean>true</RecognizeBoolean>\n" +
-            "        <RecognizeNull>true</RecognizeNull>\n" +
-            "    </Options>\n" +
-            "</XMLToJSON>\n",
-            ["PolicyName", "Source", "OutputVariable"]),
-
-        new PolicyTemplate(
-            "KeyValueMapOperations",
-            "Reads or writes entries in a Key Value Map (KVM).",
-            "Mediation",
-            "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n" +
-            "<KeyValueMapOperations name=\"{{PolicyName}}\" mapIdentifier=\"{{MapName}}\">\n" +
-            "    <Scope>environment</Scope>\n" +
-            "    <Get assignTo=\"{{AssignTo}}\" index=\"1\">\n" +
-            "        <Key>\n" +
-            "            <Parameter>{{KeyName}}</Parameter>\n" +
-            "        </Key>\n" +
-            "    </Get>\n" +
-            "</KeyValueMapOperations>\n",
-            ["PolicyName", "MapName", "AssignTo", "KeyName"]),
-
-        // ── Security ─────────────────────────────────────────────────────
-        new PolicyTemplate(
-            "VerifyAPIKey",
-            "Validates API keys sent as a query parameter or header.",
-            "Security",
-            "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n" +
-            "<VerifyAPIKey name=\"{{PolicyName}}\">\n" +
-            "    <APIKey ref=\"request.queryparam.apikey\"/>\n" +
-            "</VerifyAPIKey>\n",
-            ["PolicyName"]),
-
-        new PolicyTemplate(
-            "OAuthV2-VerifyToken",
-            "Validates an OAuth 2.0 Bearer access token.",
-            "Security",
-            "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n" +
-            "<OAuthV2 name=\"{{PolicyName}}\">\n" +
-            "    <Operation>VerifyAccessToken</Operation>\n" +
-            "</OAuthV2>\n",
-            ["PolicyName"]),
-
-        new PolicyTemplate(
-            "OAuthV2-GenerateAccessToken",
-            "Generates an OAuth 2.0 access token (client credentials or password).",
-            "Security",
-            "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n" +
-            "<OAuthV2 name=\"{{PolicyName}}\">\n" +
-            "    <Operation>GenerateAccessToken</Operation>\n" +
-            "    <ExpiresIn>{{ExpiresInMs}}</ExpiresIn>\n" +
-            "    <SupportedGrantTypes>\n" +
-            "        <GrantType>client_credentials</GrantType>\n" +
-            "    </SupportedGrantTypes>\n" +
-            "    <GenerateResponse enabled=\"true\"/>\n" +
-            "</OAuthV2>\n",
-            ["PolicyName", "ExpiresInMs"]),
-
-        new PolicyTemplate(
-            "OAuthV2-RefreshToken",
-            "Exchanges a refresh token for a new access token.",
-            "Security",
-            "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n" +
-            "<OAuthV2 name=\"{{PolicyName}}\">\n" +
-            "    <Operation>RefreshAccessToken</Operation>\n" +
-            "    <ExpiresIn>{{ExpiresInMs}}</ExpiresIn>\n" +
-            "    <GenerateResponse enabled=\"true\"/>\n" +
-            "</OAuthV2>\n",
-            ["PolicyName", "ExpiresInMs"]),
-
-        new PolicyTemplate(
-            "BasicAuthentication-Encode",
-            "Encodes username+password into a Base64 Basic Auth header.",
-            "Security",
-            "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n" +
-            "<BasicAuthentication name=\"{{PolicyName}}\">\n" +
-            "    <Operation>Encode</Operation>\n" +
-            "    <IgnoreUnresolvedVariables>false</IgnoreUnresolvedVariables>\n" +
-            "    <User ref=\"{{UserVar}}\"/>\n" +
-            "    <Password ref=\"{{PasswordVar}}\"/>\n" +
-            "    <AssignTo createNew=\"false\">request.header.Authorization</AssignTo>\n" +
-            "</BasicAuthentication>\n",
-            ["PolicyName", "UserVar", "PasswordVar"]),
-
-        new PolicyTemplate(
-            "AccessControl",
-            "Allows or denies access based on client IP address.",
-            "Security",
-            "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n" +
-            "<AccessControl name=\"{{PolicyName}}\">\n" +
-            "    <IPRules noRuleMatchAction=\"ALLOW\">\n" +
-            "        <MatchRule action=\"DENY\">\n" +
-            "            <SourceAddress mask=\"{{CIDRMask}}\">{{IPAddress}}</SourceAddress>\n" +
-            "        </MatchRule>\n" +
-            "    </IPRules>\n" +
-            "</AccessControl>\n",
-            ["PolicyName", "IPAddress", "CIDRMask"]),
-
-        new PolicyTemplate(
-            "HMAC",
-            "Generates or validates an HMAC signature on a message.",
-            "Security",
-            "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n" +
-            "<HMAC name=\"{{PolicyName}}\">\n" +
-            "    <Algorithm>SHA-256</Algorithm>\n" +
-            "    <SecretKey ref=\"{{SecretKeyRef}}\"/>\n" +
-            "    <Message ref=\"{{MessageRef}}\"/>\n" +
-            "    <Output encoding=\"base64\">{{OutputVar}}</Output>\n" +
-            "</HMAC>\n",
-            ["PolicyName", "SecretKeyRef", "MessageRef", "OutputVar"]),
-
-        // ── Traffic Management ────────────────────────────────────────────
-        new PolicyTemplate(
-            "SpikeArrest",
-            "Throttles request rate to protect backend services.",
-            "Traffic Management",
-            "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n" +
-            "<SpikeArrest name=\"{{PolicyName}}\">\n" +
-            "    <Rate>{{Rate}}</Rate>\n" +
-            "    <UseEffectiveCount>true</UseEffectiveCount>\n" +
-            "</SpikeArrest>\n",
-            ["PolicyName", "Rate"]),
-
-        new PolicyTemplate(
-            "Quota",
-            "Limits the number of calls an app can make in a time period.",
-            "Traffic Management",
-            "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n" +
-            "<Quota name=\"{{PolicyName}}\">\n" +
-            "    <Allow count=\"{{AllowCount}}\" countRef=\"verifyapikey.{{VerifyAPIKeyPolicy}}.apiproduct.developer.quota.limit\"/>\n" +
-            "    <Interval ref=\"verifyapikey.{{VerifyAPIKeyPolicy}}.apiproduct.developer.quota.interval\">1</Interval>\n" +
-            "    <TimeUnit ref=\"verifyapikey.{{VerifyAPIKeyPolicy}}.apiproduct.developer.quota.timeunit\">{{TimeUnit}}</TimeUnit>\n" +
-            "    <Identifier ref=\"request.queryparam.apikey\"/>\n" +
-            "    <Distributed>false</Distributed>\n" +
-            "    <Synchronous>false</Synchronous>\n" +
-            "</Quota>\n",
-            ["PolicyName", "AllowCount", "VerifyAPIKeyPolicy", "TimeUnit"]),
-
-        new PolicyTemplate(
-            "ConcurrentRateLimit",
-            "Limits concurrent connections to backend target servers.",
-            "Traffic Management",
-            "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n" +
-            "<ConcurrentRateLimit name=\"{{PolicyName}}\">\n" +
-            "    <AllowConnections count=\"{{MaxConnections}}\"/>\n" +
-            "    <Distributed>false</Distributed>\n" +
-            "</ConcurrentRateLimit>\n",
-            ["PolicyName", "MaxConnections"]),
-
-        // ── Extension ─────────────────────────────────────────────────────
-        new PolicyTemplate(
-            "JavaScript",
-            "Executes a JavaScript file as a custom policy step.",
-            "Extension",
-            "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n" +
-            "<Javascript name=\"{{PolicyName}}\" timeLimit=\"200\">\n" +
-            "    <ResourceURL>jsc://{{ScriptFile}}</ResourceURL>\n" +
-            "</Javascript>\n",
-            ["PolicyName", "ScriptFile"]),
+        new PolicyTemplate("AssignMessage", "Sets or modifies HTTP request/response headers and body.", "Mediation", "", ["PolicyName", "HeaderName", "HeaderValue"]),
+        new PolicyTemplate("ExtractVariables", "Extracts content from request/response into variables.", "Mediation", "", ["PolicyName", "Source", "QueryParam", "Pattern", "VariablePrefix"]),
+        new PolicyTemplate("ResponseCache", "Caches backend responses to reduce latency.", "Mediation", "", ["PolicyName", "CacheKeyRef", "TimeoutSeconds"]),
+        new PolicyTemplate("RaiseFault", "Generates a custom HTTP error response.", "Mediation", "", ["PolicyName", "StatusCode", "ReasonPhrase"]),
+        new PolicyTemplate("MessageLogging", "Logs request/response data to a Syslog or file endpoint.", "Mediation", "", ["PolicyName", "MessageTemplate", "SyslogHost", "SyslogPort"]),
+        new PolicyTemplate("ServiceCallout", "Calls an external service mid-flow and stores the response.", "Mediation", "", ["PolicyName", "RequestVar", "ResponseVar", "TargetURL"]),
+        new PolicyTemplate("JSONToXML", "Converts a JSON payload to XML.", "Mediation", "", ["PolicyName", "Source", "OutputVariable"]),
+        new PolicyTemplate("XMLToJSON", "Converts an XML payload to JSON.", "Mediation", "", ["PolicyName", "Source", "OutputVariable"]),
+        new PolicyTemplate("KeyValueMapOperations", "Reads or writes entries in a Key Value Map (KVM).", "Mediation", "", ["PolicyName", "MapName", "AssignTo", "KeyName"]),
+        new PolicyTemplate("VerifyAPIKey", "Validates API keys sent as a query parameter or header.", "Security", "", ["PolicyName"]),
+        new PolicyTemplate("OAuthV2-VerifyToken", "Validates an OAuth 2.0 Bearer access token.", "Security", "", ["PolicyName"]),
+        new PolicyTemplate("OAuthV2-GenerateAccessToken", "Generates an OAuth 2.0 access token (client credentials or password).", "Security", "", ["PolicyName", "ExpiresInMs"]),
+        new PolicyTemplate("OAuthV2-RefreshToken", "Exchanges a refresh token for a new access token.", "Security", "", ["PolicyName", "ExpiresInMs"]),
+        new PolicyTemplate("BasicAuthentication-Encode", "Encodes username+password into a Base64 Basic Auth header.", "Security", "", ["PolicyName", "UserVar", "PasswordVar"]),
+        new PolicyTemplate("AccessControl", "Allows or denies access based on client IP address.", "Security", "", ["PolicyName", "IPAddress", "CIDRMask"]),
+        new PolicyTemplate("HMAC", "Generates or validates an HMAC signature on a message.", "Security", "", ["PolicyName", "SecretKeyRef", "MessageRef", "OutputVar"]),
+        new PolicyTemplate("SpikeArrest", "Throttles request rate to protect backend services.", "Traffic Management", "", ["PolicyName", "Rate"]),
+        new PolicyTemplate("Quota", "Limits the number of calls an app can make in a time period.", "Traffic Management", "", ["PolicyName", "AllowCount", "VerifyAPIKeyPolicy", "TimeUnit"]),
+        new PolicyTemplate("ConcurrentRateLimit", "Limits concurrent connections to backend target servers.", "Traffic Management", "", ["PolicyName", "MaxConnections"]),
+        new PolicyTemplate("JavaScript", "Executes a JavaScript file as a custom policy step.", "Extension", "", ["PolicyName", "ScriptFile"]),
     ];
 
     public IReadOnlyList<PolicyTemplate> GetAll() => _templates;
@@ -301,9 +223,13 @@ public sealed class PolicyTemplateRepository : IPolicyTemplateRepository
 
     public string GeneratePolicyXml(PolicyTemplate template, IDictionary<string, string> parameters)
     {
-        var xml = template.XmlContent;
-        foreach (var (key, value) in parameters)
-            xml = xml.Replace("{{" + key + "}}", value, StringComparison.Ordinal);
-        return xml;
+        if (_builders.TryGetValue(template.Name, out var builder))
+        {
+            var element = builder(parameters);
+            var doc = new XDocument(new XDeclaration("1.0", "UTF-8", "yes"), element);
+            return doc.ToString();
+        }
+
+        throw new NotSupportedException($"Gerador não implementado para a política: {template.Name}");
     }
 }

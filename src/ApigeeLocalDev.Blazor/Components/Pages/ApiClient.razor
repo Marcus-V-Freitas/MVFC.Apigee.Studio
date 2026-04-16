@@ -1,48 +1,72 @@
 @page "/api-client"
-@inject HttpClient Http
 @rendermode RenderMode.InteractiveServer
 
-<!-- Removed page header to fit nicely inside Trace tab -->
-
-<div class="card" style="display: flex; flex-direction: column; gap: var(--space-4);">
-    <div style="display: flex; gap: var(--space-2);">
-        <select class="input" style="width: 120px;" @bind="_method">
+<div class="card client-container">
+    <div class="request-line">
+        <select class="input method-select" @bind="_method">
             <option value="GET">GET</option>
             <option value="POST">POST</option>
             <option value="PUT">PUT</option>
             <option value="DELETE">DELETE</option>
             <option value="PATCH">PATCH</option>
         </select>
-        <input class="input" style="flex: 1;" @bind="_url" placeholder="http://localhost:8998/test/v1" />
-        <button class="btn btn-primary" @onclick="SendRequest" disabled="@_isLoading">
-            @if (_isLoading) {
+        <input
+            class="input flex-1"
+            @bind="_url"
+            placeholder="http://localhost:8998/test/v1" />
+        <button
+            class="btn btn-primary"
+            @onclick="SendRequest"
+            disabled="@_isLoading">
+            @if (_isLoading)
+            {
                 <span>Enviando...</span>
-            } else {
+            }
+            else
+            {
                 <span>&#10148; Send</span>
             }
         </button>
     </div>
 
-    <!-- Headers e Body configuráveis -->
-    <div style="display: flex; gap: var(--space-4); margin-top: var(--space-2);">
-        <div style="flex: 1; display: flex; flex-direction: column; gap: var(--space-2);">
+    <div class="request-grid">
+        <div class="header-section">
             <h3>Headers</h3>
             @foreach (var header in _headers)
             {
-                <div style="display: flex; gap: var(--space-2); margin-bottom: 4px;">
-                    <input class="input" style="flex: 1;" @bind="header.Key" placeholder="Header Name" />
-                    <input class="input" style="flex: 2;" @bind="header.Value" placeholder="Value" />
-                    <button class="btn btn-ghost btn-sm btn-danger" @onclick="() => RemoveHeader(header)">✕</button>
+                <div class="header-row">
+                    <input
+                        class="input header-name"
+                        @bind="header.Key"
+                        placeholder="Header Name" />
+                        
+                    <input
+                        class="input header-value"
+                        @bind="header.Value"
+                        placeholder="Value" />
+                    <button
+                        class="btn btn-ghost btn-sm btn-danger"
+                        @onclick="() => RemoveHeader(header)">
+                        ✕
+                    </button>
                 </div>
             }
-            <button class="btn btn-ghost btn-sm" style="align-self: flex-start;" @onclick="AddHeader">+ Add Header</button>
+            <button
+                class="btn btn-ghost btn-sm add-header-btn"
+@onclick="AddHeader">
+                + Add Header
+            </button>
         </div>
 
         @if (_method == "POST" || _method == "PUT" || _method == "PATCH")
         {
-            <div style="flex: 1; display: flex; flex-direction: column; gap: var(--space-2);">
+            <div class="body-section">
                 <h3>Body</h3>
-                <textarea class="input" style="height: 150px; resize: vertical; font-family: monospace;" @bind="_body" placeholder="{ \"key\": \"value\" }"></textarea>
+                <textarea
+                    class="input body-textarea"
+                    @bind="_body"
+                    placeholder='{ "key": "value" }'>
+                </textarea>
             </div>
         }
     </div>
@@ -50,102 +74,35 @@
 
 @if (_response != null)
 {
-    <div class="card mt-4" style="background-color: var(--bg-crust);">
-        <div style="display: flex; justify-content: space-between; align-items: center;">
+    <div class="card mt-4 response-card">
+        <div class="response-header">
             <h3>Response</h3>
-            <div style="display: flex; gap: var(--space-4); font-size: var(--text-sm);">
-                <span>Status: <strong style="color: @(_response.IsSuccessStatusCode ? "var(--color-success)" : "var(--color-danger)")">@((int)_response.StatusCode) @_response.StatusCode</strong></span>
-                <span>Time: <strong>@_responseTimeMs ms</strong></span>
+            <div class="response-meta">
+                <span>
+                    Status:
+                    <strong class="@(_response.IsSuccessStatusCode ? "status-success" : "status-danger")">
+                        @((int)_response.StatusCode) @(_response.StatusCode)
+                    </strong>
+                </span>
+                <span>
+                    Time: <strong>@_responseTimeMs ms</strong>
+                </span>
             </div>
         </div>
-        
-        <div style="margin-top: var(--space-2);">
-            <div style="margin-bottom: var(--space-2); font-size: var(--text-xs); color: var(--color-text-muted);">
+
+        <div class="response-body-section">
+            <div class="response-headers-section">
                 <strong>Headers:</strong>
-                <pre style="margin: 0; padding: 4px; background: rgba(0,0,0,0.1); border-radius: 4px;">@string.Join("\n", _response.Headers.Select(h => $"{h.Key}: {string.Join(", ", h.Value)}"))</pre>
+                <pre class="response-headers-pre">
+                    @string.Join("\n", _response.Headers.Select(h => $"{h.Key}: {string.Join(", ", h.Value)}"))
+                </pre>
             </div>
-            
-            <textarea readonly class="input" style="width: 100%; height: 300px; resize: vertical; font-family: monospace; background-color: var(--bg-surface); color: var(--color-text);">@_responseBody</textarea>
+
+            <textarea
+                readonly
+                class="input response-textarea">
+                @_responseBody
+            </textarea>
         </div>
     </div>
-}
-
-@code {
-    private string _method = "GET";
-    private string _url = "http://localhost:8998/";
-    private List<HeaderEntry> _headers = new() { new HeaderEntry { Key = "Accept", Value = "application/json" } };
-    private string _body = "";
-    
-    private bool _isLoading;
-    private HttpResponseMessage? _response;
-    private string _responseBody = "";
-    private long _responseTimeMs;
-
-    private void AddHeader() => _headers.Add(new HeaderEntry());
-    private void RemoveHeader(HeaderEntry h) => _headers.Remove(h);
-
-    private async Task SendRequest()
-    {
-        if (string.IsNullOrWhiteSpace(_url)) return;
-
-        _isLoading = true;
-        _response = null;
-        _responseBody = "";
-        StateHasChanged();
-
-        try
-        {
-            var request = new HttpRequestMessage(new HttpMethod(_method), _url);
-
-            if ((_method == "POST" || _method == "PUT" || _method == "PATCH") && !string.IsNullOrWhiteSpace(_body))
-            {
-                request.Content = new StringContent(_body, System.Text.Encoding.UTF8, "application/json");
-            }
-
-            foreach (var h in _headers.Where(x => !string.IsNullOrWhiteSpace(x.Key)))
-            {
-                // Content headers go to content, not request. Trying request headers first.
-                if (h.Key.StartsWith("Content-", StringComparison.OrdinalIgnoreCase) && request.Content != null)
-                {
-                    try { request.Content.Headers.TryAddWithoutValidation(h.Key, h.Value); } catch { }
-                }
-                else
-                {
-                     request.Headers.TryAddWithoutValidation(h.Key, h.Value);
-                }
-            }
-
-            var sw = System.Diagnostics.Stopwatch.StartNew();
-            _response = await Http.SendAsync(request);
-            sw.Stop();
-            
-            _responseTimeMs = sw.ElapsedMilliseconds;
-            _responseBody = await _response.Content.ReadAsStringAsync();
-
-            // Formatação bonita para JSON (bem básico)
-            if (_response.Content.Headers.ContentType?.MediaType == "application/json")
-            {
-                try
-                {
-                    var parsedJson = System.Text.Json.JsonDocument.Parse(_responseBody);
-                    _responseBody = System.Text.Json.JsonSerializer.Serialize(parsedJson, new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
-                }
-                catch { /* ignora erro de parse */ }
-            }
-        }
-        catch (Exception ex)
-        {
-            _responseBody = $"Error: {ex.Message}";
-        }
-        finally
-        {
-            _isLoading = false;
-        }
-    }
-
-    public class HeaderEntry
-    {
-        public string Key { get; set; } = "";
-        public string Value { get; set; } = "";
-    }
 }

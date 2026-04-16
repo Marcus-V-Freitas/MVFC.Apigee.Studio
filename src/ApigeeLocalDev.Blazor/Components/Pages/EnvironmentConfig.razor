@@ -1,18 +1,16 @@
 @page "/environment-config"
-@using ApigeeLocalDev.Domain.Entities
-@using ApigeeLocalDev.Domain.Interfaces
-@inject IWorkspaceRepository WorkspaceRepo
-@inject ApigeeLocalDev.Blazor.Services.ToastService Toast
 @rendermode RenderMode.InteractiveServer
 
 <div class="page-header">
     <h1>Environment Config</h1>
-    <p class="page-subtitle">Gerencie KVMs, Caches e Target Servers (JSONs) para o seu Apigee Emulator.</p>
+    <p class="page-subtitle">
+        Gerencie KVMs, Caches e Target Servers (JSONs) para o seu Apigee Emulator.
+    </p>
 </div>
 
 <div class="card mb-4">
-    <div style="display: flex; gap: var(--space-4); align-items: flex-end;">
-        <label style="flex: 1;">
+    <div class="config-header-row">
+        <label class="flex-1">
             Workspace
             <select class="input" @bind="_selectedWorkspaceName" @bind:after="OnWorkspaceChanged">
                 <option value="">-- Selecione --</option>
@@ -22,10 +20,10 @@
                 }
             </select>
         </label>
-        
-        <label style="flex: 1;">
+
+        <label class="flex-1">
             Environment
-            <select class="input" @bind="_selectedEnvironment" @bind:after="OnEnvironmentChanged" disabled="@(_workspace == null)">
+            <select class="input" @bind="_selectedEnvironment" @bind:after="OnEnvironmentChanged" disabled="@WorkspaceNotSelected">
                 <option value="">-- Selecione --</option>
                 @foreach (var env in _environments)
                 {
@@ -33,12 +31,14 @@
                 }
             </select>
         </label>
-        
+
         @if (_workspace != null)
         {
-            <div style="display: flex; gap: var(--space-2);">
-                <input class="input" placeholder="Novo env..." @bind="_newEnvName" style="width: 150px;" />
-                <button class="btn btn-primary" @onclick="CreateEnvironment" disabled="@string.IsNullOrWhiteSpace(_newEnvName)">Criar</button>
+            <div class="new-env-form">
+                <input class="input new-env-input" placeholder="Novo env..." @bind="_newEnvName" />
+                <button class="btn btn-primary" @onclick="CreateEnvironment" disabled="@string.IsNullOrWhiteSpace(_newEnvName)">
+                    Criar
+                </button>
             </div>
         }
     </div>
@@ -46,166 +46,49 @@
 
 @if (_workspace != null && !string.IsNullOrEmpty(_selectedEnvironment))
 {
-    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-4);">
-        
+    <div class="config-grid">
+
         <!-- KVMs -->
         <div class="card">
-            <div style="display: flex; justify-content: space-between; align-items: center;">
+            <div class="card-title-row">
                 <h3>KVMs (maps.json)</h3>
                 <button class="btn btn-ghost btn-sm" @onclick="LoadKvm">Refresh</button>
             </div>
-            <textarea class="input mt-2" style="height: 200px; font-family: monospace; resize: vertical;" @bind="_kvmJson"></textarea>
+            <textarea class="input mt-2 config-textarea" @bind="_kvmJson"></textarea>
             <button class="btn btn-primary mt-2" @onclick="SaveKvm">Save KVMs</button>
-            @if (_kvmIsDirty) { <span style="color: var(--color-danger); margin-left: var(--space-2);">Changes not saved</span> }
+            @if (_kvmIsDirty)
+            {
+                <span style="color: var(--color-danger); margin-left: var(--space-2);">Changes not saved</span>
+            }
         </div>
 
         <!-- Caches -->
         <div class="card">
-            <div style="display: flex; justify-content: space-between; align-items: center;">
+            <div class="card-title-row">
                 <h3>Caches (caches.json)</h3>
                 <button class="btn btn-ghost btn-sm" @onclick="LoadCaches">Refresh</button>
             </div>
-            <textarea class="input mt-2" style="height: 200px; font-family: monospace; resize: vertical;" @bind="_cachesJson"></textarea>
+            <textarea class="input mt-2 config-textarea" @bind="_cachesJson"></textarea>
             <button class="btn btn-primary mt-2" @onclick="SaveCaches">Save Caches</button>
-            @if (_cachesIsDirty) { <span style="color: var(--color-danger); margin-left: var(--space-2);">Changes not saved</span> }
+            @if (_cachesIsDirty)
+            {
+                <span style="color: var(--color-danger); margin-left: var(--space-2);">Changes not saved</span>
+            }
         </div>
 
         <!-- Target Servers -->
-        <div class="card" style="grid-column: 1 / -1;">
-            <div style="display: flex; justify-content: space-between; align-items: center;">
+        <div class="card full-width">
+            <div class="card-title-row">
                 <h3>Target Servers (targetservers.json)</h3>
                 <button class="btn btn-ghost btn-sm" @onclick="LoadTargetServers">Refresh</button>
             </div>
-            <textarea class="input mt-2" style="height: 200px; font-family: monospace; resize: vertical;" @bind="_targetServersJson"></textarea>
+            <textarea class="input mt-2 config-textarea" @bind="_targetServersJson"></textarea>
             <button class="btn btn-primary mt-2" @onclick="SaveTargetServers">Save Target Servers</button>
-            @if (_targetIsDirty) { <span style="color: var(--color-danger); margin-left: var(--space-2);">Changes not saved</span> }
+            @if (_targetIsDirty)
+            {
+                <span style="color: var(--color-danger); margin-left: var(--space-2);">Changes not saved</span>
+            }
         </div>
 
     </div>
-}
-
-@code {
-    private IReadOnlyList<ApigeeWorkspace> _workspaces = [];
-    private string _selectedWorkspaceName = "";
-    private ApigeeWorkspace? _workspace;
-
-    private List<string> _environments = new();
-    private string _selectedEnvironment = "";
-    private string _newEnvName = "";
-
-    private string _kvmJson = "[]";
-    private string _cachesJson = "[]";
-    private string _targetServersJson = "[]";
-
-    private bool _kvmIsDirty;
-    private bool _cachesIsDirty;
-    private bool _targetIsDirty;
-
-    protected override void OnInitialized()
-    {
-        _workspaces = WorkspaceRepo.ListAll();
-    }
-
-    private void OnWorkspaceChanged()
-    {
-        _workspace = _workspaces.FirstOrDefault(w => w.Name == _selectedWorkspaceName);
-        _environments.Clear();
-        _selectedEnvironment = "";
-
-        if (_workspace != null)
-        {
-            var envPath = System.IO.Path.Combine(_workspace.RootPath, "environments");
-            if (System.IO.Directory.Exists(envPath))
-            {
-                var dirs = System.IO.Directory.GetDirectories(envPath);
-                _environments.AddRange(dirs.Select(d => System.IO.Path.GetFileName(d)));
-            }
-        }
-    }
-
-    private async Task CreateEnvironment()
-    {
-        if (_workspace != null && !string.IsNullOrWhiteSpace(_newEnvName))
-        {
-            await WorkspaceRepo.EnsureEnvironmentAsync(_workspace, _newEnvName);
-            if (!_environments.Contains(_newEnvName))
-            {
-                _environments.Add(_newEnvName);
-            }
-            _selectedEnvironment = _newEnvName;
-            _newEnvName = "";
-            await OnEnvironmentChanged();
-            Toast.ShowSuccess($"Environment '{_selectedEnvironment}' criado.");
-        }
-    }
-
-    private async Task OnEnvironmentChanged()
-    {
-        if (_workspace != null && !string.IsNullOrEmpty(_selectedEnvironment))
-        {
-            await WorkspaceRepo.EnsureEnvironmentAsync(_workspace, _selectedEnvironment);
-            await LoadKvm();
-            await LoadCaches();
-            await LoadTargetServers();
-        }
-    }
-
-    private string GetEnvPath() => System.IO.Path.Combine(_workspace!.RootPath, "environments", _selectedEnvironment);
-
-    private async Task LoadKvm()
-    {
-        var path = System.IO.Path.Combine(GetEnvPath(), "maps.json");
-        _kvmJson = System.IO.File.Exists(path) ? await System.IO.File.ReadAllTextAsync(path) : "[\n  {\n    \"name\": \"my-kvm\",\n    \"scope\": \"environment\",\n    \"encrypted\": false,\n    \"entries\": {\n      \"key1\": \"value1\"\n    }\n  }\n]";
-        _kvmIsDirty = false;
-    }
-
-    private async Task SaveKvm()
-    {
-        try 
-        {
-            System.IO.Directory.CreateDirectory(GetEnvPath());
-            await System.IO.File.WriteAllTextAsync(System.IO.Path.Combine(GetEnvPath(), "maps.json"), _kvmJson);
-            _kvmIsDirty = false;
-            Toast.ShowSuccess("KVMs salvos com sucesso (maps.json).");
-        } 
-        catch (Exception ex) { Toast.ShowError("Erro: " + ex.Message); }
-    }
-
-    private async Task LoadCaches()
-    {
-        var path = System.IO.Path.Combine(GetEnvPath(), "caches.json");
-        _cachesJson = System.IO.File.Exists(path) ? await System.IO.File.ReadAllTextAsync(path) : "[\n  {\n    \"name\": \"my-cache\"\n  }\n]";
-        _cachesIsDirty = false;
-    }
-
-    private async Task SaveCaches()
-    {
-        try 
-        {
-            System.IO.Directory.CreateDirectory(GetEnvPath());
-            await System.IO.File.WriteAllTextAsync(System.IO.Path.Combine(GetEnvPath(), "caches.json"), _cachesJson);
-            _cachesIsDirty = false;
-            Toast.ShowSuccess("Caches salvos com sucesso.");
-        } 
-        catch (Exception ex) { Toast.ShowError("Erro: " + ex.Message); }
-    }
-
-    private async Task LoadTargetServers()
-    {
-        var path = System.IO.Path.Combine(GetEnvPath(), "targetservers.json");
-        _targetServersJson = System.IO.File.Exists(path) ? await System.IO.File.ReadAllTextAsync(path) : "[\n  {\n    \"name\": \"my-target-server\",\n    \"host\": \"localhost\",\n    \"port\": 5037,\n    \"isEnabled\": true\n  }\n]";
-        _targetIsDirty = false;
-    }
-
-    private async Task SaveTargetServers()
-    {
-        try 
-        {
-            System.IO.Directory.CreateDirectory(GetEnvPath());
-            await System.IO.File.WriteAllTextAsync(System.IO.Path.Combine(GetEnvPath(), "targetservers.json"), _targetServersJson);
-            _targetIsDirty = false;
-            Toast.ShowSuccess("Target Servers salvos com sucesso.");
-        } 
-        catch (Exception ex) { Toast.ShowError("Erro: " + ex.Message); }
-    }
 }

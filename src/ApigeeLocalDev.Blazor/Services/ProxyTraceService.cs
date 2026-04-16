@@ -1,16 +1,12 @@
-using System.Runtime.CompilerServices;
-using System.Threading.Channels;
-using ApigeeLocalDev.Domain.Entities;
-using ApigeeLocalDev.Domain.Interfaces;
-
 namespace ApigeeLocalDev.Blazor.Services;
 
 public sealed class ProxyTraceService : IProxyTraceService
 {
-    private readonly object _lock = new();
+    private readonly Lock _lock = new();
     private readonly List<ChannelWriter<TraceTransaction>> _subscribers = [];
 
     public bool IsActive { get; private set; }
+
     public (string WorkspaceRoot, string ProxyName)? ActiveProxy { get; private set; }
 
     public void Start()
@@ -36,7 +32,8 @@ public sealed class ProxyTraceService : IProxyTraceService
 
     public void Publish(TraceTransaction transaction)
     {
-        if (!IsActive) return;
+        if (!IsActive) 
+            return;
 
         List<ChannelWriter<TraceTransaction>> dead = [];
 
@@ -47,13 +44,13 @@ public sealed class ProxyTraceService : IProxyTraceService
                 if (!writer.TryWrite(transaction))
                     dead.Add(writer);
             }
+
             foreach (var d in dead)
                 _subscribers.Remove(d);
         }
     }
 
-    public async IAsyncEnumerable<TraceTransaction> ReadAllAsync(
-        [EnumeratorCancellation] CancellationToken ct)
+    public async IAsyncEnumerable<TraceTransaction> ReadAllAsync([EnumeratorCancellation] CancellationToken ct)
     {
         var channel = Channel.CreateUnbounded<TraceTransaction>(
             new UnboundedChannelOptions { SingleReader = true, SingleWriter = false });

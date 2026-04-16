@@ -1,12 +1,3 @@
-using System.Diagnostics;
-using System.Net.Http.Headers;
-using System.Net.Http.Json;
-using System.Text.Json;
-using ApigeeLocalDev.Domain.Entities;
-using ApigeeLocalDev.Domain.Interfaces;
-using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.Logging;
-
 namespace ApigeeLocalDev.Infrastructure.Http;
 
 /// <summary>
@@ -32,7 +23,10 @@ public sealed class ApigeeEmulatorClient(
         try
         {
             using var r1 = await http.GetAsync("/v1/emulator/healthz", ct);
-            if (r1.IsSuccessStatusCode) return true;
+
+            if (r1.IsSuccessStatusCode) 
+                return true;
+            
             using var r2 = await http.GetAsync("/v1/emulator/version", ct);
             return r2.IsSuccessStatusCode;
         }
@@ -49,7 +43,7 @@ public sealed class ApigeeEmulatorClient(
             throw new FileNotFoundException("ZIP não encontrado: " + zipPath);
 
         var url = "/v1/emulator/deploy?environment=" + Uri.EscapeDataString(environment);
-        logger.LogInformation("Deploying {Zip} -> {Url}", zipPath, url);
+        logger.LogDeployApi(zipPath, url);
 
         await using var fs      = File.OpenRead(zipPath);
         using var       content = new StreamContent(fs);
@@ -111,7 +105,7 @@ public sealed class ApigeeEmulatorClient(
     public async Task<TraceSession> StartTraceAsync(string proxyName, CancellationToken ct = default)
     {
         var url = $"/v1/emulator/trace?proxyName={Uri.EscapeDataString(proxyName)}";
-        logger.LogInformation("Starting trace session for proxy '{Proxy}'", proxyName);
+        logger.LogStartTraceSession(proxyName);
 
         using var response = await http.PostAsync(url, null, ct);
         if (!response.IsSuccessStatusCode)
@@ -155,10 +149,9 @@ public sealed class ApigeeEmulatorClient(
         using var response = await http.DeleteAsync(url, ct);
 
         if (!response.IsSuccessStatusCode)
-            logger.LogWarning("StopTrace retornou {Status} para sessão '{SessionId}'",
-                (int)response.StatusCode, sessionId);
+            logger.LogStopTrace(response.StatusCode, sessionId);
         else
-            logger.LogInformation("Trace session '{SessionId}' encerrada", sessionId);
+            logger.LogTraceSessionStopped(sessionId);
     }
 
     // ── Parsing ───────────────────────────────────────────────────────────
@@ -171,7 +164,7 @@ public sealed class ApigeeEmulatorClient(
     // Condition    → avaliação de condição de flow/rota
     // Execution    → política executada
 
-    private static IReadOnlyList<TraceTransaction> ParseTransactions(JsonElement root)
+    private static List<TraceTransaction> ParseTransactions(JsonElement root)
     {
         var result = new List<TraceTransaction>();
 
@@ -183,9 +176,9 @@ public sealed class ApigeeEmulatorClient(
             if (!msg.TryGetProperty("point", out var pointArray))
                 continue;
 
-            var points     = new List<TracePoint>();
-            string verb    = "", uri = "", statusCode = "";
-            long totalMs   = 0;
+            var points = new List<TracePoint>();
+            string verb = "", uri = "", statusCode = "";
+            long totalMs;
 
             // timestamps para calcular duração total
             long firstTs = 0, lastTs = 0;

@@ -1,10 +1,4 @@
 @page "/"
-@using ApigeeLocalDev.Domain.Entities
-@using ApigeeLocalDev.Domain.Interfaces
-@using ApigeeLocalDev.Application.UseCases
-@using Microsoft.AspNetCore.Components.Web
-@inject IWorkspaceRepository WorkspaceRepo
-@inject CreateWorkspaceUseCase CreateWorkspace
 @rendermode RenderMode.InteractiveServer
 
 <h1>Workspaces</h1>
@@ -55,7 +49,6 @@
     </div>
 }
 
-<!-- CONFIRM DELETE MODAL -->
 @if (_pendingDelete is not null)
 {
     <div class="modal-backdrop" @onclick="CancelDelete">
@@ -96,53 +89,4 @@ else
             </div>
         }
     </div>
-}
-
-@code {
-    private List<ApigeeWorkspace> _workspaces = [];
-    private bool   _showCreate;
-    private string _newName     = string.Empty;
-    private string _newPath     = string.Empty;
-    private string _createError = string.Empty;
-    private List<string> _proxyEntries = [];
-    private ApigeeWorkspace? _pendingDelete;
-
-    protected override void OnInitialized()
-        => _workspaces = [.. WorkspaceRepo.ListAll()];
-
-    private void OpenCreateForm()
-    {
-        _showCreate = true; _newName = _newPath = _createError = string.Empty;
-        _proxyEntries = [];
-    }
-
-    private void CloseCreateForm() { _showCreate = false; _createError = string.Empty; }
-
-    private void AddProxyEntry()           => _proxyEntries.Add(string.Empty);
-    private void RemoveProxyEntry(int idx) => _proxyEntries.RemoveAt(idx);
-
-    private void HandleCreate()
-    {
-        _createError = string.Empty;
-        try
-        {
-            var customPath     = string.IsNullOrWhiteSpace(_newPath) ? null : _newPath;
-            var initialProxies = _proxyEntries.Where(p => !string.IsNullOrWhiteSpace(p)).ToList();
-            var ws = CreateWorkspace.Execute(_newName, customPath, initialProxies);
-            _workspaces.Add(ws);
-            CloseCreateForm();
-        }
-        catch (Exception ex) { _createError = ex.Message; }
-    }
-
-    private void AskDelete(ApigeeWorkspace ws)    => _pendingDelete = ws;
-    private void CancelDelete()                   => _pendingDelete = null;
-
-    private void ConfirmDelete()
-    {
-        if (_pendingDelete is null) return;
-        WorkspaceRepo.Delete(_pendingDelete);
-        _workspaces.Remove(_pendingDelete);
-        _pendingDelete = null;
-    }
 }

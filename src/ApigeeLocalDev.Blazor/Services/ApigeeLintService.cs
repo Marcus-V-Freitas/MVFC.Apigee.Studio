@@ -1,13 +1,9 @@
-using System.Diagnostics;
-using System.Text.Json;
-using ApigeeLocalDev.Domain.Entities;
-
 namespace ApigeeLocalDev.Blazor.Services;
 
 public class ApigeeLintResult
 {
     public string FilePath { get; set; } = "";
-    public List<ApigeeLintMessage> Messages { get; set; } = new();
+    public List<ApigeeLintMessage> Messages { get; set; } = [];
 }
 
 public class ApigeeLintMessage
@@ -28,7 +24,8 @@ public class ApigeeLintService
         {
             var proxyDir = Path.Combine(workspace.RootPath, "src", "main", "apigee", "apiproxies");
             
-            if (!Directory.Exists(proxyDir)) return results;
+            if (!Directory.Exists(proxyDir)) 
+                return results;
 
             var startInfo = new ProcessStartInfo
             {
@@ -38,11 +35,12 @@ public class ApigeeLintService
                 RedirectStandardError = true,
                 UseShellExecute = false,
                 CreateNoWindow = true,
-                WorkingDirectory = workspace.RootPath
+                WorkingDirectory = workspace.RootPath,
             };
 
             using var process = Process.Start(startInfo);
-            if (process == null) return results;
+            if (process == null) 
+                return results;
 
             var outputTask = process.StandardOutput.ReadToEndAsync();
             var errorTask = process.StandardError.ReadToEndAsync();
@@ -58,38 +56,46 @@ public class ApigeeLintService
 
             var output = await outputTask;
             
-            if (string.IsNullOrWhiteSpace(output)) return results;
+            if (string.IsNullOrWhiteSpace(output)) 
+                return results;
 
             // apigeelint returns an array of file results in JSON
             try
             {
                 var parsedResults = JsonSerializer.Deserialize<JsonElement>(output);
-                if (parsedResults.ValueKind == JsonValueKind.Array)
+                if (parsedResults.ValueKind != JsonValueKind.Array)
                 {
-                    foreach (var fileResult in parsedResults.EnumerateArray())
-                    {
-                        var filePath = fileResult.GetProperty("filePath").GetString() ?? "";
-                        var messagesElement = fileResult.GetProperty("messages");
-                        
-                        var res = new ApigeeLintResult { FilePath = filePath };
-
-                        if (messagesElement.ValueKind == JsonValueKind.Array)
-                        {
-                            foreach (var msg in messagesElement.EnumerateArray())
-                            {
-                                res.Messages.Add(new ApigeeLintMessage
-                                {
-                                    Line = msg.TryGetProperty("line", out var l) ? (l.ValueKind == JsonValueKind.Number ? l.GetInt32() : (int.TryParse(l.GetString(), out var li) ? li : 1)) : 1,
-                                    Column = msg.TryGetProperty("column", out var c) ? (c.ValueKind == JsonValueKind.Number ? c.GetInt32() : (int.TryParse(c.GetString(), out var ci) ? ci : 1)) : 1,
-                                    Message = msg.TryGetProperty("message", out var m) ? m.GetString() ?? "" : "",
-                                    Severity = msg.TryGetProperty("severity", out var s) ? (s.ValueKind == JsonValueKind.Number ? s.GetInt32() : 2) : 2
-                                });
-                            }
-                        }
-
-                        results.Add(res);
-                    }
+                    return results;
                 }
+
+                foreach (var fileResult in parsedResults.EnumerateArray())
+                {
+                    var filePath = fileResult.GetProperty("filePath").GetString() ?? "";
+                    var messagesElement = fileResult.GetProperty("messages");
+
+                    var res = new ApigeeLintResult { FilePath = filePath };
+
+                    if (messagesElement.ValueKind != JsonValueKind.Array)
+                    {
+                        results.Add(res);
+                        continue;
+                    }
+
+                    foreach (var msg in messagesElement.EnumerateArray())
+                    {
+                        res.Messages.Add(new ApigeeLintMessage
+                        {
+                            Line = msg.TryGetProperty("line", out var l) ? (l.ValueKind == JsonValueKind.Number ? l.GetInt32() : (int.TryParse(l.GetString(), out var li) ? li : 1)) : 1,
+                            Column = msg.TryGetProperty("column", out var c) ? (c.ValueKind == JsonValueKind.Number ? c.GetInt32() : (int.TryParse(c.GetString(), out var ci) ? ci : 1)) : 1,
+                            Message = msg.TryGetProperty("message", out var m) ? m.GetString() ?? "" : "",
+                            Severity = msg.TryGetProperty("severity", out var s) ? (s.ValueKind == JsonValueKind.Number ? s.GetInt32() : 2) : 2
+                        });
+                    }
+
+                    results.Add(res);
+                }
+
+                return results;
             }
             catch (JsonException) { }
         }

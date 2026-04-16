@@ -1,7 +1,4 @@
-using System.Xml.Linq;
-using ApigeeLocalDev.Domain.Entities;
-using ApigeeLocalDev.Domain.Interfaces;
-using Microsoft.Extensions.Logging;
+using ApigeeLocalDev.Infrastructure.Logs;
 
 namespace ApigeeLocalDev.Infrastructure.Parsers;
 
@@ -24,7 +21,7 @@ public sealed class BundleFlowReader(ILogger<BundleFlowReader> logger) : IBundle
 
         if (!Directory.Exists(proxiesDir))
         {
-            logger.LogDebug("ProxiesDir não encontrado: {Dir}", proxiesDir);
+            logger.LogProxiesDirNotFound(proxiesDir);
             return [];
         }
 
@@ -34,7 +31,7 @@ public sealed class BundleFlowReader(ILogger<BundleFlowReader> logger) : IBundle
 
         if (proxyFile is null)
         {
-            logger.LogDebug("Nenhum XML em {Dir}", proxiesDir);
+            logger.LogNoXmlFound(proxiesDir);
             return [];
         }
 
@@ -44,42 +41,41 @@ public sealed class BundleFlowReader(ILogger<BundleFlowReader> logger) : IBundle
             var root = doc.Root;
             if (root is null) return [];
 
-            var isError = statusCode >= 400;
             var points  = new List<TracePoint>();
 
             // PreFlow Request
-            ExtractSteps(root, "PreFlow",  "Request",  "ProxyRequest",  isError, points);
+            ExtractSteps(root, "PreFlow",  "Request",  "ProxyRequest", points);
             // Flows Request (condicional)
-            ExtractFlowSteps(root, "Request",  "ProxyRequest",  isError, points);
+            ExtractFlowSteps(root, "Request",  "ProxyRequest", points);
             // PostFlow Request
-            ExtractSteps(root, "PostFlow", "Request",  "ProxyRequest",  isError, points);
+            ExtractSteps(root, "PostFlow", "Request",  "ProxyRequest", points);
 
             // PostFlow Response (inverso)
-            ExtractSteps(root, "PostFlow", "Response", "ProxyResponse", isError, points);
+            ExtractSteps(root, "PostFlow", "Response", "ProxyResponse", points);
             // Flows Response (condicional)
-            ExtractFlowSteps(root, "Response", "ProxyResponse", isError, points);
+            ExtractFlowSteps(root, "Response", "ProxyResponse", points);
             // PreFlow Response
-            ExtractSteps(root, "PreFlow",  "Response", "ProxyResponse", isError, points);
+            ExtractSteps(root, "PreFlow",  "Response", "ProxyResponse", points);
 
             return points;
         }
         catch (Exception ex)
         {
-            logger.LogWarning(ex, "Erro ao parsear ProxyEndpoint XML: {File}", proxyFile);
+            logger.LogErrorParsingProxyEndpointXml(ex, proxyFile);
             return [];
         }
     }
 
     private static void ExtractSteps(
         XElement root, string flowName, string direction,
-        string phase, bool isError, List<TracePoint> points)
+        string phase, List<TracePoint> points)
     {
         var steps = root
             .Descendants(flowName)
             .FirstOrDefault()
             ?.Element(direction)
             ?.Elements("Step")
-            ?? Enumerable.Empty<XElement>();
+            ?? [];
 
         foreach (var step in steps)
         {
@@ -99,20 +95,18 @@ public sealed class BundleFlowReader(ILogger<BundleFlowReader> logger) : IBundle
         }
     }
 
-    private static void ExtractFlowSteps(
-        XElement root, string direction, string phase,
-        bool isError, List<TracePoint> points)
+    private static void ExtractFlowSteps(XElement root, string direction, string phase, List<TracePoint> points)
     {
         var flows = root
             .Element("Flows")
             ?.Elements("Flow")
-            ?? Enumerable.Empty<XElement>();
+            ?? [];
 
         foreach (var flow in flows)
         {
             var flowCondition = flow.Element("Condition")?.Value;
             var steps = flow.Element(direction)?.Elements("Step")
-                        ?? Enumerable.Empty<XElement>();
+                        ?? [];
 
             foreach (var step in steps)
             {

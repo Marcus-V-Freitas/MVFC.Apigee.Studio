@@ -1,11 +1,3 @@
-using ApigeeLocalDev.Domain.Interfaces;
-using ApigeeLocalDev.Infrastructure.Http;
-using ApigeeLocalDev.Infrastructure.Parsers;
-using ApigeeLocalDev.Infrastructure.Repositories;
-using ApigeeLocalDev.Infrastructure.Templates;
-using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.DependencyInjection;
-
 namespace ApigeeLocalDev.Infrastructure.Extensions;
 
 public static class InfrastructureServiceExtensions

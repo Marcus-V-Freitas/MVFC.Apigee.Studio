@@ -5,5 +5,4 @@ public sealed record PolicyTemplate(
     string Description,
     string Category,
     string XmlContent,
-    IReadOnlyList<string> Parameters
-);
+    IReadOnlyList<string> Parameters);
