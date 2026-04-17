@@ -22,6 +22,7 @@
   color: var(--color-text);
   font-size: var(--text-sm);
   font-family: var(--font-body);
+  height: 36px;
   transition: border-color var(--transition), box-shadow var(--transition);
 }
 

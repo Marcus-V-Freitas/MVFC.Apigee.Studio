@@ -32,6 +32,8 @@ builder.Services.AddScoped<GeneratePolicyUseCase>();
 /// </summary>
 builder.Services.AddScoped<ToastService>();
 builder.Services.AddScoped<ApigeeLintService>();
+builder.Services.AddScoped<EditorStateService>();
+builder.Services.AddSingleton<SkeletonTemplateService>();
 
 /// <summary>
 /// Registers the proxy trace service as a singleton to persist across middleware requests.

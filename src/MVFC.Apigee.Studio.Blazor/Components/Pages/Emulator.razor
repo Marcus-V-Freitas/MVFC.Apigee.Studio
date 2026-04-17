@@ -14,13 +14,16 @@
     <p class="help-text">Escolha a imagem e suba/derrube o container local do Apigee Emulator.</p>
 
     <div class="form-grid">
-        <label>
-            Imagem Docker
+        <div class="form-field">
+            <label>Imagem Docker</label>
             <input class="input" @bind="_image" list="emulator-images" placeholder="gcr.io/apigee-release/hybrid/apigee-emulator:latest" />
-        </label>
-        <div class="emulator-actions">
-            <button class="btn btn-primary" @onclick="StartContainer" disabled="@_dockerBusy">&#9654; Start</button>
-            <button class="btn btn-ghost btn-sm btn-danger" @onclick="StopContainer" disabled="@_dockerBusy">&#9632; Stop</button>
+        </div>
+        <div class="form-field">
+            <label style="visibility: hidden;">Actions</label>
+            <div class="emulator-actions" style="display: flex; gap: var(--space-2);">
+                <button class="btn btn-primary" @onclick="StartContainer" disabled="@_dockerBusy">&#9654; Start</button>
+                <button class="btn btn-ghost btn-sm btn-danger" @onclick="StopContainer" disabled="@_dockerBusy">&#9632; Stop</button>
+            </div>
         </div>
     </div>
 
@@ -33,14 +36,14 @@
 
     @if (!string.IsNullOrEmpty(_dockerMessage))
     {
-        <p class="mt-2 @(_dockerError ? "error-text" : "success-text")">@_dockerMessage</p>
+        <p class="mt-4 @(_dockerError ? "error-text" : "success-text")">@_dockerMessage</p>
     }
 </div>
 
 <!-- STATUS -->
-<div class="card emulator-status">
-    <div class="status-row">
-        <div class="status-label">
+<div class="card emulator-status" style="margin-top: var(--space-6);">
+    <div class="status-row" style="display: flex; justify-content: space-between; align-items: center;">
+        <div class="status-label" style="display: flex; align-items: center; gap: var(--space-2);">
             <span class="status-dot @(_alive ? "dot-green" : "dot-red")"></span>
             <span>@(_checking ? "Verificando..." : (_alive ? "Emulator online" : "Emulator offline"))</span>
         </div>
@@ -49,11 +52,11 @@
 
     @if (_statusError is not null)
     {
-        <p class="help-text error-text">@_statusError</p>
+        <p class="help-text error-text" style="margin-top: var(--space-2);">@_statusError</p>
     }
     else
     {
-        <p class="help-text">
+        <p class="help-text" style="margin-top: var(--space-2);">
             Base URL: <code>@_baseUrl</code> &mdash;
             certifique-se de que o container Docker está rodando.
         </p>
@@ -61,24 +64,26 @@
 </div>
 
 <!-- QUICK DEPLOY -->
-<div class="card">
+<div class="card" style="margin-top: var(--space-6);">
     <h3>Quick Deploy</h3>
-    <p class="help-text">Informe o caminho de um ZIP e o ambiente alvo para fazer deploy direto no emulator.</p>
+    <p class="help-text" style="margin-bottom: var(--space-4);">Informe o caminho de um ZIP e o ambiente alvo para fazer deploy direto no emulator.</p>
 
     <div class="form-grid">
-        <label>
-            ZIP file path
+        <div class="form-field">
+            <label>ZIP file path</label>
             <input class="input" @bind="_zipPath" placeholder="C:/tmp/my-proxy.zip" />
-        </label>
-        <label>
-            Environment
+        </div>
+        <div class="form-field">
+            <label>Environment</label>
             <input class="input" @bind="_env" placeholder="local" />
-        </label>
+        </div>
     </div>
 
-    <button class="btn btn-primary" @onclick="QuickDeploy" disabled="@DeployDisabled">
-        @(_deploying ? "Deploying..." : "Deploy ZIP")
-    </button>
+    <div style="margin-top: var(--space-6);">
+        <button class="btn btn-primary" @onclick="QuickDeploy" disabled="@DeployDisabled">
+            @(_deploying ? "Deploying..." : "Deploy ZIP")
+        </button>
+    </div>
 
     @if (!string.IsNullOrEmpty(_message))
     {

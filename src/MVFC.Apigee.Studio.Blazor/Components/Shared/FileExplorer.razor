@@ -1,0 +1,29 @@
+<aside class="file-tree">
+    <div class="file-tree-header">
+        <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+            <h3>Files</h3>
+            <div class="file-tree-actions">
+                <button class="btn btn-ghost btn-sm" @onclick="() => OnNewItem.InvokeAsync(false)">+ File</button>
+                <button class="btn btn-ghost btn-sm" @onclick="() => OnNewItem.InvokeAsync(true)">+ Folder</button>
+            </div>
+        </div>
+        <div class="file-tree-search">
+            <input class="input" style="width: 100%; font-size: var(--text-xs); padding: 4px 8px; height: 28px;" placeholder="Filter files..." value="@SearchQuery" @oninput="HandleSearchInput" />
+        </div>
+    </div>
+
+    <div class="file-tree-body">
+        @if (FilteredTree is { } filteredTree)
+        {
+            <TreeNode Item="filteredTree"
+                      SelectedFilePath="@SelectedFilePath"
+                      OnFileSelected="OnFileSelected"
+                      OnQuickAdd="OnQuickAdd"
+                      OnContextMenu="OnContextMenu" />
+        }
+        else if (Tree is not null && !string.IsNullOrWhiteSpace(SearchQuery))
+        {
+            <div class="empty-state" style="padding: var(--space-4); text-align: center; color: var(--color-text-faint); font-size: var(--text-sm);">Nenhum arquivo encontrado.</div>
+        }
+    </div>
+</aside>

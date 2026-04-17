@@ -1,4 +1,4 @@
-﻿namespace MVFC.Apigee.Studio.Blazor.Components.Pages;
+namespace MVFC.Apigee.Studio.Blazor.Components.Pages;
 
 public partial class Trace : ComponentBase, IAsyncDisposable
 {
@@ -77,6 +77,12 @@ public partial class Trace : ComponentBase, IAsyncDisposable
 
     private async Task StopTrace()
     {
+        await StopTraceInternalAsync();
+        Toast.ShowSuccess("Trace encerrado.");
+    }
+
+    private async Task StopTraceInternalAsync()
+    {
         await CancelPollAsync();
 
         if (_session is not null)
@@ -89,7 +95,6 @@ public partial class Trace : ComponentBase, IAsyncDisposable
         }
 
         _isTracing = false;
-        Toast.ShowSuccess("Trace encerrado.");
     }
 
     private void ClearTransactions()
@@ -143,15 +148,6 @@ public partial class Trace : ComponentBase, IAsyncDisposable
     public async ValueTask DisposeAsync()
     {
         GC.SuppressFinalize(this);
-        await CancelPollAsync();
-
-        if (_isTracing && _session is not null)
-        {
-            try 
-            { 
-                await Emulator.StopTraceAsync(_session.SessionId); 
-            }
-            catch { /* best-effort */ }
-        }
+        await StopTraceInternalAsync();
     }
 }

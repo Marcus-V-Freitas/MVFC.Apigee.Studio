@@ -23,8 +23,8 @@
     <div class="tab-pane @(_activeTab == "trace" ? "active" : "")">
         <div class="card trace-control-card">
             <div class="trace-control-row">
-                <div class="form-group flex-1">
-                    <label class="form-label">Workspace</label>
+                <div class="form-field flex-1">
+                    <label>Workspace</label>
                     <select class="form-input" @onchange="OnWorkspaceChanged" disabled="@_isTracing">
                         <option value="">-- Selecione o Workspace --</option>
                         @foreach (var ws in _workspaces)
@@ -34,8 +34,8 @@
                     </select>
                 </div>
 
-                <div class="form-group flex-1">
-                    <label class="form-label">Proxy</label>
+                <div class="form-field flex-1">
+                    <label>Proxy</label>
                     <select class="form-input" @onchange="OnProxyChanged" disabled="@IsWorkspaceNotReady">
                         <option value="">-- Selecione o Proxy --</option>
                         @foreach (var p in _proxies)
@@ -45,7 +45,9 @@
                     </select>
                 </div>
 
-                <div class="trace-control-actions">
+                <div class="form-field">
+                    <label style="visibility: hidden;">Actions</label>
+                    <div class="trace-control-actions">
                     @if (!_isTracing)
                     {
                         var startDisabled = string.IsNullOrWhiteSpace(_proxyName) || _loading;
@@ -78,6 +80,7 @@
                     }
                 </div>
             </div>
+        </div>
 
             @if (_session is not null)
             {

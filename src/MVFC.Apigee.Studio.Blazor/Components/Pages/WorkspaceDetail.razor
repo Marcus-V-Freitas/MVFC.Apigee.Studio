@@ -10,98 +10,52 @@
 else
 {
     <div class="workspace-detail">
-        @* ÁRVORE *@
-        <aside class="file-tree">
-            <div class="file-tree-header">
-                <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
-                    <h3>Files</h3>
-                    <div class="file-tree-actions">
-                        <button class="btn btn-ghost btn-sm" @onclick="() => OpenNewItemDialog(false)">+ File</button>
-                        <button class="btn btn-ghost btn-sm" @onclick="() => OpenNewItemDialog(true)">+ Folder</button>
-                    </div>
-                </div>
-                <div class="file-tree-search mt-4">
-                    <input class="input" style="width: 100%; font-size: var(--text-xs); padding: 4px 8px;" placeholder="Filter files..." @bind="_searchQuery" @bind:event="oninput" />
-                </div>
-            </div>
+        <FileExplorer Tree="_tree" 
+                      SelectedFilePath="@EditorState.ActiveTab?.FullPath"
+                      @bind-SearchQuery="_searchQuery"
+                      OnFileSelected="LoadFile"
+                      OnQuickAdd="OpenQuickAddModal"
+                      OnContextMenu="HandleContextMenu"
+                      OnNewItem="OpenNewItemDialog" />
 
-            @if (_showNewItem)
-            {
-                <div class="new-item-form">
-                    <input class="input" @bind="_newItemName"
-                           placeholder="@NewItemPlaceholder"
-                           @onkeydown="HandleNewItemKey" />
-                    <div class="form-actions">
-                        <button class="btn btn-primary btn-sm" @onclick="ConfirmNewItem">OK</button>
-                        <button class="btn btn-ghost btn-sm" @onclick="() => _showNewItem = false">&#10005;</button>
-                    </div>
-                    @if (!string.IsNullOrEmpty(_newItemError))
-                    {
-                        <p class="error-text">@_newItemError</p>
-                    }
-                </div>
-            }
-
-            <div class="file-tree-body">
-                @if (FilterTree(_tree) is { } filteredTree)
-                {
-                    <TreeNode Item="filteredTree"
-                              SelectedFilePath="@_activeTab?.FullPath"
-                              OnFileSelected="LoadFile"
-                              OnQuickAdd="OpenQuickAddModal"
-                              OnContextMenu="HandleContextMenu" />
-                }
-                else if (_tree is not null && !string.IsNullOrWhiteSpace(_searchQuery))
-                {
-                    <div class="empty-state" style="padding: var(--space-4); text-align: center; color: var(--color-text-faint); font-size: var(--text-sm);">Nenhum arquivo encontrado.</div>
-                }
-            </div>
-        </aside>
-
-        @* MONACO EDITOR *@
         <section class="file-editor">
-            @if (_openTabs.Any())
+            @if (EditorState.OpenTabs.Any())
             {
-                <div class="editor-tabs">
-                    @foreach (var tab in _openTabs)
-                    {
-                        var isActive = tab == _activeTab;
-                        <div class="editor-tab @(isActive ? "active" : "")" 
-                             @onclick="() => SwitchTab(tab)">
-                            <span class="tab-title">
-                                @if (tab.IsDirty) { <span class="editor-dirty-dot" style="margin-right: 4px;">●</span> }
-                                @tab.FileName
-                            </span>
-                            <button class="btn btn-ghost tab-close-btn" @onclick:stopPropagation @onclick="() => CloseTab(tab)">✕</button>
+                <EditorTabs Tabs="EditorState.OpenTabs" 
+                            ActiveTab="EditorState.ActiveTab"
+                            OnTabSwitch="SwitchTab"
+                            OnTabClose="CloseTab" />
+
+                @if (EditorState.ActiveTab is not null)
+                {
+                    <div class="editor-header">
+                        <div class="editor-header-left">
+                            <span class="editor-filename">@EditorState.ActiveTab.FileName</span>
+                            <span class="editor-lang-badge">@DetectLanguage()</span>
                         </div>
-                    }
-                </div>
-                <!-- ... header of active tab ... -->
-                <div class="editor-header">
-                    <div class="editor-header-left">
-                        <span class="editor-filename">@_activeTab?.FileName</span>
-                        <span class="editor-lang-badge">@DetectLanguage()</span>
+                        <div class="editor-header-actions">
+                            <button class="btn btn-ghost btn-sm" title="Format (Alt+Shift+F)" @onclick="FormatDocument">&#10024; Format</button>
+                            <button class="btn btn-ghost btn-sm btn-danger" @onclick="DeleteSelectedFile">&#128465; Delete</button>
+                            <button class="btn btn-primary btn-sm" @onclick="SaveFile" disabled="@_saving" title="Ctrl+S">
+                                @if (_saving)
+                                {
+                                    <span>Salvando...</span>
+                                }
+                                else
+                                {
+                                    <span>&#128190; Save</span>
+                                    <kbd class="kbd-hint">Ctrl+S</kbd>
+                                }
+                            </button>
+                        </div>
                     </div>
-                    <div class="editor-header-actions">
-                        <button class="btn btn-ghost btn-sm" title="Format (Alt+Shift+F)" @onclick="FormatDocument">&#10024; Format</button>
-                        <button class="btn btn-ghost btn-sm btn-danger" @onclick="DeleteSelectedFile">&#128465; Delete</button>
-                        <button class="btn btn-primary btn-sm" @onclick="SaveFile" disabled="@_saving" title="Ctrl+S">
-                            @if (_saving)
-                            {
-                                <span>Salvando...</span>
-                            }
-                            else
-                            {
-                                <span>&#128190; Save</span>
-                                <kbd class="kbd-hint">Ctrl+S</kbd>
-                            }
-                        </button>
-                    </div>
-                </div>
-                <div id="monaco-editor-container"
-                     class="monaco-container"
-                     @onmonaco-save="SaveFile">
-                </div>
+                    <MonacoEditor @key="EditorState.ActiveTab.FullPath"
+                                 @ref="_editor"
+                                 Id="@EditorId"
+                                 InitialContent="@EditorState.ActiveTab.Content"
+                                 FilePath="@EditorState.ActiveTab.FullPath"
+                                 OnSave="SaveFile" />
+                }
             }
             else
             {
@@ -110,175 +64,39 @@ else
         </section>
     </div>
 
-    @* MODAL QUICK ADD *@
-    @if (_quickAddOpen)
+    <QuickAddDrawer IsOpen="_quickAddOpen"
+                   Category="@_quickAddCategory"
+                   BasePath="@_quickAddPath"
+                   Workspace="_workspace"
+                   OnClose="CloseQuickAdd"
+                   OnItemCreated="OnItemCreated" />
+
+    <DeploymentPanel Workspace="_workspace" />
+
+    @if (_showNewItem)
     {
-        <div class="modal-backdrop" @onclick="CloseQuickAdd">
-            <div class="modal-drawer" @onclick:stopPropagation>
-
-                <div class="modal-header">
-                    <div>
-                        <h3>Adicionar em <code>@_quickAddCategory</code></h3>
-                        <p class="modal-path">@_quickAddPath</p>
-                    </div>
-                    <button class="btn btn-ghost btn-sm" @onclick="CloseQuickAdd">&#10005;</button>
+        <div class="modal-backdrop" style="z-index: 10001; background: rgba(0,0,0,0.7);" @onclick="() => _showNewItem = false">
+            <div class="card" style="position: absolute; left: 50%; top: 40%; transform: translate(-50%, -50%); width: 400px; z-index: 10002;" @onclick:stopPropagation>
+                <div class="card-header">
+                    <h3 class="card-title">@(_newItemIsDir ? "Nova Pasta" : "Novo Arquivo")</h3>
                 </div>
-
-                @if (_quickAddCategory == "policies")
-                {
-                    <div class="drawer-body">
-                        <div class="drawer-list">
-                            @foreach (var group in _allTemplates.GroupBy(t => t.Category))
-                            {
-                                <div class="drawer-group">
-                                    <span class="drawer-group-label">@group.Key</span>
-                                    @foreach (var t in group)
-                                    {
-                                        var isActive = t == _quickTemplate;
-                                        <button class="@(isActive ? "drawer-item drawer-item--active" : "drawer-item")"
-                                                @onclick="() => SelectQuickTemplate(t)">
-                                            <span class="drawer-item-name">@t.Name</span>
-                                            @if (!string.IsNullOrEmpty(t.Description))
-                                            {
-                                                <span class="drawer-item-desc">@t.Description</span>
-                                            }
-                                        </button>
-                                    }
-                                </div>
-                            }
-                        </div>
-
-                        <div class="drawer-form">
-                            @if (_quickTemplate is null)
-                            {
-                                <div class="drawer-empty">
-                                    <span>&larr; Selecione um template</span>
-                                </div>
-                            }
-                            else
-                            {
-                                <h4>@_quickTemplate.Name</h4>
-                                @if (!string.IsNullOrEmpty(_quickTemplate.Description))
-                                {
-                                    <p class="help-text">@_quickTemplate.Description</p>
-                                }
-
-                                <div class="param-list">
-                                    @foreach (var p in _quickTemplate.Parameters)
-                                    {
-                                        <label>
-                                            @p
-                                            <input class="input" value="@GetQParam(p)"
-                                                   @onchange="e => SetQParam(p, e.Value?.ToString() ?? string.Empty)" />
-                                        </label>
-                                    }
-                                </div>
-                                
-                                <textarea class="xml-preview code-editor" style="width: 100%; min-height: 280px; flex-shrink: 0; font-size: 12px; margin-bottom: 24px; resize: vertical;" @bind="_quickXmlEditable" @bind:event="oninput"></textarea>
-
-                                <button class="btn btn-primary" @onclick="ConfirmQuickPolicy"
-                                        disabled="@_quickGenerating">
-                                    @(_quickGenerating ? "Gerando..." : "Gerar Política")
-                                </button>
-
-                                @if (!string.IsNullOrEmpty(_quickMessage))
-                                {
-                                    <p class="mt-2 @QuickMessageClass">@_quickMessage</p>
-                                }
-                            }
-                        </div>
-                    </div>
-                }
-                else if (_quickAddCategory == "sharedflows")
-                {
-                    <div class="drawer-body drawer-body--single">
-                        <label>
-                            Nome do Shared Flow
-                            <input class="input" @bind="_quickFileName" placeholder="meu-shared-flow" />
-                        </label>
-                        <button class="btn btn-primary" @onclick="ConfirmQuickSharedFlow">Criar Shared Flow</button>
-                        @if (!string.IsNullOrEmpty(_quickMessage))
-                        {
-                            <p class="mt-2 @QuickMessageClass">@_quickMessage</p>
-                        }
-                    </div>
-                }
-                else if (_quickAddCategory == "environments")
-                {
-                    <div class="drawer-body drawer-body--single">
-                        <label>
-                            Nome do Environment
-                            <input class="input" @bind="_quickFileName" placeholder="local" />
-                        </label>
-                        <p class="help-text">Cria a pasta do environment com arquivos mínimos (deployments.json, flowhooks.json, targetservers.json).</p>
-                        <button class="btn btn-primary" @onclick="ConfirmQuickEnvironment">Criar Environment</button>
-                        @if (!string.IsNullOrEmpty(_quickMessage))
-                        {
-                            <p class="mt-2 @QuickMessageClass">@_quickMessage</p>
-                        }
-                    </div>
-                }
-                else
-                {
-                    var labelText       = _quickAddCategory == "apiproxies" ? "Nome da API (proxy)" : "Nome do arquivo";
-                    var placeholderText = _quickAddCategory == "apiproxies" ? "minha-api" : "meu-recurso.xml";
-                    var btnText         = _quickAddCategory == "apiproxies" ? "Criar API" : "Criar Arquivo";
-
-                    <div class="drawer-body drawer-body--single">
-                        <label>
-                            @labelText
-                            <input class="input" @bind="_quickFileName" placeholder="@placeholderText" />
-                        </label>
-                        <button class="btn btn-primary" @onclick="ConfirmQuickFile">@btnText</button>
-                        @if (!string.IsNullOrEmpty(_quickMessage))
-                        {
-                            <p class="mt-2 @QuickMessageClass">@_quickMessage</p>
-                        }
-                    </div>
-                }
+                <div class="card-body">
+                    <input class="input" style="width: 100%;" @bind="_newItemName"
+                           placeholder="@NewItemPlaceholder"
+                           @onkeydown="HandleNewItemKey" 
+                           @ref="_newItemInput" />
+                    @if (!string.IsNullOrEmpty(_newItemError))
+                    {
+                        <p class="error-text mt-2">@_newItemError</p>
+                    }
+                </div>
+                <div class="card-footer" style="display: flex; justify-content: flex-end; gap: 8px;">
+                    <button class="btn btn-ghost" @onclick="() => _showNewItem = false">Cancelar</button>
+                    <button class="btn btn-primary" @onclick="ConfirmNewItem">Criar</button>
+                </div>
             </div>
         </div>
     }
-
-    @* DEPLOY PANEL *@
-    <div class="deploy-panel card">
-        <h3>Deploy to Emulator</h3>
-        <div class="deploy-tabs">
-            <button class="@TabClass(DeployModeFull)"  @onclick="SetDeployModeFull">Workspace completo</button>
-            <button class="@TabClass(DeployModeProxy)" @onclick="SetDeployModeProxy">Proxy / Shared Flow</button>
-        </div>
-
-        @if (_deployMode == DeployModeProxy)
-        {
-            <div class="deploy-form">
-                <label>Proxy / Shared Flow name
-                    <input class="input" @bind="_deployTarget" placeholder="my-proxy" />
-                </label>
-                <label>Environment
-                    <input class="input" @bind="_deployEnv" placeholder="local" />
-                </label>
-                <button class="btn btn-primary" @onclick="DeployProxy" disabled="@_deploying">
-                    @(_deploying ? "Deploying..." : "Deploy")
-                </button>
-            </div>
-        }
-        else
-        {
-            <div class="deploy-form">
-                <label>Environment
-                    <input class="input" @bind="_deployEnv" placeholder="local" />
-                </label>
-                <button class="btn btn-primary" @onclick="DeployFull" disabled="@_deploying">
-                    @(_deploying ? "Deploying..." : "Deploy workspace completo")
-                </button>
-            </div>
-        }
-
-        @if (!string.IsNullOrEmpty(_deployMessage))
-        {
-            <p class="@DeployMessageClass">@_deployMessage</p>
-        }
-    </div>
 
     @* CONTEXT MENU *@
     @if (_showContextMenu)

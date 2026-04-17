@@ -1,0 +1,15 @@
+.deploy-form {
+    display: flex;
+    gap: var(--space-4);
+    align-items: flex-end;
+    flex-wrap: wrap;
+}
+
+.deploy-form label {
+    flex: 1;
+    min-width: 200px;
+}
+
+.deploy-form .btn {
+    height: var(--input-height);
+}

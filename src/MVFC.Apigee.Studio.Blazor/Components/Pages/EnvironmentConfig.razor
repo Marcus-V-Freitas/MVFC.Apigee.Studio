@@ -10,8 +10,8 @@
 
 <div class="card mb-4">
     <div class="config-header-row">
-        <label class="flex-1">
-            Workspace
+        <div class="form-field flex-1">
+            <label>Workspace</label>
             <select class="input" @bind="_selectedWorkspaceName" @bind:after="OnWorkspaceChanged">
                 <option value="">-- Selecione --</option>
                 @foreach (var w in _workspaces)
@@ -19,10 +19,10 @@
                     <option value="@w.Name">@w.Name</option>
                 }
             </select>
-        </label>
+        </div>
 
-        <label class="flex-1">
-            Environment
+        <div class="form-field flex-1">
+            <label>Environment</label>
             <select class="input" @bind="_selectedEnvironment" @bind:after="OnEnvironmentChanged" disabled="@WorkspaceNotSelected">
                 <option value="">-- Selecione --</option>
                 @foreach (var env in _environments)
@@ -30,15 +30,18 @@
                     <option value="@env">@env</option>
                 }
             </select>
-        </label>
+        </div>
 
         @if (_workspace != null)
         {
-            <div class="new-env-form">
-                <input class="input new-env-input" placeholder="Novo env..." @bind="_newEnvName" />
-                <button class="btn btn-primary" @onclick="CreateEnvironment" disabled="@string.IsNullOrWhiteSpace(_newEnvName)">
-                    Criar
-                </button>
+            <div class="form-field flex-0">
+                <label style="visibility: hidden;">New</label>
+                <div class="new-env-form">
+                    <input class="input new-env-input" placeholder="Novo env..." @bind="_newEnvName" />
+                    <button class="btn btn-primary" @onclick="CreateEnvironment" disabled="@string.IsNullOrWhiteSpace(_newEnvName)">
+                        Criar
+                    </button>
+                </div>
             </div>
         }
     </div>

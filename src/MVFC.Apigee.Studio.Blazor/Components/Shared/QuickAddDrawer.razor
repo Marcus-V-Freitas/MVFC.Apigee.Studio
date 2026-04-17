@@ -1,0 +1,128 @@
+@if (IsOpen)
+{
+    <div class="modal-backdrop" @onclick="Close">
+        <div class="modal-drawer" @onclick:stopPropagation>
+
+            <div class="modal-header">
+                <div>
+                    <h3>Adicionar em <code>@Category</code></h3>
+                    <p class="modal-path">@BasePath</p>
+                </div>
+                <button class="btn btn-ghost btn-sm" @onclick="Close">&#10005;</button>
+            </div>
+
+            @if (Category == "policies")
+            {
+                <div class="drawer-body">
+                    <div class="drawer-list">
+                        @foreach (var group in _allTemplates.GroupBy(t => t.Category))
+                        {
+                            <div class="drawer-group">
+                                <span class="drawer-group-label">@group.Key</span>
+                                @foreach (var t in group)
+                                {
+                                    var isActive = t == _quickTemplate;
+                                    <button class="@(isActive ? "drawer-item drawer-item--active" : "drawer-item")"
+                                            @onclick="() => SelectQuickTemplate(t)">
+                                        <span class="drawer-item-name">@t.Name</span>
+                                        @if (!string.IsNullOrEmpty(t.Description))
+                                        {
+                                            <span class="drawer-item-desc">@t.Description</span>
+                                        }
+                                    </button>
+                                }
+                            </div>
+                        }
+                    </div>
+
+                    <div class="drawer-form">
+                        @if (_quickTemplate is null)
+                        {
+                            <div class="drawer-empty">
+                                <span>&larr; Selecione um template</span>
+                            </div>
+                        }
+                        else
+                        {
+                            <h4>@_quickTemplate.Name</h4>
+                            @if (!string.IsNullOrEmpty(_quickTemplate.Description))
+                            {
+                                <p class="help-text">@_quickTemplate.Description</p>
+                            }
+
+                            <div class="param-list field-stack">
+                                @foreach (var p in _quickTemplate.Parameters)
+                                {
+                                    <div class="form-field">
+                                        <label>@p</label>
+                                        <input class="input" value="@GetQParam(p)"
+                                               @onchange="e => SetQParam(p, e.Value?.ToString() ?? string.Empty)" />
+                                    </div>
+                                }
+                            </div>
+                            
+                            <textarea class="xml-preview code-editor" style="width: 100%; min-height: 280px; flex-shrink: 0; font-size: 12px; margin-bottom: 24px; resize: vertical;" @bind="_quickXmlEditable" @bind:event="oninput"></textarea>
+
+                            <button class="btn btn-primary" @onclick="ConfirmQuickPolicy"
+                                    disabled="@_quickGenerating">
+                                @(_quickGenerating ? "Gerando..." : "Gerar Política")
+                            </button>
+
+                            @if (!string.IsNullOrEmpty(_quickMessage))
+                            {
+                                <p class="mt-2 @QuickMessageClass">@_quickMessage</p>
+                            }
+                        }
+                    </div>
+                </div>
+            }
+            else if (Category == "sharedflows")
+            {
+                <div class="drawer-body drawer-body--single field-stack">
+                    <div class="form-field">
+                        <label>Nome do Shared Flow</label>
+                        <input class="input" @bind="_quickFileName" placeholder="meu-shared-flow" />
+                    </div>
+                    <button class="btn btn-primary" @onclick="ConfirmQuickSharedFlow">Criar Shared Flow</button>
+                    @if (!string.IsNullOrEmpty(_quickMessage))
+                    {
+                        <p class="mt-2 @QuickMessageClass">@_quickMessage</p>
+                    }
+                </div>
+            }
+            else if (Category == "environments")
+            {
+                <div class="drawer-body drawer-body--single field-stack">
+                    <div class="form-field">
+                        <label>Nome do Environment</label>
+                        <input class="input" @bind="_quickFileName" placeholder="local" />
+                    </div>
+                    <p class="help-text">Cria a pasta do environment com arquivos mínimos (deployments.json, flowhooks.json, targetservers.json).</p>
+                    <button class="btn btn-primary" @onclick="ConfirmQuickEnvironment">Criar Environment</button>
+                    @if (!string.IsNullOrEmpty(_quickMessage))
+                    {
+                        <p class="mt-2 @QuickMessageClass">@_quickMessage</p>
+                    }
+                </div>
+            }
+            else
+            {
+                var labelText       = Category == "apiproxies" ? "Nome da API (proxy)" : "Nome do arquivo";
+                var placeholderText = Category == "apiproxies" ? "minha-api" : "meu-recurso.xml";
+                var btnText         = Category == "apiproxies" ? "Criar API" : "Criar Arquivo";
+
+                <div class="drawer-body drawer-body--single field-stack">
+                    <div class="form-field">
+                        <label>@labelText</label>
+                        <input class="input" @bind="_quickFileName" placeholder="@placeholderText" />
+                    </div>
+                    <button class="btn btn-primary" @onclick="ConfirmQuickFile">@btnText</button>
+                    @if (!string.IsNullOrEmpty(_quickMessage))
+                    {
+                        <p class="mt-2 @QuickMessageClass">@_quickMessage</p>
+                    }
+                </div>
+            }
+        </div>
+    </div>
+}
