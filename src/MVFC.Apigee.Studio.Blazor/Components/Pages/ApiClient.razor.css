@@ -106,3 +106,67 @@
 .status-danger {
     color: var(--color-error);
 }
+
+/* ─── Mobile Responsiveness ─────────────────────────────────── */
+@media (max-width: 768px) {
+    .request-line {
+        flex-direction: column;
+        align-items: stretch;
+        gap: var(--space-2);
+    }
+
+    .method-select {
+        width: 100%;
+        flex: none;
+    }
+
+    .request-line .input.flex-1 {
+        width: 100% !important;
+        flex: none !important;
+    }
+
+    .request-line .btn-primary {
+        width: 100%;
+        margin-top: var(--space-2);
+        order: 3;
+    }
+
+    .header-row {
+        flex-direction: column;
+        gap: var(--space-1);
+        margin-bottom: var(--space-4);
+        padding-bottom: var(--space-4);
+        border-bottom: 1px solid var(--color-border);
+        align-items: stretch;
+    }
+
+    .header-name, .header-value {
+        width: 100% !important;
+        flex: none !important;
+    }
+
+    .header-row .btn-danger {
+        width: 100%;
+        margin-top: 4px;
+        height: 32px;
+    }
+
+    .response-meta {
+        flex-direction: column;
+        gap: var(--space-2);
+        align-items: flex-start;
+    }
+
+    .response-headers-pre {
+        white-space: pre-wrap;
+        word-break: break-all;
+        font-size: 11px;
+        line-height: 1.4;
+        max-height: 200px;
+        overflow-y: auto;
+    }
+
+    .request-grid {
+        flex-direction: column;
+    }
+}

@@ -1,0 +1,102 @@
+@implements IDisposable
+@inject NavigationManager Nav
+@inject EditorStateService EditorState
+
+<div class="app-shell @(_sidebarOpen ? "sidebar-open" : "")">
+    <div class="sidebar-overlay" @onclick="CloseSidebar"></div>
+    
+    <aside class="sidebar">
+        <div class="sidebar-logo">
+            <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" width="26" height="26">
+                <rect width="32" height="32" rx="7" fill="#4f98a3" />
+                <path d="M8 24 L16 8 L24 24" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" fill="none" />
+                <path d="M10.5 19h11" stroke="white" stroke-width="2" stroke-linecap="round" />
+            </svg>
+            <span>MVFC.Apigee.Studio</span>
+        </div>
+        <nav class="sidebar-nav">
+            <NavLink href="/" Match="NavLinkMatch.All" class="nav-item" @onclick="CloseSidebar">
+                <i data-lucide="layout-grid" class="nav-icon"></i>
+                <span>Workspaces</span>
+            </NavLink>
+
+            <NavLink href="/emulator" class="nav-item" @onclick="CloseSidebar">
+                <i data-lucide="terminal" class="nav-icon"></i>
+                <span>Emulator</span>
+            </NavLink>
+            <NavLink href="/environment-config" class="nav-item" @onclick="CloseSidebar">
+                <i data-lucide="settings" class="nav-icon"></i>
+                <span>Env Config (KVMs)</span>
+            </NavLink>
+            <NavLink href="/trace" class="nav-item" @onclick="CloseSidebar">
+                <i data-lucide="radio" class="nav-icon"></i>
+                <span>Policy Trace</span>
+            </NavLink>
+        </nav>
+        <div class="sidebar-footer">
+            <span class="sidebar-version">v1.0.0</span>
+        </div>
+    </aside>
+
+    <main class="main-content">
+        <header class="mobile-header">
+            <button class="btn-icon" @onclick="ToggleSidebar">
+                <i data-lucide="menu"></i>
+            </button>
+            <div class="mobile-logo">
+                <svg viewBox="0 0 32 32" fill="none" width="20" height="20">
+                    <rect width="32" height="32" rx="7" fill="#4f98a3" />
+                    <path d="M8 24 L16 8 L24 24" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" fill="none" />
+                </svg>
+                <span>Apigee Studio</span>
+            </div>
+        </header>
+
+        <div class="content-body">
+            @ChildContent
+        </div>
+    </main>
+</div>
+
+@code {
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+    
+    private bool _sidebarOpen = false;
+
+    protected override void OnInitialized()
+    {
+        Nav.LocationChanged += HandleLocationChanged;
+        EditorState.OnTabsChanged += HandleTabsChanged;
+    }
+
+    private void HandleLocationChanged(object? sender, LocationChangedEventArgs e)
+    {
+        _sidebarOpen = false;
+        StateHasChanged();
+    }
+
+    private void HandleTabsChanged()
+    {
+        if (_sidebarOpen)
+        {
+            _sidebarOpen = false;
+            InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private void ToggleSidebar() => _sidebarOpen = !_sidebarOpen;
+    private void CloseSidebar() => _sidebarOpen = false;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        await JS.InvokeVoidAsync("initLucide");
+    }
+
+    public void Dispose()
+    {
+        Nav.LocationChanged -= HandleLocationChanged;
+        EditorState.OnTabsChanged -= HandleTabsChanged;
+    }
+
+    [Inject] public required IJSRuntime JS { get; set; }
+}

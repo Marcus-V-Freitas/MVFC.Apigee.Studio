@@ -1,5 +1,4 @@
 @page "/workspace/{WorkspaceName}"
-@rendermode @(new InteractiveServerRenderMode(prerender: false))
 
 <h1>@WorkspaceName</h1>
 
@@ -34,8 +33,8 @@ else
                             <span class="editor-lang-badge">@DetectLanguage()</span>
                         </div>
                         <div class="editor-header-actions">
-                            <button class="btn btn-ghost btn-sm" title="Format (Alt+Shift+F)" @onclick="FormatDocument">&#10024; Format</button>
-                            <button class="btn btn-ghost btn-sm btn-danger" @onclick="DeleteSelectedFile">&#128465; Delete</button>
+                            <button class="btn btn-ghost btn-sm" title="Format (Alt+Shift+F)" @onclick="FormatDocument">✨ <span>Format</span></button>
+                            <button class="btn btn-ghost btn-sm btn-danger" @onclick="DeleteSelectedFile">🗑️ <span>Delete</span></button>
                             <button class="btn btn-primary btn-sm" @onclick="SaveFile" disabled="@_saving" title="Ctrl+S">
                                 @if (_saving)
                                 {
@@ -43,7 +42,7 @@ else
                                 }
                                 else
                                 {
-                                    <span>&#128190; Save</span>
+                                    <span>💾 Save</span>
                                     <kbd class="kbd-hint">Ctrl+S</kbd>
                                 }
                             </button>
@@ -52,6 +51,7 @@ else
                     <MonacoEditor @key="EditorState.ActiveTab.FullPath"
                                  @ref="_editor"
                                  Id="@EditorId"
+                                 CssClass="monaco-container"
                                  InitialContent="@EditorState.ActiveTab.Content"
                                  FilePath="@EditorState.ActiveTab.FullPath"
                                  OnSave="SaveFile" />

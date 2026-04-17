@@ -19,6 +19,12 @@ public partial class Emulator : ComponentBase
     private string _dockerMessage = string.Empty;
     private bool _dockerError;
 
+    [Inject]
+    public required IApigeeEmulatorClient EmulatorClient { get; set; }
+
+    [Inject] 
+    public required IConfiguration Config { get; set; }
+
     private bool DeployDisabled => 
         _deploying || !_alive;
 

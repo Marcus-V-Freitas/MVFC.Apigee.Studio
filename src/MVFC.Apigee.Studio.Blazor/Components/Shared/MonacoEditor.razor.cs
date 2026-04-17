@@ -8,7 +8,7 @@ public partial class MonacoEditor : ComponentBase, IAsyncDisposable
     public string Id { get; set; } = "monaco-editor";
 
     [Parameter]
-    public string Class { get; set; } = "monaco-container";
+    public string CssClass { get; set; } = "monaco-container";
 
     [Parameter]
     public string InitialContent { get; set; } = string.Empty;
