@@ -1,7 +1,17 @@
 namespace MVFC.Apigee.Studio.Infrastructure.Extensions;
 
+/// <summary>
+/// Extension methods for registering infrastructure services in the dependency injection container.
+/// Provides registration for repositories, readers, and HTTP clients used by the application.
+/// </summary>
 public static class InfrastructureServiceExtensions
 {
+    /// <summary>
+    /// Registers infrastructure services, repositories, and HTTP clients for Apigee Emulator integration.
+    /// </summary>
+    /// <param name="services">The service collection to add services to.</param>
+    /// <param name="configuration">The application configuration instance.</param>
+    /// <returns>The updated <see cref="IServiceCollection"/>.</returns>
     public static IServiceCollection AddInfrastructure(this IServiceCollection services, IConfiguration configuration)
     {
         services.AddScoped<IWorkspaceRepository, WorkspaceFileSystemRepository>();

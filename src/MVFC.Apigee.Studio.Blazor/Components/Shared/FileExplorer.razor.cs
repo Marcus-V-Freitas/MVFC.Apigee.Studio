@@ -16,12 +16,6 @@ public partial class FileExplorer : ComponentBase
     [Parameter]
     public EventCallback<string> SearchQueryChanged { get; set; }
 
-    private async Task HandleSearchInput(ChangeEventArgs e)
-    {
-        var newValue = e.Value?.ToString() ?? string.Empty;
-        await SearchQueryChanged.InvokeAsync(newValue);
-    }
-
     [Parameter]
     public EventCallback<string> OnFileSelected { get; set; }
 
@@ -35,6 +29,12 @@ public partial class FileExplorer : ComponentBase
     public EventCallback<bool> OnNewItem { get; set; }
 
     private WorkspaceItem? FilteredTree => Filter(Tree);
+
+    private async Task HandleSearchInput(ChangeEventArgs e)
+    {
+        var newValue = e.Value?.ToString() ?? string.Empty;
+        await SearchQueryChanged.InvokeAsync(newValue);
+    }
 
     private WorkspaceItem? Filter(WorkspaceItem? root)
     {

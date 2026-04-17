@@ -71,7 +71,44 @@
 /* URI */
 .tx-uri {
     flex: 1; font-family: var(--font-mono); font-size: var(--text-sm);
-    color: var(--color-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    color: var(--color-text); word-break: break-all;
+}
+
+@media (max-width: 768px) {
+    .trace-tx-header {
+        flex-wrap: wrap;
+        padding: var(--space-3);
+        gap: var(--space-3);
+    }
+
+    .tx-method {
+        order: 1;
+    }
+
+    .tx-uri {
+        order: 3; /* Move URI to its own "line" or after method */
+        width: 100%;
+        flex: none;
+        white-space: normal;
+        overflow: visible;
+        display: block;
+        font-size: var(--text-sm);
+        margin-top: -4px;
+        padding-left: 2px;
+    }
+
+    .tx-meta {
+        order: 2;
+        flex: 1;
+        justify-content: flex-end;
+    }
+
+    .tx-chevron {
+        order: 4;
+        position: absolute;
+        right: var(--space-3);
+        top: var(--space-4);
+    }
 }
 
 /* Meta */
@@ -209,6 +246,13 @@
     transition: background var(--transition);
     text-align: left;
     min-height: 28px;
+}
+
+@media (max-width: 768px) {
+    .pipeline-step {
+        min-height: 40px; /* Better touch target */
+        padding: 8px var(--space-3);
+    }
 }
 .pipeline-step:hover {
     background: var(--color-surface-offset);
@@ -412,6 +456,13 @@
     font-size: var(--text-xs);
     color: var(--color-text);
     word-break: break-all;
+    white-space: pre-wrap;
+}
+
+@media (max-width: 768px) {
+    .prop-val {
+        font-size: 11px;
+    }
 }
 .prop-val-time {
     color: var(--color-primary);
@@ -451,6 +502,18 @@
     font-family: var(--font-mono);
     transition: background var(--transition);
 }
+
+@media (max-width: 480px) {
+    .var-row {
+        grid-template-columns: 1fr;
+    }
+    .var-key {
+        border-right: none;
+        border-bottom: 1px solid var(--color-border);
+        background: var(--color-surface-2);
+    }
+}
+
 .var-row:hover { background: var(--color-surface-2); }
 
 .var-key {

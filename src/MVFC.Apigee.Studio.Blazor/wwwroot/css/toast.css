@@ -15,6 +15,16 @@
     width: 100%;
 }
 
+@media (max-width: 768px) {
+    .toast-container {
+        bottom: calc(var(--space-4) + env(safe-area-inset-bottom, 0px));
+        right: 5%;
+        left: 5%;
+        width: 90%;
+        max-width: none;
+    }
+}
+
 .toast {
     display: flex;
     align-items: center;

@@ -1,5 +1,8 @@
 namespace MVFC.Apigee.Studio.Infrastructure.Repositories;
 
+/// <summary>
+/// Provides file system-based operations for managing Apigee workspaces, proxies, shared flows, and related files.
+/// </summary>
 public sealed class WorkspaceFileSystemRepository(IConfiguration configuration) : IWorkspaceRepository
 {
     private static readonly string[] ProxySubFolders =
@@ -13,18 +16,21 @@ public sealed class WorkspaceFileSystemRepository(IConfiguration configuration) 
         OmitXmlDeclaration = false,
     };
 
+    /// <summary>
+    /// Gets the root directory for all workspaces.
+    /// </summary>
     private string WorkspacesRoot =>
         configuration["WorkspacesRoot"] ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "apigee-workspaces");
 
-    // A estrutura correta do Apigee Cloud Code workspace é:
-    //   <workspace-root>/
-    //   ├── apiproxies/
-    //   ├── sharedflows/
-    //   └── environments/
-    // Sem nenhum src/main/apigee intermediário.
+    /// <summary>
+    /// Gets the root path of the specified Apigee workspace.
+    /// </summary>
+    /// <param name="workspace">The workspace instance.</param>
+    /// <returns>The root path as a string.</returns>
     private static string ApigeeRoot(ApigeeWorkspace workspace) => 
         workspace.RootPath;
 
+    /// <inheritdoc/>
     public IReadOnlyList<ApigeeWorkspace> ListAll()
     {
         if (!Directory.Exists(WorkspacesRoot)) 
@@ -35,6 +41,7 @@ public sealed class WorkspaceFileSystemRepository(IConfiguration configuration) 
             .Select(d => new ApigeeWorkspace(Path.GetFileName(d), d))];
     }
 
+    /// <inheritdoc/>
     public IReadOnlyList<string> ListApiProxies(ApigeeWorkspace workspace)
     {
         var path = Path.Combine(ApigeeRoot(workspace), "apiproxies");
@@ -47,6 +54,7 @@ public sealed class WorkspaceFileSystemRepository(IConfiguration configuration) 
             .OrderBy(x => x)];
     }
 
+    /// <inheritdoc/>
     public IReadOnlyList<string> ListSharedFlows(ApigeeWorkspace workspace)
     {
         var path = Path.Combine(ApigeeRoot(workspace), "sharedflows");
@@ -59,13 +67,14 @@ public sealed class WorkspaceFileSystemRepository(IConfiguration configuration) 
             .OrderBy(x => x)];
     }
 
+    /// <inheritdoc/>
     public ApigeeWorkspace Create(string name, string? customPath, IReadOnlyList<string>? initialProxies = null)
     {
         var fullPath = !string.IsNullOrWhiteSpace(customPath)
             ? customPath.Trim()
             : Path.Combine(WorkspacesRoot, name);
 
-        // Cria as três pastas raiz do workspace diretamente em fullPath
+        // Create the three root folders of the workspace directly in fullPath
         Directory.CreateDirectory(Path.Combine(fullPath, "apiproxies"));
         Directory.CreateDirectory(Path.Combine(fullPath, "sharedflows"));
         Directory.CreateDirectory(Path.Combine(fullPath, "environments"));
@@ -77,13 +86,19 @@ public sealed class WorkspaceFileSystemRepository(IConfiguration configuration) 
         return new ApigeeWorkspace(name, fullPath);
     }
 
+    /// <inheritdoc/>
     public void Delete(ApigeeWorkspace workspace)
     {
         if (Directory.Exists(workspace.RootPath))
             Directory.Delete(workspace.RootPath, recursive: true);
     }
 
-
+    /// <summary>
+    /// Ensures that the specified environment exists in the workspace and writes a deployments.json file.
+    /// </summary>
+    /// <param name="workspace">The workspace to update.</param>
+    /// <param name="envName">The environment name.</param>
+    /// <param name="ct">A cancellation token.</param>
     public async Task EnsureEnvironmentAsync(ApigeeWorkspace workspace, string envName, CancellationToken ct = default)
     {
         var envPath = Path.Combine(ApigeeRoot(workspace), "environments", envName);
@@ -96,6 +111,12 @@ public sealed class WorkspaceFileSystemRepository(IConfiguration configuration) 
         await File.WriteAllTextAsync(Path.Combine(envPath, "deployments.json"), json, Encoding.UTF8, ct);
     }
 
+    /// <summary>
+    /// Builds a JSON string representing the deployments for proxies and shared flows.
+    /// </summary>
+    /// <param name="proxies">List of proxy names.</param>
+    /// <param name="sharedFlows">List of shared flow names.</param>
+    /// <returns>A JSON string with deployment information.</returns>
     private static string BuildDeploymentsJson(List<string> proxies, List<string> sharedFlows)
     {
         using var ms     = new MemoryStream();
@@ -109,7 +130,7 @@ public sealed class WorkspaceFileSystemRepository(IConfiguration configuration) 
         
         writer.WriteEndArray();
 
-        // sharedFlows omitido quando vazio — o emulator não aceita array vazio
+        // sharedFlows omitted when empty — the emulator does not accept an empty array
         if (sharedFlows.Count > 0)
         {
             writer.WriteStartArray("sharedFlows");
@@ -123,15 +144,19 @@ public sealed class WorkspaceFileSystemRepository(IConfiguration configuration) 
         return Encoding.UTF8.GetString(ms.ToArray());
     }
 
+    /// <inheritdoc/>
     public async Task<WorkspaceItem> LoadTreeAsync(ApigeeWorkspace workspace, CancellationToken ct = default) => 
         await Task.FromResult(BuildItem(workspace.RootPath, workspace.RootPath));
 
+    /// <inheritdoc/>
     public async Task<string> ReadFileAsync(string absolutePath, CancellationToken ct = default) => 
         await File.ReadAllTextAsync(absolutePath, ct);
 
+    /// <inheritdoc/>
     public async Task SaveFileAsync(string absolutePath, string content, CancellationToken ct = default) => 
         await File.WriteAllTextAsync(absolutePath, content, ct);
 
+    /// <inheritdoc/>
     public async Task CreateFileAsync(string absolutePath, CancellationToken ct = default)
     {
         Directory.CreateDirectory(Path.GetDirectoryName(absolutePath)!);
@@ -140,12 +165,14 @@ public sealed class WorkspaceFileSystemRepository(IConfiguration configuration) 
             await File.WriteAllTextAsync(absolutePath, string.Empty, ct);
     }
 
+    /// <inheritdoc/>
     public Task CreateDirectoryAsync(string absolutePath, CancellationToken ct = default)
     {
         Directory.CreateDirectory(absolutePath);
         return Task.CompletedTask;
     }
 
+    /// <inheritdoc/>
     public Task DeleteFileAsync(string absolutePath, CancellationToken ct = default)
     {
         if (File.Exists(absolutePath))
@@ -154,6 +181,7 @@ public sealed class WorkspaceFileSystemRepository(IConfiguration configuration) 
         return Task.CompletedTask;
     }
 
+    /// <inheritdoc/>
     public Task DeleteDirectoryAsync(string absolutePath, CancellationToken ct = default)
     {
         if (Directory.Exists(absolutePath))
@@ -162,6 +190,7 @@ public sealed class WorkspaceFileSystemRepository(IConfiguration configuration) 
         return Task.CompletedTask;
     }
 
+    /// <inheritdoc/>
     public async Task<string> BuildBundleZipAsync(ApigeeWorkspace workspace, string proxyOrFlowName, CancellationToken ct = default)
     {
         var apigeeRoot = ApigeeRoot(workspace);
@@ -185,6 +214,7 @@ public sealed class WorkspaceFileSystemRepository(IConfiguration configuration) 
         return zip;
     }
 
+    /// <inheritdoc/>
     public Task<string> BuildWorkspaceZipAsync(ApigeeWorkspace workspace, CancellationToken ct = default)
     {
         var zip = Path.Combine(Path.GetTempPath(),
@@ -195,7 +225,13 @@ public sealed class WorkspaceFileSystemRepository(IConfiguration configuration) 
 
         return Task.FromResult(zip);
     }
-
+    
+    /// <summary>
+    /// Adds all files from a directory to a zip archive asynchronously.
+    /// </summary>
+    /// <param name="archive">The zip archive.</param>
+    /// <param name="sourceDir">The source directory.</param>
+    /// <param name="zipRoot">The root path inside the zip archive.</param>
     private static async Task AddDirectoryToZip(ZipArchive archive, string sourceDir, string zipRoot)
     {
         foreach (var file in Directory.EnumerateFiles(sourceDir, "*", SearchOption.AllDirectories))
@@ -206,6 +242,12 @@ public sealed class WorkspaceFileSystemRepository(IConfiguration configuration) 
         }
     }
 
+    /// <summary>
+    /// Adds all files and empty directories from a directory to a zip archive.
+    /// </summary>
+    /// <param name="archive">The zip archive.</param>
+    /// <param name="sourceDir">The source directory.</param>
+    /// <param name="zipRoot">The root path inside the zip archive.</param>
     private static void AddDirectoryToZipIncludingEmpty(ZipArchive archive, string sourceDir, string zipRoot)
     {
         foreach (var file in Directory.EnumerateFiles(sourceDir, "*", SearchOption.AllDirectories))
@@ -226,6 +268,11 @@ public sealed class WorkspaceFileSystemRepository(IConfiguration configuration) 
         }
     }
 
+    /// <summary>
+    /// Scaffolds the folder structure and default files for a new API proxy.
+    /// </summary>
+    /// <param name="apigeeRoot">The root directory of the workspace.</param>
+    /// <param name="proxyName">The name of the proxy.</param>
     private static void ScaffoldApiProxy(string apigeeRoot, string proxyName)
     {
         var baseDir = Path.Combine(apigeeRoot, "apiproxies", proxyName);
@@ -257,12 +304,23 @@ public sealed class WorkspaceFileSystemRepository(IConfiguration configuration) 
         SaveXml(targetEndpoint, Path.Combine(baseDir, "apiproxy", "targets", "default.xml"));
     }
 
+    /// <summary>
+    /// Saves an XML document to the specified path using the configured XML writer settings.
+    /// </summary>
+    /// <param name="doc">The XML document.</param>
+    /// <param name="path">The file path to save to.</param>
     private static void SaveXml(XDocument doc, string path)
     {
         using var writer = XmlWriter.Create(path, XmlSettings);
         doc.Save(writer);
     }
 
+    /// <summary>
+    /// Recursively builds a <see cref="WorkspaceItem"/> tree from the file system.
+    /// </summary>
+    /// <param name="path">The current path.</param>
+    /// <param name="rootPath">The root path of the workspace.</param>
+    /// <returns>A <see cref="WorkspaceItem"/> representing the directory or file.</returns>
     private static WorkspaceItem BuildItem(string path, string rootPath)
     {
         var rel  = Path.GetRelativePath(rootPath, path);

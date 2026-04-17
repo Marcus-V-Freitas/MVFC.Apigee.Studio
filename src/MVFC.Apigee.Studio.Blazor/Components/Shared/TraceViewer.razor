@@ -2,7 +2,7 @@
     @if (!Transactions.Any())
     {
         <div class="trace-empty">
-            <i data-lucide="radio" style="width:36px;height:36px"></i>
+            <i data-lucide="radio" class="icon-xl"></i>
             <p>Nenhuma transação capturada ainda.<br/>Faça uma requisição ao proxy enquanto o trace estiver ativo.</p>
         </div>
     }
@@ -35,7 +35,7 @@
                             @if (tx.TotalTimeMs > 0)
                             {
                                 <span class="tx-time">
-                                    <i data-lucide="timer" style="width:11px;height:11px"></i>
+                                    <i data-lucide="timer" class="icon-xs"></i>
                                     @tx.TotalTimeMs ms
                                 </span>
                             }
@@ -132,7 +132,7 @@
                                         </div>
                                         <button class="btn btn-ghost btn-sm" @onclick="() => ClearSelection(tx.MessageId)"
                                                 @onclick:stopPropagation="true">
-                                            <i data-lucide="x" style="width:12px;height:12px"></i>
+                                            <i data-lucide="x" class="icon-xs"></i>
                                         </button>
                                     </div>
 
@@ -166,7 +166,7 @@
                                                     <div class="detail-prop detail-prop-error">
                                                         <span class="prop-key">Status</span>
                                                         <span class="prop-val prop-val-error">
-                                                            <i data-lucide="alert-triangle" style="width:11px;height:11px"></i>
+                                                            <i data-lucide="alert-triangle" class="icon-xs"></i>
                                                             Error
                                                         </span>
                                                     </div>
@@ -200,7 +200,7 @@
                                                 {
                                                     <div class="detail-section">
                                                         <div class="detail-section-header">
-                                                            <i data-lucide="log-in" style="width:12px;height:12px"></i>
+                                                            <i data-lucide="log-in" class="icon-xs"></i>
                                                             <span>Request Headers (@reqHeaders.Count)</span>
                                                         </div>
                                                         <div class="detail-vars">
@@ -219,7 +219,7 @@
                                                 {
                                                     <div class="detail-section">
                                                         <div class="detail-section-header">
-                                                            <i data-lucide="log-out" style="width:12px;height:12px"></i>
+                                                            <i data-lucide="log-out" class="icon-xs"></i>
                                                             <span>Response Headers (@resHeaders.Count)</span>
                                                         </div>
                                                         <div class="detail-vars">
@@ -238,7 +238,7 @@
                                                 {
                                                     <div class="detail-section">
                                                         <div class="detail-section-header">
-                                                            <i data-lucide="message-square" style="width:12px;height:12px"></i>
+                                                            <i data-lucide="message-square" class="icon-xs"></i>
                                                             <span>Message Headers (@msgHeaders.Count)</span>
                                                         </div>
                                                         <div class="detail-vars">
@@ -259,7 +259,7 @@
                                             {
                                                 <div class="detail-section">
                                                     <div class="detail-section-header">
-                                                        <i data-lucide="braces" style="width:12px;height:12px"></i>
+                                                        <i data-lucide="braces" class="icon-xs"></i>
                                                         <span>Properties & Variables (@otherVars.Count)</span>
                                                     </div>
                                                     <div class="detail-vars">
@@ -280,7 +280,7 @@
                             else
                             {
                                 <div class="trace-details trace-details-hint">
-                                    <i data-lucide="mouse-pointer-click" style="width:20px;height:20px"></i>
+                                    <i data-lucide="mouse-pointer-click" class="icon-md"></i>
                                     <span>Clique em um step no pipeline para ver os detalhes.</span>
                                 </div>
                             }

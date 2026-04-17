@@ -42,3 +42,26 @@
 .mt-2 {
     margin-top: var(--space-2);
 }
+
+/* ─── Mobile Responsiveness ─────────────────────────────────── */
+@media (max-width: 768px) {
+    .config-header-row {
+        flex-direction: column;
+        align-items: stretch;
+        gap: var(--space-3);
+    }
+
+    .new-env-form {
+        flex-direction: column;
+        align-items: stretch;
+        gap: var(--space-3);
+    }
+
+    .new-env-input {
+        width: 100% !important;
+    }
+
+    .config-grid {
+        grid-template-columns: 1fr;
+    }
+}

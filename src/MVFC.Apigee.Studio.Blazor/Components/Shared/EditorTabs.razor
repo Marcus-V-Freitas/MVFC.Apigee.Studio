@@ -7,7 +7,7 @@
             <div class="editor-tab @(isActive ? "active" : "")" 
                  @onclick="() => Switch(tab)">
                 <span class="tab-title">
-                    @if (tab.IsDirty) { <span class="editor-dirty-dot" style="margin-right: 4px;">●</span> }
+                    @if (tab.IsDirty) { <span class="editor-dirty-dot">●</span> }
                     @tab.FileName
                 </span>
                 <button class="btn btn-ghost tab-close-btn" @onclick:stopPropagation @onclick="() => Close(tab)">✕</button>

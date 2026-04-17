@@ -15,5 +15,6 @@ public partial class EditorTabs : ComponentBase
     public EventCallback<EditorTab> OnTabClose { get; set; }
 
     private async Task Switch(EditorTab tab) => await OnTabSwitch.InvokeAsync(tab);
+
     private async Task Close(EditorTab tab) => await OnTabClose.InvokeAsync(tab);
 }

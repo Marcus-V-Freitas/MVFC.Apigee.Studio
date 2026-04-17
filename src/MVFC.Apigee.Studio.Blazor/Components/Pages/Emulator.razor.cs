@@ -1,33 +1,103 @@
 ﻿namespace MVFC.Apigee.Studio.Blazor.Components.Pages;
 
+/// <summary>
+/// Blazor page component for managing the Apigee Emulator lifecycle and deployments.
+/// Allows the user to check emulator status, start/stop the Docker container, list available images,
+/// and deploy bundles to a selected environment.
+/// </summary>
 public partial class Emulator : ComponentBase
 {
+    /// <summary>
+    /// Indicates if the emulator is alive (reachable and running).
+    /// </summary>
     private bool _alive;
+
+    /// <summary>
+    /// Indicates if the emulator status is currently being checked.
+    /// </summary>
     private bool _checking;
+
+    /// <summary>
+    /// The base URL of the Apigee Emulator.
+    /// </summary>
     private string _baseUrl = string.Empty;
+
+    /// <summary>
+    /// Stores the last error message encountered when checking emulator status.
+    /// </summary>
     private string? _statusError;
 
+    /// <summary>
+    /// Path to the ZIP bundle to deploy.
+    /// </summary>
     private string _zipPath = string.Empty;
+
+    /// <summary>
+    /// Target environment for deployment (e.g., "local").
+    /// </summary>
     private string _env = "local";
+
+    /// <summary>
+    /// Indicates if a deployment is currently in progress.
+    /// </summary>
     private bool _deploying;
+
+    /// <summary>
+    /// Message displayed to the user about deployment status.
+    /// </summary>
     private string _message = string.Empty;
+
+    /// <summary>
+    /// Indicates if the last deployment message is an error.
+    /// </summary>
     private bool _isError;
 
+    /// <summary>
+    /// The Docker image currently selected for the emulator.
+    /// </summary>
     private string _image = string.Empty;
+
+    /// <summary>
+    /// List of available Docker images for the emulator.
+    /// </summary>
     private List<string> _images = [];
+
+    /// <summary>
+    /// Indicates if a Docker operation (start/stop) is in progress.
+    /// </summary>
     private bool _dockerBusy;
+
+    /// <summary>
+    /// Message displayed to the user about Docker operations.
+    /// </summary>
     private string _dockerMessage = string.Empty;
+
+    /// <summary>
+    /// Indicates if the last Docker operation resulted in an error.
+    /// </summary>
     private bool _dockerError;
 
+    /// <summary>
+    /// Client for communicating with the Apigee Emulator.
+    /// </summary>
     [Inject]
     public required IApigeeEmulatorClient EmulatorClient { get; set; }
 
+    /// <summary>
+    /// Application configuration provider.
+    /// </summary>
     [Inject] 
     public required IConfiguration Config { get; set; }
 
+    /// <summary>
+    /// Indicates if deployment actions should be disabled (when deploying or emulator is not alive).
+    /// </summary>
     private bool DeployDisabled => 
         _deploying || !_alive;
 
+    /// <summary>
+    /// Loads emulator configuration, available images, and checks emulator status on initialization.
+    /// </summary>
     protected override async Task OnInitializedAsync()
     {
         _baseUrl = Config["ApigeeEmulator:BaseUrl"] ?? "http://localhost:8080";
@@ -36,6 +106,9 @@ public partial class Emulator : ComponentBase
         await Check();
     }
 
+    /// <summary>
+    /// Loads the list of available Docker images for the emulator.
+    /// </summary>
     private async Task LoadImages()
     {
         try
@@ -53,6 +126,9 @@ public partial class Emulator : ComponentBase
         }
     }
 
+    /// <summary>
+    /// Starts the emulator Docker container with the selected image.
+    /// </summary>
     private async Task StartContainer()
     {
         if (string.IsNullOrWhiteSpace(_image))
@@ -82,6 +158,9 @@ public partial class Emulator : ComponentBase
         }
     }
 
+    /// <summary>
+    /// Stops the emulator Docker container.
+    /// </summary>
     private async Task StopContainer()
     {
         _dockerBusy = true;
@@ -104,6 +183,9 @@ public partial class Emulator : ComponentBase
         }
     }
 
+    /// <summary>
+    /// Checks if the emulator is alive and updates the status.
+    /// </summary>
     private async Task Check()
     {
         _checking = true;
@@ -124,6 +206,9 @@ public partial class Emulator : ComponentBase
         }
     }
 
+    /// <summary>
+    /// Deploys a bundle ZIP to the emulator in the selected environment.
+    /// </summary>
     private async Task QuickDeploy()
     {
         if (string.IsNullOrWhiteSpace(_zipPath)) 

@@ -1,15 +1,42 @@
 namespace MVFC.Apigee.Studio.Blazor.Services;
 
+/// <summary>
+/// Service for managing the state of editor tabs in the Blazor application.
+/// Handles opening, switching, closing, and updating tabs, as well as tracking the active tab and dirty state.
+/// </summary>
 public sealed class EditorStateService
 {
+    /// <summary>
+    /// List of currently open editor tabs.
+    /// </summary>
     private readonly List<EditorTab> _openTabs = [];
+
+    /// <summary>
+    /// The currently active editor tab.
+    /// </summary>
     private EditorTab? _activeTab;
 
+    /// <summary>
+    /// Gets a read-only list of open editor tabs.
+    /// </summary>
     public IReadOnlyList<EditorTab> OpenTabs => _openTabs;
+
+    /// <summary>
+    /// Gets the currently active editor tab, or null if none is active.
+    /// </summary>
     public EditorTab? ActiveTab => _activeTab;
 
+    /// <summary>
+    /// Event triggered whenever the set of open tabs or the active tab changes.
+    /// </summary>
     public event Action? OnTabsChanged;
 
+    /// <summary>
+    /// Opens a tab for the specified file path and content.
+    /// If the tab is already open, it becomes the active tab; otherwise, a new tab is created and activated.
+    /// </summary>
+    /// <param name="path">The full file path to open.</param>
+    /// <param name="content">The file content to display in the tab.</param>
     public void OpenTab(string path, string content)
     {
         var existing = _openTabs.FirstOrDefault(t => t.FullPath == path);
@@ -26,6 +53,10 @@ public sealed class EditorStateService
         OnTabsChanged?.Invoke();
     }
 
+    /// <summary>
+    /// Switches the active tab to the specified tab, if it is open.
+    /// </summary>
+    /// <param name="tab">The tab to activate.</param>
     public void SwitchToTab(EditorTab tab)
     {
         if (_openTabs.Contains(tab))
@@ -35,6 +66,10 @@ public sealed class EditorStateService
         }
     }
 
+    /// <summary>
+    /// Closes the specified tab. If the closed tab was active, activates the next available tab.
+    /// </summary>
+    /// <param name="tab">The tab to close.</param>
     public void CloseTab(EditorTab tab)
     {
         var index = _openTabs.IndexOf(tab);
@@ -52,6 +87,11 @@ public sealed class EditorStateService
         OnTabsChanged?.Invoke();
     }
 
+    /// <summary>
+    /// Updates the content and dirty state of the active tab.
+    /// </summary>
+    /// <param name="content">The new content for the tab.</param>
+    /// <param name="isDirty">Indicates whether the tab has unsaved changes.</param>
     public void UpdateActiveTabContent(string content, bool isDirty)
     {
         if (_activeTab is not null)
@@ -62,6 +102,10 @@ public sealed class EditorStateService
         }
     }
 
+    /// <summary>
+    /// Clears the dirty state of the tab with the specified file path.
+    /// </summary>
+    /// <param name="path">The full file path of the tab to update.</param>
     public void ClearDirty(string path)
     {
         var tab = _openTabs.FirstOrDefault(t => t.FullPath == path);
@@ -72,6 +116,9 @@ public sealed class EditorStateService
         }
     }
 
+    /// <summary>
+    /// Closes all tabs and resets the active tab.
+    /// </summary>
     public void Reset()
     {
         _openTabs.Clear();

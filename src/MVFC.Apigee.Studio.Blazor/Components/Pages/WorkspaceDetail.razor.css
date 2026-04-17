@@ -1,0 +1,68 @@
+.new-item-backdrop {
+    z-index: 10001;
+    background: rgba(0, 0, 0, 0.7);
+}
+
+.new-item-modal {
+    position: absolute;
+    left: 50%;
+    top: 40%;
+    transform: translate(-50%, -50%);
+    width: min(400px, 90vw);
+    z-index: 10002;
+    margin-bottom: 0;
+}
+
+.new-item-input {
+    width: 100%;
+}
+
+.modal-footer-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: var(--space-2);
+}
+
+/* Context Menu */
+.context-menu-wrapper {
+    position: fixed;
+    z-index: 9999;
+    padding: var(--space-1) 0;
+    min-width: 150px;
+    background: var(--color-surface-offset);
+    box-shadow: var(--shadow-lg);
+    border: 1px solid var(--color-border);
+}
+
+.ctx-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 9998;
+}
+
+.context-menu-btn {
+    display: block;
+    width: 100%;
+    text-align: left;
+    padding: var(--space-3) var(--space-4);
+    min-height: 44px;
+    border: none;
+    background: transparent;
+    color: var(--color-text);
+    cursor: pointer;
+    transition: background var(--transition);
+}
+
+.context-menu-btn:hover {
+    background: var(--color-surface-dynamic);
+}
+
+.context-menu-btn.btn-danger {
+    color: var(--color-error);
+}
+
+.context-menu-sep {
+    margin: var(--space-1) 0;
+    border: none;
+    border-top: 1px solid var(--color-border);
+}

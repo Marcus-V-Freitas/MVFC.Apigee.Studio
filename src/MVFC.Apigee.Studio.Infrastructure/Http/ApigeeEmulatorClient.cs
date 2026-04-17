@@ -1,9 +1,9 @@
 namespace MVFC.Apigee.Studio.Infrastructure.Http;
 
 /// <summary>
-/// Cliente HTTP para o Apigee Emulator local.
+/// HTTP client for the local Apigee Emulator.
 ///
-/// Endpoints do emulator (porta 8080):
+/// Emulator endpoints (port 8080):
 ///   GET    /v1/emulator/healthz
 ///   GET    /v1/emulator/version
 ///   POST   /v1/emulator/deploy?environment={env}
@@ -18,6 +18,11 @@ public sealed class ApigeeEmulatorClient(
 {
     private const string DefaultContainerName = "apigee-emulator";
 
+    /// <summary>
+    /// Checks if the emulator is alive by calling health and version endpoints.
+    /// </summary>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>True if the emulator is reachable; otherwise, false.</returns>
     public async Task<bool> IsAliveAsync(CancellationToken ct = default)
     {
         try
@@ -37,6 +42,14 @@ public sealed class ApigeeEmulatorClient(
         }
     }
 
+    /// <summary>
+    /// Deploys a bundle (proxy or shared flow) to the emulator.
+    /// </summary>
+    /// <param name="environment">Target environment name.</param>
+    /// <param name="zipPath">Path to the ZIP bundle file.</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <exception cref="FileNotFoundException">If the ZIP file does not exist.</exception>
+    /// <exception cref="HttpRequestException">If the deploy fails.</exception>
     public async Task DeployBundleAsync(string environment, string zipPath, CancellationToken ct = default)
     {
         if (!File.Exists(zipPath))
@@ -57,6 +70,19 @@ public sealed class ApigeeEmulatorClient(
         }
     }
 
+    /// <summary>
+    /// Lists available Docker images for the emulator.
+    /// Example output:
+    /// <code>
+    /// [
+    ///   "gcr.io/apigee-release/hybrid/apigee-emulator:latest",
+    ///   "gcr.io/apigee-release/hybrid/apigee-emulator:1.12.0",
+    ///   "gcr.io/apigee-release/hybrid/apigee-emulator:1.11.0"
+    /// ]
+    /// </code>
+    /// </summary>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>List of image names.</returns>
     public Task<IReadOnlyList<string>> ListImagesAsync(CancellationToken ct = default)
     {
         var images = new List<string>
@@ -91,17 +117,41 @@ public sealed class ApigeeEmulatorClient(
         return Task.FromResult<IReadOnlyList<string>>(images);
     }
 
+    /// <summary>
+    /// Starts the emulator Docker container with the specified image.
+    /// Example:
+    /// <code>
+    /// await client.StartContainerAsync("gcr.io/apigee-release/hybrid/apigee-emulator:latest");
+    /// </code>
+    /// </summary>
+    /// <param name="image">Docker image name.</param>
+    /// <param name="ct">Cancellation token.</param>
     public async Task StartContainerAsync(string image, CancellationToken ct = default)
     {
         var port = config["ApigeeEmulator:Port"] ?? "8080";
         await RunDockerAsync($"run -d --rm -p {port}:8080 -p 8998:8998 --name {DefaultContainerName} {image}", ct);
     }
 
+    /// <summary>
+    /// Stops the emulator Docker container.
+    /// Example:
+    /// <code>
+    /// await client.StopContainerAsync();
+    /// </code>
+    /// </summary>
+    /// <param name="ct">Cancellation token.</param>
     public async Task StopContainerAsync(CancellationToken ct = default)
         => await RunDockerAsync($"stop {DefaultContainerName}", ct);
 
     // ── TRACE ─────────────────────────────────────────────────────────────
 
+    /// <summary>
+    /// Starts a trace session for the specified proxy.
+    /// </summary>
+    /// <param name="proxyName">Name of the API proxy.</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>A <see cref="TraceSession"/> representing the started session.</returns>
+    /// <exception cref="HttpRequestException">If the trace session cannot be started.</exception>
     public async Task<TraceSession> StartTraceAsync(string proxyName, CancellationToken ct = default)
     {
         var url = $"/v1/emulator/trace?proxyName={Uri.EscapeDataString(proxyName)}";
@@ -127,6 +177,14 @@ public sealed class ApigeeEmulatorClient(
         };
     }
 
+    /// <summary>
+    /// Gets the trace transactions captured so far for the active session.
+    /// Should be polled (~2s) while the session is active.
+    /// </summary>
+    /// <param name="sessionId">The trace session ID.</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>List of <see cref="TraceTransaction"/> objects.</returns>
+    /// <exception cref="HttpRequestException">If the request fails.</exception>
     public async Task<IReadOnlyList<TraceTransaction>> GetTraceTransactionsAsync(
         string sessionId, CancellationToken ct = default)
     {
@@ -143,6 +201,11 @@ public sealed class ApigeeEmulatorClient(
         return ParseTransactions(root);
     }
 
+    /// <summary>
+    /// Stops the active trace session.
+    /// </summary>
+    /// <param name="sessionId">The trace session ID.</param>
+    /// <param name="ct">Cancellation token.</param>
     public async Task StopTraceAsync(string sessionId, CancellationToken ct = default)
     {
         var url = $"/v1/emulator/trace?sessionid={Uri.EscapeDataString(sessionId)}";
@@ -156,13 +219,28 @@ public sealed class ApigeeEmulatorClient(
 
     // ── Parsing ───────────────────────────────────────────────────────────
     //
-    // O JSON do emulator tem um array "point" por mensagem. Cada entry tem um "id"
-    // que pode ser: StateChange, FlowInfo, Condition, Execution, Paused, Resumed.
-    // Mantemos a ORDEM original do array e filtramos apenas os tipos relevantes.
+    // The emulator JSON has a "point" array per message. Each entry has an "id"
+    // which can be: StateChange, FlowInfo, Condition, Execution, Paused, Resumed.
+    // The original order of the array is preserved and only relevant types are filtered.
     //
-    // StateChange  → separador de fase (From → To)
-    // Condition    → avaliação de condição de flow/rota
-    // Execution    → política executada
+    // StateChange  → phase separator (From → To)
+    // Condition    → flow/route condition evaluation
+    // Execution    → executed policy
+    //
+    // Example of a parsed TraceTransaction:
+    // <code>
+    // new TraceTransaction {
+    //     MessageId = "...",
+    //     RequestMethod = "GET",
+    //     RequestUri = "/v1/hello",
+    //     ResponseCode = 200,
+    //     TotalTimeMs = 123,
+    //     Points = new List&lt;TracePoint&gt; {
+    //         new TracePoint { PointType = "StateChange", PolicyName = "PROXY_REQ_FLOW", ... },
+    //         new TracePoint { PointType = "Execution", PolicyName = "AM-InjetarHeader", ... }
+    //     }
+    // }
+    // </code>
 
     private static List<TraceTransaction> ParseTransactions(JsonElement root)
     {
@@ -190,7 +268,7 @@ public sealed class ApigeeEmulatorClient(
                 if (!point.TryGetProperty("results", out var results))
                     continue;
 
-                // ── Extrai verb/uri/statusCode de RequestMessage / ResponseMessage ──
+                // ── Extract verb/uri/statusCode from RequestMessage / ResponseMessage ──
                 foreach (var res in results.EnumerateArray())
                 {
                     var actionResult = TryGetString(res, "ActionResult");
@@ -204,7 +282,7 @@ public sealed class ApigeeEmulatorClient(
                     if (actionResult == "ResponseMessage" && string.IsNullOrEmpty(statusCode))
                         statusCode = TryGetString(res, "statusCode") ?? string.Empty;
 
-                    // captura timestamp do primeiro DebugInfo para calcular duração
+                    // capture timestamp from first DebugInfo to calculate duration
                     if (actionResult == "DebugInfo")
                     {
                         var ts = TryGetString(res, "timestamp");
@@ -216,7 +294,7 @@ public sealed class ApigeeEmulatorClient(
                     }
                 }
 
-                // ── Só processa tipos relevantes para a timeline ──
+                // ── Only process relevant types for the timeline ──
                 if (pointId is not ("StateChange" or "Condition" or "Execution"))
                     continue;
 
@@ -239,6 +317,21 @@ public sealed class ApigeeEmulatorClient(
         return result;
     }
 
+    /// <summary>
+    /// Parses a trace point from the emulator JSON.
+    /// Examples:
+    /// <code>
+    /// // StateChange
+    /// new TracePoint { PointType = "StateChange", PolicyName = "PROXY_REQ_FLOW", Phase = "PROXY_REQ_FLOW", Description = "PREV_PHASE → PROXY_REQ_FLOW" }
+    /// // Condition
+    /// new TracePoint { PointType = "Condition", PolicyName = "\"default\" equals proxy.name", Description = "true" }
+    /// // Execution
+    /// new TracePoint { PointType = "Execution", PolicyName = "AM-InjetarHeader", Phase = "request", Description = "AssignMessageExecution" }
+    /// </code>
+    /// </summary>
+    /// <param name="point">The JSON element representing the point.</param>
+    /// <param name="pointId">The type of the point ("StateChange", "Condition", "Execution").</param>
+    /// <returns>A <see cref="TracePoint"/> instance.</returns>
     private static TracePoint ParseTracePoint(JsonElement point, string pointId)
     {
         var variables = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
@@ -282,10 +375,10 @@ public sealed class ApigeeEmulatorClient(
             }
         }
 
-        // ── Determina PolicyName por tipo ──────────────────────────────────
-        // Execution  → stepDefinition-name (nome da política)
-        // Condition  → Expression (ex: "\"default\" equals proxy.name")
-        // StateChange→ "From → To" como label de fase
+        // ── Determines PolicyName by type ─────────────────────────────
+        // Execution  → stepDefinition-name (policy name)
+        // Condition  → Expression (e.g., "\"default\" equals proxy.name")
+        // StateChange→ "From → To" as phase label
         string policyName;
         string phase;
         string description;
@@ -294,7 +387,7 @@ public sealed class ApigeeEmulatorClient(
         {
             var from = variables.GetValueOrDefault("From", string.Empty);
             var to   = variables.GetValueOrDefault("To",   string.Empty);
-            policyName  = to;                       // label principal = destino
+            policyName  = to;                       // main label = destination
             phase       = to;
             description = string.IsNullOrEmpty(from) ? to : $"{from} → {to}";
         }
@@ -328,7 +421,12 @@ public sealed class ApigeeEmulatorClient(
         };
     }
 
-    /// <summary>Parse do formato "dd-MM-yy HH:mm:ss:fff" em milissegundos epoch.</summary>
+    /// <summary>
+    /// Parses a timestamp in the format "dd-MM-yy HH:mm:ss:fff" to epoch milliseconds.
+    /// </summary>
+    /// <param name="ts">The timestamp string.</param>
+    /// <param name="epochMs">The parsed epoch milliseconds.</param>
+    /// <returns>True if parsing succeeded; otherwise, false.</returns>
     private static bool TryParseEmulatorTimestamp(string ts, out long epochMs)
     {
         epochMs = 0;
@@ -342,11 +440,23 @@ public sealed class ApigeeEmulatorClient(
         return false;
     }
 
+    /// <summary>
+    /// Tries to get a string property from a JSON element.
+    /// </summary>
+    /// <param name="el">The JSON element.</param>
+    /// <param name="key">The property key.</param>
+    /// <returns>The string value, or null if not found.</returns>
     private static string? TryGetString(JsonElement el, string key)
         => el.TryGetProperty(key, out var v) && v.ValueKind == JsonValueKind.String
             ? v.GetString()
             : null;
 
+    /// <summary>
+    /// Runs a Docker command with the specified arguments.
+    /// Throws if the command fails.
+    /// </summary>
+    /// <param name="args">Docker command arguments.</param>
+    /// <param name="ct">Cancellation token.</param>
     private static async Task RunDockerAsync(string args, CancellationToken ct)
     {
         var psi = new ProcessStartInfo("docker", args)

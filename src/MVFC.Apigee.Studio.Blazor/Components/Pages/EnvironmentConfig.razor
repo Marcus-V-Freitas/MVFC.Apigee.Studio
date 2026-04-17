@@ -35,7 +35,7 @@
         @if (_workspace != null)
         {
             <div class="form-field flex-0">
-                <label style="visibility: hidden;">New</label>
+                <label class="hidden-label">New</label>
                 <div class="new-env-form">
                     <input class="input new-env-input" placeholder="Novo env..." @bind="_newEnvName" />
                     <button class="btn btn-primary" @onclick="CreateEnvironment" disabled="@string.IsNullOrWhiteSpace(_newEnvName)">
@@ -61,7 +61,7 @@
             <button class="btn btn-primary mt-2" @onclick="SaveKvm">Save KVMs</button>
             @if (_kvmIsDirty)
             {
-                <span style="color: var(--color-danger); margin-left: var(--space-2);">Changes not saved</span>
+                <span class="dirty-hint">Changes not saved</span>
             }
         </div>
 
@@ -75,7 +75,7 @@
             <button class="btn btn-primary mt-2" @onclick="SaveCaches">Save Caches</button>
             @if (_cachesIsDirty)
             {
-                <span style="color: var(--color-danger); margin-left: var(--space-2);">Changes not saved</span>
+                <span class="dirty-hint">Changes not saved</span>
             }
         </div>
 
@@ -89,7 +89,7 @@
             <button class="btn btn-primary mt-2" @onclick="SaveTargetServers">Save Target Servers</button>
             @if (_targetIsDirty)
             {
-                <span style="color: var(--color-danger); margin-left: var(--space-2);">Changes not saved</span>
+                <span class="dirty-hint">Changes not saved</span>
             }
         </div>
 

@@ -1,6 +1,6 @@
 @if (IsOpen)
 {
-    <div class="modal-backdrop" @onclick="Close">
+    <div class="modal-backdrop-standard" @onclick="Close">
         <div class="modal-drawer" @onclick:stopPropagation>
 
             <div class="modal-header">
@@ -61,7 +61,7 @@
                                 }
                             </div>
                             
-                            <textarea class="xml-preview code-editor" style="width: 100%; min-height: 280px; flex-shrink: 0; font-size: 12px; margin-bottom: 24px; resize: vertical;" @bind="_quickXmlEditable" @bind:event="oninput"></textarea>
+                            <textarea class="xml-preview code-editor drawer-preview" @bind="_quickXmlEditable" @bind:event="oninput"></textarea>
 
                             <button class="btn btn-primary" @onclick="ConfirmQuickPolicy"
                                     disabled="@_quickGenerating">

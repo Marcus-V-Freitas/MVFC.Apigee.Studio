@@ -1,33 +1,94 @@
 namespace MVFC.Apigee.Studio.Blazor.Components.Pages;
 
+/// <summary>
+/// Blazor page component for tracing API proxy transactions using the Apigee Emulator.
+/// Allows the user to select a workspace and proxy, start and stop trace sessions, and view captured transactions in real time.
+/// </summary>
 public partial class Trace : ComponentBase, IAsyncDisposable
 {
+    /// <summary>
+    /// The currently active tab in the UI ("trace" by default).
+    /// </summary>
     private string _activeTab = "trace";
+
+    /// <summary>
+    /// The name of the selected API proxy.
+    /// </summary>
     private string _proxyName = string.Empty;
+
+    /// <summary>
+    /// Indicates if a trace session is currently active.
+    /// </summary>
     private bool _isTracing = false;
+
+    /// <summary>
+    /// Indicates if a loading operation is in progress (e.g., starting trace).
+    /// </summary>
     private bool _loading = false;
+
+    /// <summary>
+    /// Stores the last error message encountered during trace operations.
+    /// </summary>
     private string? _error = null;
+
+    /// <summary>
+    /// The path of the selected workspace.
+    /// </summary>
     private string? _selectedWorkspacePath;
 
+    /// <summary>
+    /// The current trace session, if any.
+    /// </summary>
     private TraceSession? _session = null;
+
+    /// <summary>
+    /// Cancellation token source for polling trace transactions.
+    /// </summary>
     private CancellationTokenSource? _pollCts = null;
  
+    /// <summary>
+    /// List of captured trace transactions for the current session.
+    /// </summary>
     private IReadOnlyList<TraceTransaction> _transactions = [];    
+
+    /// <summary>
+    /// List of available workspaces.
+    /// </summary>
     private IReadOnlyList<ApigeeWorkspace> _workspaces = [];
+
+    /// <summary>
+    /// List of available proxies for the selected workspace.
+    /// </summary>
     private IReadOnlyList<string> _proxies = [];
 
+    /// <summary>
+    /// Client for communicating with the Apigee Emulator.
+    /// </summary>
     [Inject]
     public required IApigeeEmulatorClient Emulator { get; set; }
 
+    /// <summary>
+    /// Repository for workspace and proxy operations.
+    /// </summary>
     [Inject]
     public required IWorkspaceRepository WorkspaceRepo { get; set; }
     
+    /// <summary>
+    /// Service for displaying toast notifications.
+    /// </summary>
     [Inject]
     public required ToastService Toast { get; set; }
 
+    /// <summary>
+    /// Loads the list of workspaces on component initialization.
+    /// </summary>
     protected override void OnInitialized() => 
         _workspaces = WorkspaceRepo.ListAll();
 
+    /// <summary>
+    /// Handles workspace selection changes and loads proxies for the selected workspace.
+    /// </summary>
+    /// <param name="e">The change event arguments.</param>
     private void OnWorkspaceChanged(ChangeEventArgs e)
     {
         _selectedWorkspacePath = e.Value?.ToString();
@@ -41,12 +102,22 @@ public partial class Trace : ComponentBase, IAsyncDisposable
         }
     }
 
+    /// <summary>
+    /// Handles proxy selection changes.
+    /// </summary>
+    /// <param name="e">The change event arguments.</param>
     private void OnProxyChanged(ChangeEventArgs e) => 
         _proxyName = e.Value?.ToString() ?? string.Empty;
 
+    /// <summary>
+    /// Indicates if the workspace is not ready for tracing (not selected or tracing in progress).
+    /// </summary>
     private bool IsWorkspaceNotReady =>
         string.IsNullOrEmpty(_selectedWorkspacePath) || _isTracing;
 
+    /// <summary>
+    /// Starts a trace session for the selected proxy and begins polling for transactions.
+    /// </summary>
     private async Task StartTrace()
     {
         _error = null;
@@ -75,12 +146,18 @@ public partial class Trace : ComponentBase, IAsyncDisposable
         }
     }
 
+    /// <summary>
+    /// Stops the current trace session and polling.
+    /// </summary>
     private async Task StopTrace()
     {
         await StopTraceInternalAsync();
         Toast.ShowSuccess("Trace encerrado.");
     }
 
+    /// <summary>
+    /// Stops the trace session and cancels polling (internal logic).
+    /// </summary>
     private async Task StopTraceInternalAsync()
     {
         await CancelPollAsync();
@@ -97,12 +174,19 @@ public partial class Trace : ComponentBase, IAsyncDisposable
         _isTracing = false;
     }
 
+    /// <summary>
+    /// Clears the list of captured transactions.
+    /// </summary>
     private void ClearTransactions()
     {
         _transactions = [];
         StateHasChanged();
     }
 
+    /// <summary>
+    /// Polls the emulator for new trace transactions while the session is active.
+    /// </summary>
+    /// <param name="ct">Cancellation token for stopping the polling loop.</param>
     private async Task PollLoopAsync(CancellationToken ct)
     {
         while (!ct.IsCancellationRequested && _session is not null)
@@ -135,6 +219,9 @@ public partial class Trace : ComponentBase, IAsyncDisposable
         }
     }
 
+    /// <summary>
+    /// Cancels the polling loop for trace transactions.
+    /// </summary>
     private async Task CancelPollAsync()
     {
         if (_pollCts is not null)
@@ -145,6 +232,9 @@ public partial class Trace : ComponentBase, IAsyncDisposable
         }
     }
 
+    /// <summary>
+    /// Disposes the component and ensures the trace session is stopped.
+    /// </summary>
     public async ValueTask DisposeAsync()
     {
         GC.SuppressFinalize(this);

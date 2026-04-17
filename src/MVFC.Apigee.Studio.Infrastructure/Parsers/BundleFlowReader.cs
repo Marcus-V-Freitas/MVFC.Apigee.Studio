@@ -1,17 +1,24 @@
-using MVFC.Apigee.Studio.Infrastructure.Logs;
-
 namespace MVFC.Apigee.Studio.Infrastructure.Parsers;
 
 /// <summary>
-/// Lê o ProxyEndpoint.xml do bundle no disco e extrai os steps das políticas
-/// em ordem de execução, inferindo HasError pelo status code.
+/// Reads the ProxyEndpoint.xml from the bundle on disk and extracts the policy steps
+/// in execution order, inferring HasError by the status code.
 ///
-/// Estrutura esperada no disco:
+/// Expected structure on disk:
 ///   {workspaceRoot}/src/main/apigee/apiproxies/{proxyName}/apiproxy/proxies/default.xml
 ///   {workspaceRoot}/src/main/apigee/apiproxies/{proxyName}/apiproxy/policies/*.xml
 /// </summary>
 public sealed class BundleFlowReader(ILogger<BundleFlowReader> logger) : IBundleFlowReader
 {
+    /// <summary>
+    /// Reads the steps (policies) defined in the ProxyEndpoint of the proxy,
+    /// in execution order: PreFlow Request, Flows Request, PostFlow Request,
+    /// PostFlow Response, Flows Response, PreFlow Response.
+    /// </summary>
+    /// <param name="workspaceRoot">Root path of the workspace (e.g., C:/apigee-workspaces/my-ws).</param>
+    /// <param name="proxyName">Name of the API proxy (e.g., hello-world).</param>
+    /// <param name="statusCode">Response status code — used to infer Executed and Error.</param>
+    /// <returns>Ordered list of <see cref="TracePoint"/> representing the policy steps.</returns>
     public IReadOnlyList<TracePoint> ReadFlowPoints(
         string workspaceRoot, string proxyName, int statusCode)
     {
@@ -45,14 +52,14 @@ public sealed class BundleFlowReader(ILogger<BundleFlowReader> logger) : IBundle
 
             // PreFlow Request
             ExtractSteps(root, "PreFlow",  "Request",  "ProxyRequest", points);
-            // Flows Request (condicional)
+            // Flows Request (conditional)
             ExtractFlowSteps(root, "Request",  "ProxyRequest", points);
             // PostFlow Request
             ExtractSteps(root, "PostFlow", "Request",  "ProxyRequest", points);
 
-            // PostFlow Response (inverso)
+            // PostFlow Response (reverse)
             ExtractSteps(root, "PostFlow", "Response", "ProxyResponse", points);
-            // Flows Response (condicional)
+            // Flows Response (conditional)
             ExtractFlowSteps(root, "Response", "ProxyResponse", points);
             // PreFlow Response
             ExtractSteps(root, "PreFlow",  "Response", "ProxyResponse", points);
@@ -66,6 +73,15 @@ public sealed class BundleFlowReader(ILogger<BundleFlowReader> logger) : IBundle
         }
     }
 
+    /// <summary>
+    /// Extracts the steps from a specific flow and direction (e.g., PreFlow Request or PostFlow Response)
+    /// and adds them to the provided list of trace points.
+    /// </summary>
+    /// <param name="root">The root XElement of the ProxyEndpoint XML.</param>
+    /// <param name="flowName">The flow name ("PreFlow" or "PostFlow").</param>
+    /// <param name="direction">The direction ("Request" or "Response").</param>
+    /// <param name="phase">The phase label for the trace point ("ProxyRequest" or "ProxyResponse").</param>
+    /// <param name="points">The list to which extracted trace points will be added.</param>
     private static void ExtractSteps(
         XElement root, string flowName, string direction,
         string phase, List<TracePoint> points)
@@ -95,6 +111,14 @@ public sealed class BundleFlowReader(ILogger<BundleFlowReader> logger) : IBundle
         }
     }
 
+    /// <summary>
+    /// Extracts the steps from all conditional flows (Flows/Flow) for a given direction
+    /// and adds them to the provided list of trace points.
+    /// </summary>
+    /// <param name="root">The root XElement of the ProxyEndpoint XML.</param>
+    /// <param name="direction">The direction ("Request" or "Response").</param>
+    /// <param name="phase">The phase label for the trace point ("ProxyRequest" or "ProxyResponse").</param>
+    /// <param name="points">The list to which extracted trace points will be added.</param>
     private static void ExtractFlowSteps(XElement root, string direction, string phase, List<TracePoint> points)
     {
         var flows = root

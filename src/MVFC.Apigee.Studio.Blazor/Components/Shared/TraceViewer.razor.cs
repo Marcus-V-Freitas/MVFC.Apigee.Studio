@@ -1,16 +1,37 @@
 ﻿namespace MVFC.Apigee.Studio.Blazor.Components.Shared;
 
+/// <summary>
+/// Blazor component for visualizing trace transactions and their execution points in a grouped, expandable view.
+/// Supports selection, grouping by phase, and integration with JavaScript for icon rendering.
+/// </summary>
 public partial class TraceViewer : ComponentBase
 {
+    /// <summary>
+    /// List of trace transactions to display.
+    /// </summary>
     [Parameter] 
     public IReadOnlyList<TraceTransaction> Transactions { get; set; } = [];
 
+    /// <summary>
+    /// JavaScript runtime for invoking JS interop (e.g., icon initialization).
+    /// </summary>
     [Inject] 
     public required IJSRuntime JSRuntime { get; set; }
 
+    /// <summary>
+    /// Set of expanded transaction message IDs.
+    /// </summary>
     private readonly HashSet<string> _expanded = [];
+
+    /// <summary>
+    /// Dictionary of selected trace points per transaction message ID.
+    /// </summary>
     private readonly Dictionary<string, TracePoint> _selectedPoints = [];
 
+    /// <summary>
+    /// Initializes Lucide icons after the component is rendered.
+    /// </summary>
+    /// <param name="firstRender">Indicates if this is the first render.</param>
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         try
@@ -23,6 +44,10 @@ public partial class TraceViewer : ComponentBase
         }
     }
 
+    /// <summary>
+    /// Toggles the expanded/collapsed state of a transaction by message ID.
+    /// </summary>
+    /// <param name="messageId">The message ID of the transaction.</param>
     private void Toggle(string messageId)
     {
         if (!_expanded.Add(messageId))
@@ -32,24 +57,48 @@ public partial class TraceViewer : ComponentBase
         }
     }
 
+    /// <summary>
+    /// Selects a trace point for a given transaction message ID.
+    /// </summary>
+    /// <param name="messageId">The message ID of the transaction.</param>
+    /// <param name="pt">The trace point to select.</param>
     private void SelectPoint(string messageId, TracePoint pt)
     {
         _selectedPoints[messageId] = pt;
     }
 
+    /// <summary>
+    /// Clears the selected trace point for a given transaction message ID.
+    /// </summary>
+    /// <param name="messageId">The message ID of the transaction.</param>
     private void ClearSelection(string messageId)
     {
         _selectedPoints.Remove(messageId);
     }
 
+    /// <summary>
+    /// Gets the selected trace point for a given transaction message ID, or null if none is selected.
+    /// </summary>
+    /// <param name="messageId">The message ID of the transaction.</param>
+    /// <returns>The selected <see cref="TracePoint"/> or null.</returns>
     private TracePoint? GetSelectedPoint(string messageId)
     {
         return _selectedPoints.TryGetValue(messageId, out var pt) ? pt : null;
     }
 
     // ─── Grouping Logic ────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Represents a group of trace points belonging to a specific phase.
+    /// </summary>
     private sealed record PhaseGroup(string PhaseName, List<TracePoint> Points);
 
+    /// <summary>
+    /// Groups trace points by phase, using "StateChange" points as phase delimiters.
+    /// Example: Each "StateChange" starts a new phase group.
+    /// </summary>
+    /// <param name="points">The list of trace points to group.</param>
+    /// <returns>A list of <see cref="PhaseGroup"/> objects.</returns>
     private static List<PhaseGroup> GroupPointsByPhase(IReadOnlyList<TracePoint> points)
     {
         var groups = new List<PhaseGroup>();
@@ -79,12 +128,22 @@ public partial class TraceViewer : ComponentBase
         return groups;
     }
 
+    /// <summary>
+    /// Truncates a name to a maximum of 22 characters, adding an ellipsis if needed.
+    /// </summary>
+    /// <param name="name">The name to truncate.</param>
+    /// <returns>The truncated name.</returns>
     private static string TruncateName(string name)
     {
         if (name.Length <= 22) return name;
         return name[..20] + "…";
     }
 
+    /// <summary>
+    /// Returns a CSS class for the given phase, used for coloring the UI.
+    /// </summary>
+    /// <param name="phase">The phase name.</param>
+    /// <returns>A CSS class string.</returns>
     private static string PhaseColorClass(string phase) => phase switch
     {
         "REQ_HEADERS_PARSED" => "phase-clr-proxy-req",
@@ -101,6 +160,11 @@ public partial class TraceViewer : ComponentBase
         _ => "phase-clr-generic"
     };
 
+    /// <summary>
+    /// Returns a display name for the given phase.
+    /// </summary>
+    /// <param name="phase">The phase name.</param>
+    /// <returns>A user-friendly display name.</returns>
     private static string PhaseDisplayName(string phase) => phase switch
     {
         "REQ_HEADERS_PARSED" => "Request Received",
@@ -117,6 +181,11 @@ public partial class TraceViewer : ComponentBase
         _ => phase
     };
 
+    /// <summary>
+    /// Returns an icon name for the given phase, used for UI display.
+    /// </summary>
+    /// <param name="phase">The phase name.</param>
+    /// <returns>The icon name as a string.</returns>
     private static string PhaseIcon(string phase) => phase switch
     {
         "REQ_HEADERS_PARSED" => "log-in",

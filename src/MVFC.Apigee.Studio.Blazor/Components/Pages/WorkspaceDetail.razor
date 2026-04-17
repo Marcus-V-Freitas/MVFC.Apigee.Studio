@@ -75,13 +75,13 @@ else
 
     @if (_showNewItem)
     {
-        <div class="modal-backdrop" style="z-index: 10001; background: rgba(0,0,0,0.7);" @onclick="() => _showNewItem = false">
-            <div class="card" style="position: absolute; left: 50%; top: 40%; transform: translate(-50%, -50%); width: 400px; z-index: 10002;" @onclick:stopPropagation>
+        <div class="modal-backdrop new-item-backdrop" @onclick="() => _showNewItem = false">
+            <div class="card new-item-modal" @onclick:stopPropagation>
                 <div class="card-header">
                     <h3 class="card-title">@(_newItemIsDir ? "Nova Pasta" : "Novo Arquivo")</h3>
                 </div>
                 <div class="card-body">
-                    <input class="input" style="width: 100%;" @bind="_newItemName"
+                    <input class="input new-item-input" @bind="_newItemName"
                            placeholder="@NewItemPlaceholder"
                            @onkeydown="HandleNewItemKey" 
                            @ref="_newItemInput" />
@@ -90,7 +90,7 @@ else
                         <p class="error-text mt-2">@_newItemError</p>
                     }
                 </div>
-                <div class="card-footer" style="display: flex; justify-content: flex-end; gap: 8px;">
+                <div class="card-footer modal-footer-actions">
                     <button class="btn btn-ghost" @onclick="() => _showNewItem = false">Cancelar</button>
                     <button class="btn btn-primary" @onclick="ConfirmNewItem">Criar</button>
                 </div>
@@ -101,18 +101,15 @@ else
     @* CONTEXT MENU *@
     @if (_showContextMenu)
     {
-        <div class="context-menu-backdrop" @onclick="CloseContextMenu" @oncontextmenu="CloseContextMenu" @oncontextmenu:preventDefault="true" style="position: fixed; inset: 0; z-index: 9998;"></div>
-        <div class="context-menu card" style="position: fixed; left: @(_contextMenuX)px; top: @(_contextMenuY)px; z-index: 9999; padding: 4px 0; min-width: 150px; background: var(--bg-crust); box-shadow: 0 4px 12px rgba(0,0,0,0.5);">
+        <div class="ctx-backdrop" @onclick="CloseContextMenu" @oncontextmenu="CloseContextMenu" @oncontextmenu:preventDefault="true"></div>
+        <div class="context-menu-wrapper card" style="left: @(_contextMenuX)px; top: @(_contextMenuY)px;">
             @if (_contextMenuItem?.Type == WorkspaceItemType.Directory || _contextMenuItem?.Type == WorkspaceItemType.ApiProxy || _contextMenuItem?.Type == WorkspaceItemType.SharedFlow || _contextMenuItem?.Type == WorkspaceItemType.Environment)
             {
-                <button class="context-menu-item" style="display: block; width: 100%; text-align: left; padding: 8px 16px; border: none; background: transparent; color: var(--color-text); cursor: pointer;"
-                        @onclick="() => ContextAdd(false)">New File</button>
-                <button class="context-menu-item" style="display: block; width: 100%; text-align: left; padding: 8px 16px; border: none; background: transparent; color: var(--color-text); cursor: pointer;"
-                        @onclick="() => ContextAdd(true)">New Folder</button>
-                <hr style="margin: 4px 0; border: none; border-top: 1px solid var(--bg-surface);" />
+                <button class="context-menu-btn" @onclick="() => ContextAdd(false)">New File</button>
+                <button class="context-menu-btn" @onclick="() => ContextAdd(true)">New Folder</button>
+                <hr class="context-menu-sep" />
             }
-            <button class="context-menu-item" style="display: block; width: 100%; text-align: left; padding: 8px 16px; border: none; background: transparent; color: var(--color-danger); cursor: pointer;"
-                    @onclick="ContextDelete">Delete</button>
+            <button class="context-menu-btn btn-danger" @onclick="ContextDelete">Delete</button>
         </div>
     }
 }

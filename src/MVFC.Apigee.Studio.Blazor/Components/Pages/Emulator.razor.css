@@ -1,0 +1,32 @@
+.emulator-actions-row {
+    display: flex;
+    gap: var(--space-2);
+}
+
+.emulator-section {
+    margin-top: var(--space-6);
+}
+
+.emulator-status-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.emulator-status-label {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+}
+
+.mt-md {
+    margin-top: var(--space-2);
+}
+
+.mb-lg {
+    margin-bottom: var(--space-4);
+}
+
+.mt-xl {
+    margin-top: var(--space-6);
+}

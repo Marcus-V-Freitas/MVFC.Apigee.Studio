@@ -1,0 +1,27 @@
+.file-tree-header-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+}
+
+.search-input {
+    width: 100%;
+    font-size: var(--text-xs);
+    padding: 4px 8px;
+    height: 28px;
+}
+
+.file-tree-empty {
+    padding: var(--space-4);
+    text-align: center;
+    color: var(--color-text-faint);
+    font-size: var(--text-sm);
+}
+
+@media (max-width: 768px) {
+    .search-input {
+        height: 44px; /* Accessible touch target for mobile search */
+        font-size: var(--text-sm);
+    }
+}

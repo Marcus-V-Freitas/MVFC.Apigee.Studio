@@ -1,11 +1,25 @@
-using System.Xml.Linq;
-using MVFC.Apigee.Studio.Domain.Entities;
-using MVFC.Apigee.Studio.Domain.Interfaces;
-
 namespace MVFC.Apigee.Studio.Infrastructure.Templates;
 
+/// <summary>
+/// Repository for Apigee policy templates and XML generation.
+/// Provides access to built-in policy templates and generates policy XML from parameters.
+/// 
+/// Example usage:
+/// <code>
+/// var repo = new PolicyTemplateRepository();
+/// var template = repo.GetByName("AssignMessage");
+/// var xml = repo.GeneratePolicyXml(template, new Dictionary&lt;string, string&gt; {
+///     ["PolicyName"] = "AM-AddHeader",
+///     ["HeaderName"] = "X-My-Header",
+///     ["HeaderValue"] = "123"
+/// });
+/// </code>
+/// </summary>
 public sealed class PolicyTemplateRepository : IPolicyTemplateRepository
 {
+    /// <summary>
+    /// Dictionary mapping policy template names to XML builder functions.
+    /// </summary>
     private static readonly IReadOnlyDictionary<string, Func<IDictionary<string, string>, XElement>> _builders = 
         new Dictionary<string, Func<IDictionary<string, string>, XElement>>(StringComparer.OrdinalIgnoreCase)
     {
@@ -192,6 +206,9 @@ public sealed class PolicyTemplateRepository : IPolicyTemplateRepository
         )
     };
 
+    /// <summary>
+    /// List of built-in policy templates, including name, description, category, and required parameters.
+    /// </summary>
     private static readonly IReadOnlyList<PolicyTemplate> _templates =
     [
         new PolicyTemplate("AssignMessage", "Sets or modifies HTTP request/response headers and body.", "Mediation", "", ["PolicyName", "HeaderName", "HeaderValue"]),
@@ -216,11 +233,37 @@ public sealed class PolicyTemplateRepository : IPolicyTemplateRepository
         new PolicyTemplate("JavaScript", "Executes a JavaScript file as a custom policy step.", "Extension", "", ["PolicyName", "ScriptFile"]),
     ];
 
+    /// <summary>
+    /// Returns all available policy templates.
+    /// </summary>
+    /// <returns>A read-only list of <see cref="PolicyTemplate"/> objects.</returns>
     public IReadOnlyList<PolicyTemplate> GetAll() => _templates;
 
+    /// <summary>
+    /// Gets a policy template by name (case-insensitive).
+    /// </summary>
+    /// <param name="name">The name of the policy template.</param>
+    /// <returns>The <see cref="PolicyTemplate"/> if found; otherwise, null.</returns>
     public PolicyTemplate? GetByName(string name)
         => _templates.FirstOrDefault(t => t.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
 
+    /// <summary>
+    /// Generates the XML for a policy using the specified template and parameters.
+    /// Throws if the template is not supported or required parameters are missing.
+    ///
+    /// Example:
+    /// <code>
+    /// var xml = repo.GeneratePolicyXml(template, new Dictionary&lt;string, string&gt; {
+    ///     ["PolicyName"] = "AM-AddHeader",
+    ///     ["HeaderName"] = "X-My-Header",
+    ///     ["HeaderValue"] = "123"
+    /// });
+    /// </code>
+    /// </summary>
+    /// <param name="template">The policy template to use.</param>
+    /// <param name="parameters">Dictionary of parameter names and values.</param>
+    /// <returns>The generated policy XML as a string.</returns>
+    /// <exception cref="NotSupportedException">If the template is not supported.</exception>
     public string GeneratePolicyXml(PolicyTemplate template, IDictionary<string, string> parameters)
     {
         if (_builders.TryGetValue(template.Name, out var builder))

@@ -17,8 +17,8 @@
             <input class="input" @bind="_image" list="emulator-images" placeholder="gcr.io/apigee-release/hybrid/apigee-emulator:latest" />
         </div>
         <div class="form-field">
-            <label style="visibility: hidden;">Actions</label>
-            <div class="emulator-actions" style="display: flex; gap: var(--space-2);">
+            <label class="hidden-label">Actions</label>
+            <div class="emulator-actions-row">
                 <button class="btn btn-primary" @onclick="StartContainer" disabled="@_dockerBusy">&#9654; Start</button>
                 <button class="btn btn-ghost btn-sm btn-danger" @onclick="StopContainer" disabled="@_dockerBusy">&#9632; Stop</button>
             </div>
@@ -39,9 +39,9 @@
 </div>
 
 <!-- STATUS -->
-<div class="card emulator-status" style="margin-top: var(--space-6);">
-    <div class="status-row" style="display: flex; justify-content: space-between; align-items: center;">
-        <div class="status-label" style="display: flex; align-items: center; gap: var(--space-2);">
+<div class="card emulator-status emulator-section">
+    <div class="emulator-status-row">
+        <div class="emulator-status-label">
             <span class="status-dot @(_alive ? "dot-green" : "dot-red")"></span>
             <span>@(_checking ? "Verificando..." : (_alive ? "Emulator online" : "Emulator offline"))</span>
         </div>
@@ -50,11 +50,11 @@
 
     @if (_statusError is not null)
     {
-        <p class="help-text error-text" style="margin-top: var(--space-2);">@_statusError</p>
+        <p class="help-text error-text mt-md">@_statusError</p>
     }
     else
     {
-        <p class="help-text" style="margin-top: var(--space-2);">
+        <p class="help-text mt-md">
             Base URL: <code>@_baseUrl</code> &mdash;
             certifique-se de que o container Docker está rodando.
         </p>
@@ -62,9 +62,9 @@
 </div>
 
 <!-- QUICK DEPLOY -->
-<div class="card" style="margin-top: var(--space-6);">
+<div class="card emulator-section">
     <h3>Quick Deploy</h3>
-    <p class="help-text" style="margin-bottom: var(--space-4);">Informe o caminho de um ZIP e o ambiente alvo para fazer deploy direto no emulator.</p>
+    <p class="help-text mb-lg">Informe o caminho de um ZIP e o ambiente alvo para fazer deploy direto no emulator.</p>
 
     <div class="form-grid">
         <div class="form-field">
@@ -77,7 +77,7 @@
         </div>
     </div>
 
-    <div style="margin-top: var(--space-6);">
+    <div class="mt-xl">
         <button class="btn btn-primary" @onclick="QuickDeploy" disabled="@DeployDisabled">
             @(_deploying ? "Deploying..." : "Deploy ZIP")
         </button>

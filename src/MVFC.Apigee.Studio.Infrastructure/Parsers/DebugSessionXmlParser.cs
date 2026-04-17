@@ -1,15 +1,22 @@
 namespace MVFC.Apigee.Studio.Infrastructure.Parsers;
 
 /// <summary>
-/// Faz o parse do XML retornado pela Debug API do Apigee Emulator.
-/// O schema segue o formato da Management API do Apigee Edge:
-///   &lt;DebugSession&gt; → &lt;Messages&gt; → &lt;Message&gt; → &lt;point id="..."&gt; → &lt;DebugInfo&gt;
+/// Parses the XML returned by the Debug API of the Apigee Emulator.
+/// The schema follows the format of the Apigee Edge Management API:
+///   &lt;DebugSession&gt; → &lt;Messages&gt; → &lt;Message&gt; → &lt;Point id="..."&gt; → &lt;DebugInfo&gt;
 ///
-/// Nota: este parser é mantido por compatibilidade futura.
-/// O trace primário agora é capturado via JSON pelo ApigeeEmulatorClient.
+/// Note: This parser is maintained for future compatibility.
+/// The primary trace is now captured via JSON by ApigeeEmulatorClient.
 /// </summary>
 public static class DebugSessionXmlParser
 {
+    /// <summary>
+    /// Parses a debug session XML and returns a <see cref="TraceTransaction"/>.
+    /// </summary>
+    /// <param name="xml">The XML string to parse.</param>
+    /// <param name="messageId">The message ID for the transaction.</param>
+    /// <returns>A <see cref="TraceTransaction"/> representing the parsed data.</returns>
+    /// <exception cref="InvalidOperationException">Thrown if the XML cannot be parsed.</exception>
     public static TraceTransaction Parse(string xml, string messageId)
     {
         XDocument doc;
@@ -17,7 +24,7 @@ public static class DebugSessionXmlParser
         catch (Exception ex)
         {
             throw new InvalidOperationException(
-                $"Falha ao parsear XML de debug session para messageId '{messageId}'.", ex);
+                $"Failed to parse debug session XML for messageId '{messageId}'.", ex);
         }
 
         var allProps = doc
@@ -48,6 +55,11 @@ public static class DebugSessionXmlParser
         };
     }
 
+    /// <summary>
+    /// Parses a &lt;Point&gt; element and returns a <see cref="TracePoint"/> instance.
+    /// </summary>
+    /// <param name="point">The XElement representing the point.</param>
+    /// <returns>A <see cref="TracePoint"/> or null if the point is invalid.</returns>
     private static TracePoint? ParsePoint(XElement point)
     {
         var pointId = point.Attribute("id")?.Value;
@@ -90,7 +102,7 @@ public static class DebugSessionXmlParser
             .Select(v => new
             {
                 Name  = v.Element("Name")?.Value,
-                Value = v.Element("Value")?.Value
+                v.Element("Value")?.Value,
             })
             .Where(v => !string.IsNullOrWhiteSpace(v.Name))
             .GroupBy(v => v.Name!, StringComparer.OrdinalIgnoreCase)

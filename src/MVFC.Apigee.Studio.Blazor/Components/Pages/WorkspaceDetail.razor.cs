@@ -1,53 +1,152 @@
 namespace MVFC.Apigee.Studio.Blazor.Components.Pages;
-
+    
+/// <summary>
+/// Blazor page component for browsing and editing files in an Apigee workspace.
+/// Provides a file tree, Monaco editor integration, context menu actions, and quick add features for files and folders.
+/// </summary>
 public partial class WorkspaceDetail : ComponentBase, IAsyncDisposable
 {
+    /// <summary>
+    /// The HTML element ID for the Monaco editor container.
+    /// </summary>
     private const string EditorId = "monaco-editor-container";
 
+    /// <summary>
+    /// The currently loaded workspace.
+    /// </summary>
     private ApigeeWorkspace? _workspace;
+
+    /// <summary>
+    /// The root of the workspace file tree.
+    /// </summary>
     private WorkspaceItem? _tree;
+
+    /// <summary>
+    /// The current search query for filtering the file tree.
+    /// </summary>
     private string _searchQuery = string.Empty;
 
     // UI State
+    /// <summary>
+    /// Indicates if the context menu is visible.
+    /// </summary>
     private bool _showContextMenu;
+
+    /// <summary>
+    /// X coordinate for the context menu position.
+    /// </summary>
     private double _contextMenuX;
+
+    /// <summary>
+    /// Y coordinate for the context menu position.
+    /// </summary>
     private double _contextMenuY;
+
+    /// <summary>
+    /// The workspace item associated with the context menu.
+    /// </summary>
     private WorkspaceItem? _contextMenuItem;
+
+    /// <summary>
+    /// Indicates if a file is currently being saved.
+    /// </summary>
     private bool _saving;
+
+    /// <summary>
+    /// Indicates if the new item dialog is visible.
+    /// </summary>
     private bool _showNewItem;
+
+    /// <summary>
+    /// Indicates if the new item to be created is a directory.
+    /// </summary>
     private bool _newItemIsDir;
+
+    /// <summary>
+    /// The name for the new file or directory.
+    /// </summary>
     private string _newItemName = string.Empty;
+
+    /// <summary>
+    /// The error message for new item creation.
+    /// </summary>
     private string _newItemError = string.Empty;
+
+    /// <summary>
+    /// The directory context for creating a new item.
+    /// </summary>
     private WorkspaceItem? _targetDirContext;
+
+    /// <summary>
+    /// Reference to the input element for the new item dialog.
+    /// </summary>
     private ElementReference _newItemInput;
 
     // Quick Add drawer state
+    /// <summary>
+    /// Indicates if the quick add drawer is open.
+    /// </summary>
     private bool _quickAddOpen = false;
+
+    /// <summary>
+    /// The path for the quick add operation.
+    /// </summary>
     private string _quickAddPath = string.Empty;
+
+    /// <summary>
+    /// The category for the quick add operation.
+    /// </summary>
     private string _quickAddCategory = string.Empty;
 
+    /// <summary>
+    /// Reference to the Monaco editor instance.
+    /// </summary>
     private MonacoEditor? _editor;
 
+    /// <summary>
+    /// The name of the workspace to load (from route parameter).
+    /// </summary>
     [Parameter]
     public string WorkspaceName { get; set; } = string.Empty;
 
+    /// <summary>
+    /// Repository for workspace and file operations.
+    /// </summary>
     [Inject]
     public required IWorkspaceRepository WorkspaceRepo { get; set; }
 
+    /// <summary>
+    /// Service for displaying toast notifications.
+    /// </summary>
     [Inject]
     public required ToastService Toast { get; set; }
 
+    /// <summary>
+    /// Service for running Apigee lint checks on XML files.
+    /// </summary>
     [Inject]
     public required ApigeeLintService LintService { get; set; }
 
+    /// <summary>
+    /// JavaScript runtime for interop calls.
+    /// </summary>
     [Inject]
     public required IJSRuntime JS { get; set; }
 
+    /// <summary>
+    /// Service for managing editor tab state.
+    /// </summary>
     [Inject]
     public required EditorStateService EditorState { get; set; }
 
+    /// <summary>
+    /// Gets the placeholder text for the new item input based on type.
+    /// </summary>
     private string NewItemPlaceholder => _newItemIsDir ? "folder-name" : "file.xml";
     
+    /// <summary>
+    /// Loads the workspace and file tree on initialization and resets editor state.
+    /// </summary>
     protected override async Task OnInitializedAsync()
     {
         _workspace = WorkspaceRepo.ListAll().FirstOrDefault(w => w.Name == WorkspaceName);
@@ -60,6 +159,10 @@ public partial class WorkspaceDetail : ComponentBase, IAsyncDisposable
         EditorState.Reset();
     }
 
+    /// <summary>
+    /// Detects the language for the Monaco editor based on the active tab's file extension.
+    /// </summary>
+    /// <returns>The language name as a string.</returns>
     private string DetectLanguage()
     {
         if (EditorState.ActiveTab is null) return "";
@@ -77,6 +180,10 @@ public partial class WorkspaceDetail : ComponentBase, IAsyncDisposable
         };
     }
 
+    /// <summary>
+    /// Switches to the specified editor tab, saving the current tab's content if necessary.
+    /// </summary>
+    /// <param name="tab">The tab to switch to.</param>
     private async Task SwitchTab(EditorTab tab)
     {
         if (EditorState.ActiveTab == tab) return;
@@ -92,6 +199,10 @@ public partial class WorkspaceDetail : ComponentBase, IAsyncDisposable
         StateHasChanged();
     }
 
+    /// <summary>
+    /// Closes the specified editor tab, prompting to discard unsaved changes if necessary.
+    /// </summary>
+    /// <param name="tab">The tab to close.</param>
     private async Task CloseTab(EditorTab tab)
     {
         var isCurrent = EditorState.ActiveTab == tab;
@@ -111,6 +222,10 @@ public partial class WorkspaceDetail : ComponentBase, IAsyncDisposable
         StateHasChanged();
     }
 
+    /// <summary>
+    /// Loads a file into a new editor tab, or switches to the tab if already open.
+    /// </summary>
+    /// <param name="path">The file path to load.</param>
     private async Task LoadFile(string path)
     {
         var existing = EditorState.OpenTabs.FirstOrDefault(t => t.FullPath == path);
@@ -132,6 +247,9 @@ public partial class WorkspaceDetail : ComponentBase, IAsyncDisposable
         StateHasChanged();
     }
 
+    /// <summary>
+    /// Saves the currently active file in the editor and runs lint checks if applicable.
+    /// </summary>
     private async Task SaveFile()
     {
         if (EditorState.ActiveTab is null || _saving || _editor is null) return;
@@ -151,7 +269,7 @@ public partial class WorkspaceDetail : ComponentBase, IAsyncDisposable
             {
                 var lintResults = await LintService.RunLintAsync(_workspace);
                 var activeFileLint = lintResults.FirstOrDefault(r => r.FilePath.Replace("\\", "/").EndsWith(EditorState.ActiveTab.FileName));
-                await _editor.SetMarkers(activeFileLint?.Messages ?? (IEnumerable<object>)Array.Empty<object>());
+                await _editor.SetMarkers(activeFileLint?.Messages ?? (IEnumerable<object>)[]);
             }
         }
         catch (Exception ex)
@@ -164,11 +282,17 @@ public partial class WorkspaceDetail : ComponentBase, IAsyncDisposable
         }
     }
 
+    /// <summary>
+    /// Formats the current document in the Monaco editor.
+    /// </summary>
     private async Task FormatDocument()
     {
         if (_editor is not null) await _editor.FormatDocument();
     }
 
+    /// <summary>
+    /// Deletes the currently active file and closes its tab.
+    /// </summary>
     private async Task DeleteSelectedFile()
     {
         if (EditorState.ActiveTab is null || _workspace is null) return;
@@ -183,12 +307,19 @@ public partial class WorkspaceDetail : ComponentBase, IAsyncDisposable
         Toast.ShowSuccess($"✔ Arquivo '{fileName}' removido.");
     }
 
+    /// <summary>
+    /// Disposes resources when the component is disposed.
+    /// </summary>
     public async ValueTask DisposeAsync()
     {
         GC.SuppressFinalize(this);
         // MonacoEditor handles its own disposal
     }
 
+    /// <summary>
+    /// Handles the context menu event for a workspace item.
+    /// </summary>
+    /// <param name="args">Tuple containing mouse event args and the workspace item.</param>
     private void HandleContextMenu((MouseEventArgs e, WorkspaceItem item) args)
     {
         _contextMenuX = args.e.ClientX;
@@ -197,14 +328,24 @@ public partial class WorkspaceDetail : ComponentBase, IAsyncDisposable
         _showContextMenu = true;
     }
 
+    /// <summary>
+    /// Closes the context menu.
+    /// </summary>
     private void CloseContextMenu() => _showContextMenu = false;
 
+    /// <summary>
+    /// Opens the new item dialog from the context menu.
+    /// </summary>
+    /// <param name="isDir">Whether the new item is a directory.</param>
     private void ContextAdd(bool isDir)
     {
         _showContextMenu = false;
         OpenNewItemDialog(isDir, _contextMenuItem);
     }
 
+    /// <summary>
+    /// Deletes the selected file or directory from the context menu.
+    /// </summary>
     private async Task ContextDelete()
     {
         _showContextMenu = false;
@@ -230,8 +371,17 @@ public partial class WorkspaceDetail : ComponentBase, IAsyncDisposable
         StateHasChanged();
     }
 
+    /// <summary>
+    /// Opens the new item dialog for creating a file or directory.
+    /// </summary>
+    /// <param name="isDir">Whether the new item is a directory.</param>
     private void OpenNewItemDialog(bool isDir) => OpenNewItemDialog(isDir, null);
 
+    /// <summary>
+    /// Opens the new item dialog for a specific directory context.
+    /// </summary>
+    /// <param name="isDir">Whether the new item is a directory.</param>
+    /// <param name="targetDir">The target directory context.</param>
     private void OpenNewItemDialog(bool isDir, WorkspaceItem? targetDir = null)
     {
         _targetDirContext = targetDir;
@@ -240,12 +390,19 @@ public partial class WorkspaceDetail : ComponentBase, IAsyncDisposable
         _showNewItem = true;
     }
 
+    /// <summary>
+    /// Handles keyboard events in the new item dialog.
+    /// </summary>
+    /// <param name="e">The keyboard event arguments.</param>
     private async Task HandleNewItemKey(KeyboardEventArgs e)
     {
         if (e.Key == "Enter") await ConfirmNewItem();
         if (e.Key == "Escape") _showNewItem = false;
     }
 
+    /// <summary>
+    /// Confirms and creates the new file or directory.
+    /// </summary>
     private async Task ConfirmNewItem()
     {
         _newItemError = string.Empty;
@@ -273,6 +430,10 @@ public partial class WorkspaceDetail : ComponentBase, IAsyncDisposable
         catch (Exception ex) { _newItemError = ex.Message; }
     }
 
+    /// <summary>
+    /// Opens the quick add modal for a given path and category.
+    /// </summary>
+    /// <param name="args">Tuple containing the path and category.</param>
     private void OpenQuickAddModal((string Path, string Category) args)
     {
         _quickAddPath = args.Path;
@@ -280,8 +441,15 @@ public partial class WorkspaceDetail : ComponentBase, IAsyncDisposable
         _quickAddOpen = true;
     }
 
+    /// <summary>
+    /// Closes the quick add modal.
+    /// </summary>
     private void CloseQuickAdd() => _quickAddOpen = false;
 
+    /// <summary>
+    /// Handles the event when a new item is created via quick add.
+    /// </summary>
+    /// <param name="path">The path of the created item.</param>
     private async Task OnItemCreated(string? path)
     {
         if (_workspace is not null)

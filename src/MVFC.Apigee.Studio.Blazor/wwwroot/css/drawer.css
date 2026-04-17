@@ -76,6 +76,40 @@
     overflow: hidden;
 }
 
+@media (max-width: 768px) {
+    .drawer-body {
+        grid-template-columns: 1fr;
+        display: flex;
+        flex-direction: column;
+        overflow-y: auto;
+    }
+
+    .drawer-list {
+        border-right: none;
+        border-bottom: 1px solid var(--color-border);
+        max-height: 240px;
+        flex-shrink: 0;
+    }
+
+    .drawer-form {
+        padding: var(--space-4);
+    }
+}
+
+.drawer-preview {
+    width: 100%;
+    min-height: 280px;
+    flex-shrink: 0;
+    font-size: var(--text-xs);
+    margin-bottom: var(--space-6);
+    resize: vertical;
+    font-family: var(--font-mono);
+    padding: var(--space-3);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    background: var(--color-surface-offset);
+}
+
 .drawer-body--single {
     grid-template-columns: 1fr;
     padding: var(--space-6);
