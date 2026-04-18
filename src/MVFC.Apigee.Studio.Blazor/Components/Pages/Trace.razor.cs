@@ -146,13 +146,14 @@ public partial class Trace : ComponentBase, IAsyncDisposable
         _error = null;
         _isError = false;
         _loading = true;
+
+        _pollCts = new CancellationTokenSource();
+        var ct = _pollCts.Token;
+
         StateHasChanged();
 
         try
         {
-            var ct = _pollCts?.Token ?? CancellationToken.None;
-
-            // 1. Check if the proxy is deployed
             var deployedApis = await TraceClient.ListDeployedApisAsync("local", ct);
             var isDeployed = deployedApis.Any(a => string.Equals(a.ApiProxy, _proxyName, StringComparison.OrdinalIgnoreCase));
 
@@ -166,27 +167,27 @@ public partial class Trace : ComponentBase, IAsyncDisposable
                     return;
                 }
 
-                // 2. Perform Automatic Deploy using the standard Use Case
                 _error = $"Realizando deploy automático de '{_proxyName}'...";
                 _isError = false;
                 StateHasChanged();
 
                 await DeployUseCase.ExecuteAsync(ws, _proxyName, "local", ct);
-
-                // Small delay to allow emulator state to stabilize
                 await Task.Delay(500, ct);
                 _error = null;
             }
 
-            // 3. Start Trace Session
             _session = await Emulator.StartTraceAsync(_proxyName, ct);
             _isTracing = true;
             _transactions = [];
 
-            _pollCts = new CancellationTokenSource();
-            _pollTask = PollLoopAsync(_pollCts.Token);
+            _pollTask = PollLoopAsync(ct);
 
             Toast.ShowSuccess($"Trace iniciado para '{_proxyName}'");
+        }
+        catch (OperationCanceledException)
+        {
+            _error = "Operação cancelada.";
+            _isError = false;
         }
         catch (Exception ex)
         {
@@ -252,12 +253,8 @@ public partial class Trace : ComponentBase, IAsyncDisposable
             try
             {
                 var txs = await Emulator.GetTraceTransactionsAsync(_session.SessionId, ct);
-
-                if (txs.Count != _transactions.Count)
-                {
-                    _transactions = [.. txs];
-                    await InvokeAsync(StateHasChanged);
-                }
+                _transactions = [.. txs];
+                await InvokeAsync(StateHasChanged);
             }
             catch (OperationCanceledException)
             {
