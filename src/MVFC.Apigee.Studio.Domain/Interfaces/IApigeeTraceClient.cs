@@ -1,12 +1,14 @@
 namespace MVFC.Apigee.Studio.Domain.Interfaces;
 
 /// <summary>
-/// Contrato para operações de management do emulator relacionadas ao trace.
-/// O trace em si é capturado via TraceMiddleware — este client apenas
-/// lista as APIs deployadas para popular o seletor na UI.
+/// Contract for emulator management operations related to trace.
+/// The trace itself is captured via TraceMiddleware — this client only
+/// lists the deployed APIs to populate the selector in the UI.
 /// </summary>
 public interface IApigeeTraceClient
 {
-    /// <summary>Lista APIs deployadas em um ambiente (Management API :8080).</summary>
+    /// <summary>
+    /// Lists APIs deployed in an environment (Management API :8080).
+    /// </summary>
     Task<IReadOnlyList<(string ApiProxy, string Revision)>> ListDeployedApisAsync(string environment, CancellationToken ct = default);
 }

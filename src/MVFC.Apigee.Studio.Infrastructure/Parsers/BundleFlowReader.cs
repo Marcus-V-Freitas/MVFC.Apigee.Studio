@@ -10,6 +10,8 @@ namespace MVFC.Apigee.Studio.Infrastructure.Parsers;
 /// </summary>
 public sealed class BundleFlowReader(ILogger<BundleFlowReader> logger) : IBundleFlowReader
 {
+    private readonly ILogger<BundleFlowReader> _logger = logger;
+
     /// <summary>
     /// Reads the steps (policies) defined in the ProxyEndpoint of the proxy,
     /// in execution order: PreFlow Request, Flows Request, PostFlow Request,
@@ -28,7 +30,7 @@ public sealed class BundleFlowReader(ILogger<BundleFlowReader> logger) : IBundle
 
         if (!Directory.Exists(proxiesDir))
         {
-            logger.LogProxiesDirNotFound(proxiesDir);
+            _logger.LogProxiesDirNotFound(proxiesDir);
             return [];
         }
 
@@ -38,7 +40,7 @@ public sealed class BundleFlowReader(ILogger<BundleFlowReader> logger) : IBundle
 
         if (proxyFile is null)
         {
-            logger.LogNoXmlFound(proxiesDir);
+            _logger.LogNoXmlFound(proxiesDir);
             return [];
         }
 
@@ -68,7 +70,7 @@ public sealed class BundleFlowReader(ILogger<BundleFlowReader> logger) : IBundle
         }
         catch (Exception ex)
         {
-            logger.LogErrorParsingProxyEndpointXml(ex, proxyFile);
+            _logger.LogErrorParsingProxyEndpointXml(ex, proxyFile);
             return [];
         }
     }

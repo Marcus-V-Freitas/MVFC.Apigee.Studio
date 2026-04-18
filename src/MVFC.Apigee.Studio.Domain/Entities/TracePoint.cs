@@ -1,37 +1,51 @@
 namespace MVFC.Apigee.Studio.Domain.Entities;
 
 /// <summary>
-/// Um ponto de execução dentro de uma transação.
-/// Mapeado de Messages[].point[] do payload do emulator.
+/// An execution point within a transaction.
+/// Mapped from Messages[].point[] in the emulator payload.
 ///
-/// PointType possíveis : StateChange | Execution | Condition
-/// Phase     possíveis : "request" | "response"  (Execution → enforcement)
-///                       valor de "To"            (StateChange, ex: "PROXY_REQ_FLOW")
+/// Possible PointType values: StateChange | Execution | Condition
+/// Possible Phase values: "request" | "response"  (Execution → enforcement)
+///                       value of "To"           (StateChange, e.g., "PROXY_REQ_FLOW")
 /// </summary>
 public sealed class TracePoint
 {
-    /// <summary>StateChange | Execution | Condition</summary>
+    /// <summary>
+    /// StateChange | Execution | Condition
+    /// </summary>
     public string PointType     { get; init; } = string.Empty;
 
     /// <summary>
-    /// Execution   → stepDefinition-name  (ex: "AM-InjetarHeader")
-    /// Condition   → Expression           (ex: "\"default\" equals proxy.name")
-    /// StateChange → To                   (ex: "PROXY_REQ_FLOW")
+    /// Execution   → stepDefinition-name  (e.g., "AM-InjetarHeader")
+    /// Condition   → Expression           (e.g., "\"default\" equals proxy.name")
+    /// StateChange → To                   (e.g., "PROXY_REQ_FLOW")
     /// </summary>
     public string PolicyName    { get; init; } = string.Empty;
 
     /// <summary>
     /// Execution   → enforcement ("request" | "response")
-    /// StateChange → To          (ex: "TARGET_REQ_FLOW")
+    /// StateChange → To          (e.g., "TARGET_REQ_FLOW")
     /// </summary>
     public string Phase         { get; init; } = string.Empty;
 
-    /// <summary>Valor de "type" nas properties (ex: "AssignMessageExecution").</summary>
+    /// <summary>
+    /// Value of "type" in properties (e.g., "AssignMessageExecution").
+    /// </summary>
     public string Description   { get; init; } = string.Empty;
 
+    /// <summary>
+    /// Elapsed time in milliseconds for this point.
+    /// </summary>
     public long ElapsedTimeMs   { get; init; }
+
+    /// <summary>
+    /// Indicates if this point has an error.
+    /// </summary>
     public bool HasError        { get; init; }
 
+    /// <summary>
+    /// Variables captured at this point.
+    /// </summary>
     public IReadOnlyDictionary<string, string> Variables { get; init; }
         = new Dictionary<string, string>();
 }

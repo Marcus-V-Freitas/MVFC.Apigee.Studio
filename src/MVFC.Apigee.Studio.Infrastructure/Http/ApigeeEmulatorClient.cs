@@ -17,6 +17,9 @@ public sealed class ApigeeEmulatorClient(
     ILogger<ApigeeEmulatorClient> logger) : IApigeeEmulatorClient
 {
     private const string DefaultContainerName = "apigee-emulator";
+    private readonly HttpClient _htp = http;
+    private readonly IConfiguration _config = config;
+    private readonly ILogger<ApigeeEmulatorClient> _logger = logger;
 
     /// <summary>
     /// Checks if the emulator is alive by calling health and version endpoints.
@@ -27,17 +30,17 @@ public sealed class ApigeeEmulatorClient(
     {
         try
         {
-            using var r1 = await http.GetAsync("/v1/emulator/healthz", ct);
+            using var r1 = await _htp.GetAsync("/v1/emulator/healthz", ct);
 
             if (r1.IsSuccessStatusCode) 
                 return true;
             
-            using var r2 = await http.GetAsync("/v1/emulator/version", ct);
+            using var r2 = await _htp.GetAsync("/v1/emulator/version", ct);
             return r2.IsSuccessStatusCode;
         }
         catch (Exception ex)
         {
-            logger.LogWarning(ex, "Emulator health check failed");
+            _logger.LogEmulatorNotHealth(ex);
             return false;
         }
     }
@@ -56,13 +59,13 @@ public sealed class ApigeeEmulatorClient(
             throw new FileNotFoundException("ZIP não encontrado: " + zipPath);
 
         var url = "/v1/emulator/deploy?environment=" + Uri.EscapeDataString(environment);
-        logger.LogDeployApi(zipPath, url);
+        _logger.LogDeployApi(zipPath, url);
 
         await using var fs      = File.OpenRead(zipPath);
         using var       content = new StreamContent(fs);
         content.Headers.ContentType = new MediaTypeHeaderValue("application/zip");
 
-        using var resp = await http.PostAsync(url, content, ct);
+        using var resp = await _htp.PostAsync(url, content, ct);
         if (!resp.IsSuccessStatusCode)
         {
             var body = await resp.Content.ReadAsStringAsync(ct);
@@ -83,11 +86,10 @@ public sealed class ApigeeEmulatorClient(
     /// </summary>
     /// <param name="ct">Cancellation token.</param>
     /// <returns>List of image names.</returns>
-    public Task<IReadOnlyList<string>> ListImagesAsync(CancellationToken ct = default)
+    public async  Task<IReadOnlyList<string>> ListImagesAsync(CancellationToken ct = default)
     {
         var images = new List<string>
         {
-            "gcr.io/apigee-release/hybrid/apigee-emulator:latest",
             "gcr.io/apigee-release/hybrid/apigee-emulator:1.12.0",
             "gcr.io/apigee-release/hybrid/apigee-emulator:1.11.0",
             "gcr.io/apigee-release/hybrid/apigee-emulator:1.10.0"
@@ -104,7 +106,7 @@ public sealed class ApigeeEmulatorClient(
             using var proc = Process.Start(psi);
             if (proc is not null)
             {
-                var output = proc.StandardOutput.ReadToEnd();
+                var output = await proc.StandardOutput.ReadToEndAsync(ct);
                 proc.WaitForExit();
                 foreach (var img in output.Split('\n', StringSplitOptions.RemoveEmptyEntries)
                              .Where(l => l.Contains("apigee", StringComparison.OrdinalIgnoreCase))
@@ -112,9 +114,12 @@ public sealed class ApigeeEmulatorClient(
                     images.Add(img);
             }
         }
-        catch { /* docker não disponível */ }
+        catch (Exception ex)
+        {
+            _logger.LogDockerImageNotAvailable(ex);
+        }
 
-        return Task.FromResult<IReadOnlyList<string>>(images);
+        return images;
     }
 
     /// <summary>
@@ -128,7 +133,7 @@ public sealed class ApigeeEmulatorClient(
     /// <param name="ct">Cancellation token.</param>
     public async Task StartContainerAsync(string image, CancellationToken ct = default)
     {
-        var port = config["ApigeeEmulator:Port"] ?? "8080";
+        var port = _config["ApigeeEmulator:Port"] ?? "8080";
         await RunDockerAsync($"run -d --rm -p {port}:8080 -p 8998:8998 --name {DefaultContainerName} {image}", ct);
     }
 
@@ -155,9 +160,9 @@ public sealed class ApigeeEmulatorClient(
     public async Task<TraceSession> StartTraceAsync(string proxyName, CancellationToken ct = default)
     {
         var url = $"/v1/emulator/trace?proxyName={Uri.EscapeDataString(proxyName)}";
-        logger.LogStartTraceSession(proxyName);
+        _logger.LogStartTraceSession(proxyName);
 
-        using var response = await http.PostAsync(url, null, ct);
+        using var response = await _htp.PostAsync(url, null, ct);
         if (!response.IsSuccessStatusCode)
         {
             var body = await response.Content.ReadAsStringAsync(ct);
@@ -189,7 +194,7 @@ public sealed class ApigeeEmulatorClient(
         string sessionId, CancellationToken ct = default)
     {
         var url = $"/v1/emulator/trace/transactions?sessionid={Uri.EscapeDataString(sessionId)}";
-        using var response = await http.GetAsync(url, ct);
+        using var response = await _htp.GetAsync(url, ct);
 
         if (!response.IsSuccessStatusCode)
         {
@@ -209,12 +214,12 @@ public sealed class ApigeeEmulatorClient(
     public async Task StopTraceAsync(string sessionId, CancellationToken ct = default)
     {
         var url = $"/v1/emulator/trace?sessionid={Uri.EscapeDataString(sessionId)}";
-        using var response = await http.DeleteAsync(url, ct);
+        using var response = await _htp.DeleteAsync(url, ct);
 
         if (!response.IsSuccessStatusCode)
-            logger.LogStopTrace(response.StatusCode, sessionId);
+            _logger.LogStopTrace(response.StatusCode, sessionId);
         else
-            logger.LogTraceSessionStopped(sessionId);
+            _logger.LogTraceSessionStopped(sessionId);
     }
 
     // ── Parsing ───────────────────────────────────────────────────────────

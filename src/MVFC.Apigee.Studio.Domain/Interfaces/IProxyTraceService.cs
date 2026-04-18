@@ -1,35 +1,45 @@
 namespace MVFC.Apigee.Studio.Domain.Interfaces;
 
 /// <summary>
-/// Serviço singleton que recebe transações do TraceMiddleware
-/// e as distribui para os consumidores Blazor via IAsyncEnumerable.
+/// Singleton service that receives transactions from the TraceMiddleware
+/// and distributes them to Blazor consumers via IAsyncEnumerable.
 /// </summary>
 public interface IProxyTraceService
 {
-    /// <summary>Publica uma transação capturada pelo middleware.</summary>
+    /// <summary>
+    /// Publishes a transaction captured by the middleware.
+    /// </summary>
     void Publish(TraceTransaction transaction);
 
     /// <summary>
-    /// Retorna um stream assíncrono de transações para consumo no componente Blazor.
-    /// Cada chamada recebe um reader independente.
+    /// Returns an asynchronous stream of transactions for consumption in the Blazor component.
+    /// Each call receives an independent reader.
     /// </summary>
     IAsyncEnumerable<TraceTransaction> ReadAllAsync(CancellationToken ct);
 
-    /// <summary>Indica se o trace está ativo (aceitando capturas).</summary>
+    /// <summary>
+    /// Indicates whether trace is active (accepting captures).
+    /// </summary>
     bool IsActive { get; }
 
-    /// <summary>Ativa a captura de transações.</summary>
+    /// <summary>
+    /// Activates transaction capture.
+    /// </summary>
     void Start();
 
-    /// <summary>Desativa a captura de transações.</summary>
+    /// <summary>
+    /// Deactivates transaction capture.
+    /// </summary>
     void Stop();
 
     /// <summary>
-    /// Registra o workspace e proxy ativo para que o middleware
-    /// possa resolver os flows do bundle no disco.
+    /// Registers the active workspace and proxy so that the middleware
+    /// can resolve the bundle flows on disk.
     /// </summary>
     void SetActiveProxy(string workspaceRoot, string proxyName);
 
-    /// <summary>Retorna o workspace root e proxy name registrados, ou null se não houver.</summary>
+    /// <summary>
+    /// Returns the registered workspace root and proxy name, or null if none is set.
+    /// </summary>
     (string WorkspaceRoot, string ProxyName)? ActiveProxy { get; }
 }

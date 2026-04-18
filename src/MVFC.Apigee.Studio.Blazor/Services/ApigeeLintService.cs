@@ -1,20 +1,6 @@
 namespace MVFC.Apigee.Studio.Blazor.Services;
 
-public class ApigeeLintResult
-{
-    public string FilePath { get; set; } = "";
-    public List<ApigeeLintMessage> Messages { get; set; } = [];
-}
-
-public class ApigeeLintMessage
-{
-    public int Line { get; set; }
-    public int Column { get; set; }
-    public string Message { get; set; } = "";
-    public int Severity { get; set; } // 1 = warning, 2 = error (apigeelint convention)
-}
-
-public class ApigeeLintService
+public sealed class ApigeeLintService
 {
     public async Task<List<ApigeeLintResult>> RunLintAsync(ApigeeWorkspace workspace)
     {

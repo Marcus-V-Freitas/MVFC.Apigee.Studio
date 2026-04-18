@@ -28,4 +28,10 @@ public static partial class LogDefinitions
 
     [LoggerMessage(LogLevel.Warning, "Erro ao parsear ProxyEndpoint XML: {File}")]
     public static partial void LogErrorParsingProxyEndpointXml(this ILogger logger, Exception ex, string file);
+
+    [LoggerMessage(LogLevel.Warning, "docker images indisponível, usando lista padrão")]
+    public static partial void LogDockerImageNotAvailable(this ILogger logger, Exception ex);
+
+    [LoggerMessage(LogLevel.Warning, "Emulator health check failed")]
+    public static partial void LogEmulatorNotHealth(this ILogger logger, Exception ex);
 }

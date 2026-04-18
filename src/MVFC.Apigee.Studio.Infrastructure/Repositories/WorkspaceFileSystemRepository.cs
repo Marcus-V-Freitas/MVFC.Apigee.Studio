@@ -3,7 +3,7 @@ namespace MVFC.Apigee.Studio.Infrastructure.Repositories;
 /// <summary>
 /// Provides file system-based operations for managing Apigee workspaces, proxies, shared flows, and related files.
 /// </summary>
-public sealed class WorkspaceFileSystemRepository(IConfiguration configuration) : IWorkspaceRepository
+public sealed class WorkspaceFileSystemRepository(IConfiguration config) : IWorkspaceRepository
 {
     private static readonly string[] ProxySubFolders =
         ["apiproxy", "apiproxy/policies", "apiproxy/proxies", "apiproxy/targets", "apiproxy/resources"];
@@ -16,11 +16,13 @@ public sealed class WorkspaceFileSystemRepository(IConfiguration configuration) 
         OmitXmlDeclaration = false,
     };
 
+    private readonly IConfiguration _config = config;
+
     /// <summary>
     /// Gets the root directory for all workspaces.
     /// </summary>
     private string WorkspacesRoot =>
-        configuration["WorkspacesRoot"] ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "apigee-workspaces");
+        _config["WorkspacesRoot"] ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "apigee-workspaces");
 
     /// <summary>
     /// Gets the root path of the specified Apigee workspace.
