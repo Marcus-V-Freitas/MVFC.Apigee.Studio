@@ -152,7 +152,7 @@ public sealed class WorkspaceFileSystemRepository(IConfiguration config) : IWork
 
     /// <inheritdoc/>
     public async Task<WorkspaceItem> LoadTreeAsync(ApigeeWorkspace workspace, CancellationToken ct = default) =>
-        await Task.FromResult(BuildItem(workspace.RootPath, workspace.RootPath));
+        await Task.Run(() => BuildItem(workspace.RootPath, workspace.RootPath), ct);
 
     /// <inheritdoc/>
     public async Task<string> ReadFileAsync(string absolutePath, CancellationToken ct = default) =>
@@ -172,29 +172,24 @@ public sealed class WorkspaceFileSystemRepository(IConfiguration config) : IWork
     }
 
     /// <inheritdoc/>
-    public Task CreateDirectoryAsync(string absolutePath, CancellationToken ct = default)
-    {
-        Directory.CreateDirectory(absolutePath);
-        return Task.CompletedTask;
-    }
+    public Task CreateDirectoryAsync(string absolutePath, CancellationToken ct = default) =>
+        Task.Run(() => Directory.CreateDirectory(absolutePath), ct);
 
     /// <inheritdoc/>
-    public Task DeleteFileAsync(string absolutePath, CancellationToken ct = default)
-    {
-        if (File.Exists(absolutePath))
-            File.Delete(absolutePath);
-
-        return Task.CompletedTask;
-    }
+    public Task DeleteFileAsync(string absolutePath, CancellationToken ct = default) =>
+        Task.Run(() =>
+        {
+            if (File.Exists(absolutePath))
+                File.Delete(absolutePath);
+        }, ct);
 
     /// <inheritdoc/>
-    public Task DeleteDirectoryAsync(string absolutePath, CancellationToken ct = default)
-    {
-        if (Directory.Exists(absolutePath))
-            Directory.Delete(absolutePath, recursive: true);
-
-        return Task.CompletedTask;
-    }
+    public Task DeleteDirectoryAsync(string absolutePath, CancellationToken ct = default) =>
+        Task.Run(() =>
+        {
+            if (Directory.Exists(absolutePath))
+                Directory.Delete(absolutePath, recursive: true);
+        }, ct);
 
     /// <inheritdoc/>
     public async Task<string> BuildBundleZipAsync(ApigeeWorkspace workspace, string proxyOrFlowName, CancellationToken ct = default)

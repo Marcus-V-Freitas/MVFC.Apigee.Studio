@@ -23,9 +23,9 @@ builder.Services.AddHttpClient("EmulatorRuntime", client =>
 /// <summary>
 /// Registers application use cases for dependency injection.
 /// </summary>
-builder.Services.AddScoped<CreateWorkspaceUseCase>();
-builder.Services.AddScoped<DeployToEmulatorUseCase>();
-builder.Services.AddScoped<GeneratePolicyUseCase>();
+builder.Services.AddTransient<CreateWorkspaceUseCase>();
+builder.Services.AddTransient<DeployToEmulatorUseCase>();
+builder.Services.AddTransient<GeneratePolicyUseCase>();
 
 /// <summary>
 /// Registers UI and linting services for dependency injection.

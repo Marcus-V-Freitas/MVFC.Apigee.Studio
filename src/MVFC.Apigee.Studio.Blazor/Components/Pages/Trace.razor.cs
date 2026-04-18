@@ -27,9 +27,14 @@ public partial class Trace : ComponentBase, IAsyncDisposable
     private bool _loading;
 
     /// <summary>
-    /// Stores the last error message encountered during trace operations.
+    /// Stores the last status or error message encountered during trace operations.
     /// </summary>
     private string? _error;
+
+    /// <summary>
+    /// Indicates if the message in _error is an error (red) or info (blue).
+    /// </summary>
+    private bool _isError;
 
     /// <summary>
     /// The path of the selected workspace.
@@ -80,6 +85,18 @@ public partial class Trace : ComponentBase, IAsyncDisposable
     public required ToastService Toast { get; set; }
 
     /// <summary>
+    /// Client for listing deployed APIs.
+    /// </summary>
+    [Inject]
+    public required IApigeeTraceClient TraceClient { get; set; }
+
+    /// <summary>
+    /// Use case for standard deployment to the emulator.
+    /// </summary>
+    [Inject]
+    public required DeployToEmulatorUseCase DeployUseCase { get; set; }
+
+    /// <summary>
     /// Loads the list of workspaces on component initialization.
     /// </summary>
     protected override void OnInitialized() =>
@@ -116,17 +133,48 @@ public partial class Trace : ComponentBase, IAsyncDisposable
         string.IsNullOrEmpty(_selectedWorkspacePath) || _isTracing;
 
     /// <summary>
-    /// Starts a trace session for the selected proxy and begins polling for transactions.
+    /// Starts a trace session for the selected proxy.
+    /// If the proxy is not yet deployed, it performs an automatic deploy using the standard workflow.
     /// </summary>
     private async Task StartTrace()
     {
         _error = null;
+        _isError = false;
         _loading = true;
         StateHasChanged();
 
         try
         {
-            _session = await Emulator.StartTraceAsync(_proxyName, _pollCts?.Token ?? CancellationToken.None);
+            var ct = _pollCts?.Token ?? CancellationToken.None;
+
+            // 1. Check if the proxy is deployed
+            var deployedApis = await TraceClient.ListDeployedApisAsync("local", ct);
+            var isDeployed = deployedApis.Any(a => string.Equals(a.ApiProxy, _proxyName, StringComparison.OrdinalIgnoreCase));
+
+            if (!isDeployed)
+            {
+                var ws = _workspaces.FirstOrDefault(w => string.Equals(w.RootPath, _selectedWorkspacePath, StringComparison.OrdinalIgnoreCase));
+                if (ws == null)
+                {
+                    _error = "Workspace não encontrado para realizar o deploy automático.";
+                    _isError = true;
+                    return;
+                }
+
+                // 2. Perform Automatic Deploy using the standard Use Case
+                _error = $"Realizando deploy automático de '{_proxyName}'...";
+                _isError = false;
+                StateHasChanged();
+
+                await DeployUseCase.ExecuteAsync(ws, _proxyName, "local", ct);
+
+                // Small delay to allow emulator state to stabilize
+                await Task.Delay(500, ct);
+                _error = null;
+            }
+
+            // 3. Start Trace Session
+            _session = await Emulator.StartTraceAsync(_proxyName, ct);
             _isTracing = true;
             _transactions = [];
 
@@ -137,8 +185,9 @@ public partial class Trace : ComponentBase, IAsyncDisposable
         }
         catch (Exception ex)
         {
-            _error = ex.Message;
-            Toast.ShowError("Falha ao iniciar trace: " + ex.Message);
+            _error = "Falha ao iniciar trace: " + ex.Message;
+            _isError = true;
+            Toast.ShowError(_error);
         }
         finally
         {

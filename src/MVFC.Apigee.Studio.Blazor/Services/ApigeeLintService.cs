@@ -2,7 +2,7 @@ namespace MVFC.Apigee.Studio.Blazor.Services;
 
 public static class ApigeeLintService
 {
-    public static async Task<IList<ApigeeLintResult>> RunLintAsync(ApigeeWorkspace workspace)
+    public static async Task<IList<ApigeeLintResult>> RunLintAsync(ApigeeWorkspace workspace, string? filterFilePath = null)
     {
         var results = new List<ApigeeLintResult>();
 
@@ -30,6 +30,15 @@ public static class ApigeeLintService
         catch
         {
             // Apigeelint not installed or other error. Ignore to not crash UI.
+        }
+
+        if (!string.IsNullOrEmpty(filterFilePath))
+        {
+            return [.. results
+                .Where(r => r.FilePath.Replace("\\", "/", StringComparison.OrdinalIgnoreCase)
+                             .EndsWith(
+                                 Path.GetFileName(filterFilePath),
+                                 StringComparison.OrdinalIgnoreCase)),];
         }
 
         return results;

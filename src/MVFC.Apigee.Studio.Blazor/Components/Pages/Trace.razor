@@ -94,8 +94,8 @@
 
             @if (!string.IsNullOrWhiteSpace(_error))
             {
-                <div class="alert alert-error">
-                    <i data-lucide="alert-circle"></i>
+                <div class="alert @(_isError ? "alert-error" : "alert-info")">
+                    <i data-lucide="@(_isError ? "alert-circle" : "info")"></i>
                     <span>@_error</span>
                 </div>
             }

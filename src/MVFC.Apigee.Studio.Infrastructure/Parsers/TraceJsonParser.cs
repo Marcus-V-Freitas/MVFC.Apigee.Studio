@@ -50,7 +50,7 @@ public static class TraceJsonParser
     }
 
     private static (List<TracePoint> points, string verb, string uri, string statusCode, long firstTs, long lastTs)
-        ParsePoints(JsonElement pointArray)
+    ParsePoints(JsonElement pointArray)
     {
         var points = new List<TracePoint>();
         var verb = string.Empty;
@@ -58,6 +58,7 @@ public static class TraceJsonParser
         var statusCode = string.Empty;
         long firstTs = 0;
         long lastTs = 0;
+        long prevTs = 0;
 
         foreach (var point in pointArray.EnumerateArray())
         {
@@ -66,12 +67,27 @@ public static class TraceJsonParser
             if (!point.TryGetProperty("results", out var results))
                 continue;
 
+            long currentTs = 0;
             ExtractRequestResponseInfo(results, ref verb, ref uri, ref statusCode, ref firstTs, ref lastTs);
 
-            if (pointId is not ("StateChange" or "Condition" or "Execution"))
-                continue;
+            foreach (var res in results.EnumerateArray()
+                                       .Where(res => string.Equals(TryGetString(res, "ActionResult"), "DebugInfo", StringComparison.OrdinalIgnoreCase)))
+            {
+                var ts = TryGetString(res, "timestamp");
+                if (ts is not null && TryParseEmulatorTimestamp(ts, out var ms))
+                    currentTs = ms;
+            }
 
-            points.Add(ParseTracePoint(point, pointId));
+            if (pointId is not ("StateChange" or "Condition" or "Execution"))
+            {
+                prevTs = currentTs > 0 ? currentTs : prevTs;
+                continue;
+            }
+
+            var elapsed = (currentTs > 0 && prevTs > 0) ? currentTs - prevTs : 0;
+            prevTs = currentTs > 0 ? currentTs : prevTs;
+
+            points.Add(ParseTracePoint(point, pointId, elapsed));
         }
 
         return (points, verb, uri, statusCode, firstTs, lastTs);
@@ -117,7 +133,7 @@ public static class TraceJsonParser
     ///   Condition   → PolicyName = Expression; Description = ExpressionResult
     ///   Execution   → PolicyName = stepDefinition-name; Phase = enforcement direction
     /// </summary>
-    public static TracePoint ParseTracePoint(JsonElement point, string pointId)
+    public static TracePoint ParseTracePoint(JsonElement point, string pointId, long elapsedMs = 0)
     {
         var variables = ExtractVariables(point);
 
@@ -157,7 +173,7 @@ public static class TraceJsonParser
             PolicyName = policyName,
             Phase = phase,
             Description = description,
-            ElapsedTimeMs = 0,
+            ElapsedTimeMs = elapsedMs,
             HasError = hasError,
             Variables = variables,
         };

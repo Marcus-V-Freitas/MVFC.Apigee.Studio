@@ -276,8 +276,8 @@ public partial class WorkspaceDetail : ComponentBase, IAsyncDisposable
 
             if (_workspace != null && EditorState.ActiveTab.FullPath.EndsWith(".xml", StringComparison.OrdinalIgnoreCase))
             {
-                var lintResults = await ApigeeLintService.RunLintAsync(_workspace);
-                var activeFileLint = lintResults.FirstOrDefault(r => r.FilePath.Replace("\\", "/", StringComparison.OrdinalIgnoreCase).EndsWith(EditorState.ActiveTab.FileName, StringComparison.OrdinalIgnoreCase));
+                var lintResults = await ApigeeLintService.RunLintAsync(_workspace, EditorState.ActiveTab.FullPath);
+                var activeFileLint = lintResults.FirstOrDefault();
                 await _editor.SetMarkers(activeFileLint?.Messages ?? (IEnumerable<object>)[]);
             }
         }

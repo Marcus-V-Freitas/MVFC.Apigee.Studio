@@ -41,7 +41,16 @@ public sealed class DeployToEmulatorUseCase(
 
         await workspaceRepository.EnsureEnvironmentAsync(workspace, environment, ct);
         var zipPath = await workspaceRepository.BuildWorkspaceZipAsync(workspace, ct);
-        await emulatorClient.DeployBundleAsync(environment, zipPath, ct);
+
+        try
+        {
+            await emulatorClient.DeployBundleAsync(environment, zipPath, ct);
+        }
+        finally
+        {
+            if (File.Exists(zipPath))
+                File.Delete(zipPath);
+        }
     }
 
     /// <summary>
@@ -66,9 +75,16 @@ public sealed class DeployToEmulatorUseCase(
     {
         // Ensures that the environments/{env}/ folder exists on disk before zipping
         await workspaceRepository.EnsureEnvironmentAsync(workspace, environment, ct);
-
         var zipPath = await workspaceRepository.BuildWorkspaceZipAsync(workspace, ct);
-        await emulatorClient.DeployBundleAsync(environment, zipPath, ct);
+        try
+        {
+            await emulatorClient.DeployBundleAsync(environment, zipPath, ct);
+        }
+        finally
+        {
+            if (File.Exists(zipPath))
+                File.Delete(zipPath);
+        }
 
         // Returns what was deployed
         var proxies     = workspaceRepository.ListApiProxies(workspace);
