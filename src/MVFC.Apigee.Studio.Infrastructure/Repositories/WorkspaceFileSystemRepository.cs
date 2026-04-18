@@ -125,8 +125,11 @@ public sealed class WorkspaceFileSystemRepository(IConfiguration config) : IWork
     /// <returns>A JSON string with deployment information.</returns>
     private static string BuildDeploymentsJson(List<string> proxies, List<string> sharedFlows)
     {
-        using var ms     = new MemoryStream();
-        using var writer = new Utf8JsonWriter(ms, new JsonWriterOptions { Indented = true });
+        var buffer = new ArrayBufferWriter<byte>();
+        using var writer = new Utf8JsonWriter(buffer, new JsonWriterOptions
+        {
+            Indented = true,
+        });
 
         writer.WriteStartObject();
         writer.WriteStartArray("proxies");
@@ -136,7 +139,6 @@ public sealed class WorkspaceFileSystemRepository(IConfiguration config) : IWork
 
         writer.WriteEndArray();
 
-        // sharedFlows omitted when empty — the emulator does not accept an empty array
         if (sharedFlows.Count > 0)
         {
             writer.WriteStartArray("sharedFlows");
@@ -146,8 +148,7 @@ public sealed class WorkspaceFileSystemRepository(IConfiguration config) : IWork
 
         writer.WriteEndObject();
         writer.Flush();
-
-        return Encoding.UTF8.GetString(ms.ToArray());
+        return Encoding.UTF8.GetString(buffer.WrittenSpan);
     }
 
     /// <inheritdoc/>

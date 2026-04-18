@@ -7,6 +7,11 @@ namespace MVFC.Apigee.Studio.Blazor.Components.Pages;
 public partial class Trace : ComponentBase, IAsyncDisposable
 {
     /// <summary>
+    /// Represents the background polling task that retrieves trace transactions while a trace session is active.
+    /// </summary>
+    private Task? _pollTask;
+
+    /// <summary>
     /// The currently active tab in the UI ("trace" by default).
     /// </summary>
     private string _activeTab = "trace";
@@ -179,7 +184,7 @@ public partial class Trace : ComponentBase, IAsyncDisposable
             _transactions = [];
 
             _pollCts = new CancellationTokenSource();
-            _ = PollLoopAsync(_pollCts.Token);
+            _pollTask = PollLoopAsync(_pollCts.Token);
 
             Toast.ShowSuccess($"Trace iniciado para '{_proxyName}'");
         }
@@ -215,9 +220,13 @@ public partial class Trace : ComponentBase, IAsyncDisposable
         {
             try
             {
-                await Emulator.StopTraceAsync(_session.SessionId, _pollCts?.Token ?? CancellationToken.None);
+                await Emulator.StopTraceAsync(_session.SessionId, CancellationToken.None);
             }
             catch { /* best-effort */ }
+            finally
+            {
+                _session = null; // clear reference to ended session
+            }
         }
 
         _isTracing = false;
@@ -279,11 +288,25 @@ public partial class Trace : ComponentBase, IAsyncDisposable
             _pollCts.Dispose();
             _pollCts = null;
         }
+
+        if (_pollTask is not null)
+        {
+            try
+            {
+                await _pollTask; // wait for the loop to actually finish
+            }
+            catch (OperationCanceledException)
+            {
+                // expected on cancel
+            }
+            _pollTask = null;
+        }
     }
 
     /// <summary>
     /// Disposes the component and ensures the trace session is stopped.
     /// </summary>
+    /// <returns>A <see cref="ValueTask"/> representing the asynchronous dispose operation.</returns>
     public async ValueTask DisposeAsync()
     {
         GC.SuppressFinalize(this);

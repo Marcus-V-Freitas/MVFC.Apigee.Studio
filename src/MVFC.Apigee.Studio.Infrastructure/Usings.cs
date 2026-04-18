@@ -19,3 +19,4 @@ global using System.Diagnostics;
 global using System.Net.Http.Headers;
 global using System.Net.Http.Json;
 global using System.Globalization;
+global using System.Buffers;
