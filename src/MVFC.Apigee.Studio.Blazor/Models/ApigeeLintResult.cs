@@ -13,5 +13,5 @@ public sealed class ApigeeLintResult
     /// <summary>
     /// The list of lint messages found in the file.
     /// </summary>
-    public List<ApigeeLintMessage> Messages { get; set; } = [];
+    public IList<ApigeeLintMessage> Messages { get; set; } = [];
 }

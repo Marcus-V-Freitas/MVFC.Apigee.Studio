@@ -3,25 +3,25 @@
 /// <summary>
 /// Represents the severity level of a toast notification.
 /// </summary>
-public enum ToastLevel 
-{ 
+public enum ToastLevel
+{
     /// <summary>
     /// Indicates a successful operation.
     /// </summary>
-    Success, 
+    Success,
 
     /// <summary>
     /// Indicates an error occurred.
     /// </summary>
-    Error, 
+    Error,
 
     /// <summary>
     /// Indicates a warning or potential issue.
     /// </summary>
-    Warning, 
+    Warning,
 
     /// <summary>
     /// Provides informational feedback.
     /// </summary>
-    Info, 
+    Info,
 }

@@ -12,9 +12,7 @@
             @foreach (var tx in Transactions)
             {
                 var isExpanded  = _expanded.Contains(tx.MessageId);
-                var statusClass = tx.ResponseCode >= 500 ? "status-5xx"
-                                : tx.ResponseCode >= 400 ? "status-4xx"
-                                : "status-2xx";
+                var statusClass = GetStatusClass(tx.ResponseCode);
                 var methodClass = tx.RequestMethod switch
                 {
                     "GET"    => "method-get",
@@ -94,7 +92,7 @@
                                             </div>
                                         </div>
 
-                                        @if (group != groups.Last())
+                                        @if (group != groups[^1])
                                         {
                                             <div class="pipeline-connector">
                                                 <i data-lucide="chevron-right" class="connector-arrow"></i>

@@ -24,7 +24,7 @@ public partial class EnvironmentConfig : ComponentBase
     /// <summary>
     /// The currently selected workspace instance.
     /// </summary>
-    private ApigeeWorkspace? _workspace;   
+    private ApigeeWorkspace? _workspace;
 
     /// <summary>
     /// JSON content for KVMs (Key Value Maps).
@@ -75,19 +75,19 @@ public partial class EnvironmentConfig : ComponentBase
     /// <summary>
     /// Service for displaying toast notifications.
     /// </summary>
-    [Inject] 
+    [Inject]
     public required ToastService Toast { get; set; }
 
     /// <summary>
     /// Indicates if no workspace is currently selected.
     /// </summary>
-    public bool WorkspaceNotSelected => 
+    public bool WorkspaceNotSelected =>
         _workspace == null;
 
     /// <summary>
     /// Loads the list of workspaces on component initialization.
     /// </summary>
-    protected override void OnInitialized() => 
+    protected override void OnInitialized() =>
         _workspaces = WorkspaceRepo.ListAll();
 
     /// <summary>
@@ -95,7 +95,7 @@ public partial class EnvironmentConfig : ComponentBase
     /// </summary>
     private void OnWorkspaceChanged()
     {
-        _workspace = _workspaces.FirstOrDefault(w => w.Name == _selectedWorkspaceName);
+        _workspace = _workspaces.FirstOrDefault(w => string.Equals(w.Name, _selectedWorkspaceName, StringComparison.OrdinalIgnoreCase));
         _environments.Clear();
         _selectedEnvironment = "";
 
@@ -126,15 +126,15 @@ public partial class EnvironmentConfig : ComponentBase
         }
 
         await WorkspaceRepo.EnsureEnvironmentAsync(_workspace, _newEnvName);
-        
+
         if (!_environments.Contains(_newEnvName))
         {
             _environments.Add(_newEnvName);
         }
-        
+
         _selectedEnvironment = _newEnvName;
         _newEnvName = "";
-        
+
         await OnEnvironmentChanged();
         Toast.ShowSuccess($"Environment '{_selectedEnvironment}' criado.");
     }
@@ -159,7 +159,7 @@ public partial class EnvironmentConfig : ComponentBase
     /// Gets the file system path for the selected environment.
     /// </summary>
     /// <returns>The environment path as a string.</returns>
-    private string GetEnvPath() => 
+    private string GetEnvPath() =>
         Path.Combine(_workspace!.RootPath, "environments", _selectedEnvironment);
 
     /// <summary>
@@ -168,7 +168,7 @@ public partial class EnvironmentConfig : ComponentBase
     private async Task LoadKvm()
     {
         var path = Path.Combine(GetEnvPath(), "maps.json");
-        
+
         _kvmJson = File.Exists(path) ? await File.ReadAllTextAsync(path) : "[\n  {\n    \"name\": \"my-kvm\",\n    \"scope\": \"environment\",\n    \"encrypted\": false,\n    \"entries\": {\n      \"key1\": \"value1\"\n    }\n  }\n]";
         _kvmIsDirty = false;
     }
@@ -182,13 +182,13 @@ public partial class EnvironmentConfig : ComponentBase
         {
             Directory.CreateDirectory(GetEnvPath());
             await File.WriteAllTextAsync(Path.Combine(GetEnvPath(), "maps.json"), _kvmJson);
-            
+
             _kvmIsDirty = false;
             Toast.ShowSuccess("KVMs salvos com sucesso (maps.json).");
         }
-        catch (Exception ex) 
-        { 
-            Toast.ShowError("Erro: " + ex.Message); 
+        catch (Exception ex)
+        {
+            Toast.ShowError("Erro: " + ex.Message);
         }
     }
 
@@ -198,7 +198,7 @@ public partial class EnvironmentConfig : ComponentBase
     private async Task LoadCaches()
     {
         var path = Path.Combine(GetEnvPath(), "caches.json");
-        
+
         _cachesJson = File.Exists(path) ? await File.ReadAllTextAsync(path) : "[\n  {\n    \"name\": \"my-cache\"\n  }\n]";
         _cachesIsDirty = false;
     }
@@ -212,13 +212,13 @@ public partial class EnvironmentConfig : ComponentBase
         {
             Directory.CreateDirectory(GetEnvPath());
             await File.WriteAllTextAsync(Path.Combine(GetEnvPath(), "caches.json"), _cachesJson);
-            
+
             _cachesIsDirty = false;
             Toast.ShowSuccess("Caches salvos com sucesso.");
         }
-        catch (Exception ex) 
-        { 
-            Toast.ShowError("Erro: " + ex.Message); 
+        catch (Exception ex)
+        {
+            Toast.ShowError("Erro: " + ex.Message);
         }
     }
 
@@ -228,7 +228,7 @@ public partial class EnvironmentConfig : ComponentBase
     private async Task LoadTargetServers()
     {
         var path = Path.Combine(GetEnvPath(), "targetservers.json");
-        
+
         _targetServersJson = File.Exists(path) ? await File.ReadAllTextAsync(path) : "[\n  {\n    \"name\": \"my-target-server\",\n    \"host\": \"localhost\",\n    \"port\": 5037,\n    \"isEnabled\": true\n  }\n]";
         _targetIsDirty = false;
     }
@@ -246,9 +246,9 @@ public partial class EnvironmentConfig : ComponentBase
             _targetIsDirty = false;
             Toast.ShowSuccess("Target Servers salvos com sucesso.");
         }
-        catch (Exception ex) 
-        { 
-            Toast.ShowError("Erro: " + ex.Message); 
+        catch (Exception ex)
+        {
+            Toast.ShowError("Erro: " + ex.Message);
         }
     }
 }

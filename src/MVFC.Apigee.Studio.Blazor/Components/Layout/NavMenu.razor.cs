@@ -6,31 +6,33 @@
 /// </summary>
 public partial class NavMenu : ComponentBase, IDisposable
 {
+    private bool _disposed;
+
     /// <summary>
     /// Optional child content to be rendered inside the navigation menu.
     /// </summary>
-    [Parameter] 
+    [Parameter]
     public RenderFragment? ChildContent { get; set; }
 
     /// <summary>
     /// JavaScript runtime used for invoking JS interop methods.
     /// </summary>
-    [Inject] 
+    [Inject]
     public required IJSRuntime JS { get; set; }
 
     /// <summary>
     /// Provides navigation and URL management for the application.
     /// </summary>
-    [Inject] 
+    [Inject]
     public required NavigationManager Nav { get; set; }
-    
+
     /// <summary>
     /// Service for managing the state of editor tabs.
     /// </summary>
-    [Inject] 
+    [Inject]
     public required EditorStateService EditorState { get; set; }
 
-    private bool _sidebarOpen = false;
+    private bool _sidebarOpen;
 
     /// <summary>
     /// Subscribes to navigation and editor tab change events.
@@ -58,27 +60,27 @@ public partial class NavMenu : ComponentBase, IDisposable
         if (_sidebarOpen)
         {
             _sidebarOpen = false;
-            InvokeAsync(StateHasChanged);
+            _ = InvokeAsync(StateHasChanged);
         }
     }
 
     /// <summary>
     /// Toggles the sidebar open/close state.
     /// </summary>
-    private void ToggleSidebar() => 
+    private void ToggleSidebar() =>
         _sidebarOpen = !_sidebarOpen;
 
     /// <summary>
     /// Closes the sidebar.
     /// </summary>
-    private void CloseSidebar() => 
+    private void CloseSidebar() =>
         _sidebarOpen = false;
 
     /// <summary>
     /// Invokes JavaScript to initialize Lucide icons after the component is rendered.
     /// </summary>
     /// <param name="firstRender">Indicates if this is the first render.</param>
-    protected override async Task OnAfterRenderAsync(bool firstRender) => 
+    protected override async Task OnAfterRenderAsync(bool firstRender) =>
         await JS.InvokeVoidAsync("initLucide");
 
     /// <summary>
@@ -86,8 +88,25 @@ public partial class NavMenu : ComponentBase, IDisposable
     /// </summary>
     public void Dispose()
     {
+        Dispose(disposing: true);
         GC.SuppressFinalize(this);
-        Nav.LocationChanged -= HandleLocationChanged;
-        EditorState.OnTabsChanged -= HandleTabsChanged;
+    }
+
+    /// <summary>
+    /// Dispose pattern implementation.
+    /// </summary>
+    /// <param name="disposing">Indica se está sendo chamado explicitamente.</param>
+    protected virtual void Dispose(bool disposing)
+    {
+        if (_disposed)
+            return;
+
+        if (disposing)
+        {
+            Nav.LocationChanged -= HandleLocationChanged;
+            EditorState.OnTabsChanged -= HandleTabsChanged;
+        }
+
+        _disposed = true;
     }
 }

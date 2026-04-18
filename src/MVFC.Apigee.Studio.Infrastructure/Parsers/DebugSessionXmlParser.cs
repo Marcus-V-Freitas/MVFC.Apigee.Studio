@@ -1,12 +1,15 @@
 namespace MVFC.Apigee.Studio.Infrastructure.Parsers;
 
 /// <summary>
+/// <para>
 /// Parses the XML returned by the Debug API of the Apigee Emulator.
 /// The schema follows the format of the Apigee Edge Management API:
-///   &lt;DebugSession&gt; → &lt;Messages&gt; → &lt;Message&gt; → &lt;Point id="..."&gt; → &lt;DebugInfo&gt;
-///
+///   &lt;DebugSession&gt; → &lt;Messages&gt; → &lt;Message&gt; → &lt;Point id="..."&gt; → &lt;DebugInfo
+/// </para>
+/// <para>
 /// Note: This parser is maintained for future compatibility.
 /// The primary trace is now captured via JSON by ApigeeEmulatorClient.
+/// </para>
 /// </summary>
 public static class DebugSessionXmlParser
 {
@@ -35,7 +38,7 @@ public static class DebugSessionXmlParser
 
         var verb       = allProps.GetValueOrDefault("request.verb", "GET");
         var path       = allProps.GetValueOrDefault("request.path", "/");
-        var statusCode = int.TryParse(allProps.GetValueOrDefault("response.status.code"), out var s) ? s : 0;
+        var statusCode = int.TryParse(allProps.GetValueOrDefault("response.status.code"), CultureInfo.InvariantCulture, out var s) ? s : 0;
 
         var points = doc
             .Descendants("Point")
@@ -51,7 +54,7 @@ public static class DebugSessionXmlParser
             RequestUri    = path,
             ResponseCode  = statusCode,
             TotalTimeMs   = 0,
-            Points        = points
+            Points        = points,
         };
     }
 
@@ -91,11 +94,10 @@ public static class DebugSessionXmlParser
         var hasError = point.Descendants("Error").Any() ||
                        point.Descendants("Fault").Any();
 
-        var durationMs = long.TryParse(
-            point.Descendants("Property")
+        var durationMs = long.TryParse(point.Descendants("Property")
                  .FirstOrDefault(p => p.Attribute("name")?.Value
                      .Equals("timeInMillis", StringComparison.OrdinalIgnoreCase) == true)
-                 ?.Value, out var d) ? d : 0L;
+                 ?.Value, CultureInfo.InvariantCulture, out var d) ? d : 0L;
 
         var variables = point
             .Descendants("VariableAssignment")
@@ -106,7 +108,7 @@ public static class DebugSessionXmlParser
             })
             .Where(v => !string.IsNullOrWhiteSpace(v.Name))
             .GroupBy(v => v.Name!, StringComparer.OrdinalIgnoreCase)
-            .ToDictionary(g => g.Key, g => g.First().Value ?? string.Empty);
+            .ToDictionary(g => g.Key, g => g.First().Value ?? string.Empty, StringComparer.OrdinalIgnoreCase);
 
         return new TracePoint
         {
@@ -116,7 +118,7 @@ public static class DebugSessionXmlParser
             Description   = description,
             ElapsedTimeMs = durationMs,
             HasError      = hasError,
-            Variables     = variables
+            Variables     = variables,
         };
     }
 }

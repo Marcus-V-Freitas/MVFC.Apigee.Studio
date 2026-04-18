@@ -29,31 +29,31 @@ public sealed class WorkspaceFileSystemRepository(IConfiguration config) : IWork
     /// </summary>
     /// <param name="workspace">The workspace instance.</param>
     /// <returns>The root path as a string.</returns>
-    private static string ApigeeRoot(ApigeeWorkspace workspace) => 
+    private static string ApigeeRoot(ApigeeWorkspace workspace) =>
         workspace.RootPath;
 
     /// <inheritdoc/>
     public IReadOnlyList<ApigeeWorkspace> ListAll()
     {
-        if (!Directory.Exists(WorkspacesRoot)) 
+        if (!Directory.Exists(WorkspacesRoot))
             return [];
-        
+
         return [.. Directory
             .GetDirectories(WorkspacesRoot)
-            .Select(d => new ApigeeWorkspace(Path.GetFileName(d), d))];
+            .Select(d => new ApigeeWorkspace(Path.GetFileName(d), d)),];
     }
 
     /// <inheritdoc/>
     public IReadOnlyList<string> ListApiProxies(ApigeeWorkspace workspace)
     {
         var path = Path.Combine(ApigeeRoot(workspace), "apiproxies");
-        
-        if (!Directory.Exists(path)) 
+
+        if (!Directory.Exists(path))
             return [];
 
         return [.. Directory.GetDirectories(path)
             .Select(Path.GetFileName).OfType<string>()
-            .OrderBy(x => x)];
+            .Order(StringComparer.OrdinalIgnoreCase),];
     }
 
     /// <inheritdoc/>
@@ -61,12 +61,12 @@ public sealed class WorkspaceFileSystemRepository(IConfiguration config) : IWork
     {
         var path = Path.Combine(ApigeeRoot(workspace), "sharedflows");
 
-        if (!Directory.Exists(path)) 
+        if (!Directory.Exists(path))
             return [];
-        
+
         return [.. Directory.GetDirectories(path)
             .Select(Path.GetFileName).OfType<string>()
-            .OrderBy(x => x)];
+            .Order(StringComparer.OrdinalIgnoreCase),];
     }
 
     /// <inheritdoc/>
@@ -82,8 +82,12 @@ public sealed class WorkspaceFileSystemRepository(IConfiguration config) : IWork
         Directory.CreateDirectory(Path.Combine(fullPath, "environments"));
 
         if (initialProxies is { Count: > 0 })
+        {
             foreach (var p in initialProxies.Where(p => !string.IsNullOrWhiteSpace(p)))
+            {
                 ScaffoldApiProxy(fullPath, p.Trim());
+            }
+        }
 
         return new ApigeeWorkspace(name, fullPath);
     }
@@ -126,10 +130,10 @@ public sealed class WorkspaceFileSystemRepository(IConfiguration config) : IWork
 
         writer.WriteStartObject();
         writer.WriteStartArray("proxies");
-        
-        foreach (var p in proxies) 
+
+        foreach (var p in proxies)
             writer.WriteStringValue(p);
-        
+
         writer.WriteEndArray();
 
         // sharedFlows omitted when empty — the emulator does not accept an empty array
@@ -147,15 +151,15 @@ public sealed class WorkspaceFileSystemRepository(IConfiguration config) : IWork
     }
 
     /// <inheritdoc/>
-    public async Task<WorkspaceItem> LoadTreeAsync(ApigeeWorkspace workspace, CancellationToken ct = default) => 
+    public async Task<WorkspaceItem> LoadTreeAsync(ApigeeWorkspace workspace, CancellationToken ct = default) =>
         await Task.FromResult(BuildItem(workspace.RootPath, workspace.RootPath));
 
     /// <inheritdoc/>
-    public async Task<string> ReadFileAsync(string absolutePath, CancellationToken ct = default) => 
+    public async Task<string> ReadFileAsync(string absolutePath, CancellationToken ct = default) =>
         await File.ReadAllTextAsync(absolutePath, ct);
 
     /// <inheritdoc/>
-    public async Task SaveFileAsync(string absolutePath, string content, CancellationToken ct = default) => 
+    public async Task SaveFileAsync(string absolutePath, string content, CancellationToken ct = default) =>
         await File.WriteAllTextAsync(absolutePath, content, ct);
 
     /// <inheritdoc/>
@@ -208,26 +212,30 @@ public sealed class WorkspaceFileSystemRepository(IConfiguration config) : IWork
             throw new DirectoryNotFoundException($"Proxy or shared flow '{proxyOrFlowName}' not found in workspace.");
 
         var zip = Path.Combine(Path.GetTempPath(),
-            proxyOrFlowName + "_" + DateTime.UtcNow.ToString("yyyyMMddHHmmss") + ".zip");
+            proxyOrFlowName + "_" + DateTime.UtcNow.ToString("yyyyMMddHHmmss", CultureInfo.InvariantCulture) + ".zip");
 
-        using (var archive = ZipFile.Open(zip, ZipArchiveMode.Create))
+        await using (var archive = await ZipFile.OpenAsync(zip, ZipArchiveMode.Create, ct))
             await AddDirectoryToZip(archive, sourceDir, string.Empty);
 
         return zip;
     }
 
     /// <inheritdoc/>
-    public Task<string> BuildWorkspaceZipAsync(ApigeeWorkspace workspace, CancellationToken ct = default)
+    public async Task<string> BuildWorkspaceZipAsync(ApigeeWorkspace workspace, CancellationToken ct = default)
     {
         var zip = Path.Combine(Path.GetTempPath(),
-            workspace.Name + "_full_" + DateTime.UtcNow.ToString("yyyyMMddHHmmss") + ".zip");
+            workspace.Name + "_full_" + DateTime.UtcNow.ToString("yyyyMMddHHmmss", CultureInfo.InvariantCulture) + ".zip");
 
-        using (var archive = ZipFile.Open(zip, ZipArchiveMode.Create))
-            AddDirectoryToZipIncludingEmpty(archive, workspace.RootPath, string.Empty);
+        var archive = await ZipFile.OpenAsync(zip, ZipArchiveMode.Create, ct);
 
-        return Task.FromResult(zip);
+        await using (archive.ConfigureAwait(false))
+        {
+            await AddDirectoryToZipIncludingEmpty(archive, workspace.RootPath, string.Empty);
+        }
+
+        return zip;
     }
-    
+
     /// <summary>
     /// Adds all files from a directory to a zip archive asynchronously.
     /// </summary>
@@ -250,23 +258,22 @@ public sealed class WorkspaceFileSystemRepository(IConfiguration config) : IWork
     /// <param name="archive">The zip archive.</param>
     /// <param name="sourceDir">The source directory.</param>
     /// <param name="zipRoot">The root path inside the zip archive.</param>
-    private static void AddDirectoryToZipIncludingEmpty(ZipArchive archive, string sourceDir, string zipRoot)
+    private static async Task AddDirectoryToZipIncludingEmpty(ZipArchive archive, string sourceDir, string zipRoot)
     {
         foreach (var file in Directory.EnumerateFiles(sourceDir, "*", SearchOption.AllDirectories))
         {
             var relative  = Path.GetRelativePath(sourceDir, file).Replace(Path.DirectorySeparatorChar, '/');
             var entryName = string.IsNullOrEmpty(zipRoot) ? relative : zipRoot + "/" + relative;
-            archive.CreateEntryFromFile(file, entryName, CompressionLevel.Optimal);
+            await archive.CreateEntryFromFileAsync(file, entryName, CompressionLevel.Optimal);
         }
 
-        foreach (var dir in Directory.EnumerateDirectories(sourceDir, "*", SearchOption.AllDirectories))
+        foreach (var entryName in from dir in Directory.EnumerateDirectories(sourceDir, "*", SearchOption.AllDirectories)
+                                  where !Directory.EnumerateFileSystemEntries(dir).Any()
+                                  let relative = Path.GetRelativePath(sourceDir, dir).Replace(Path.DirectorySeparatorChar, '/') + "/"
+                                  let entryName = string.IsNullOrEmpty(zipRoot) ? relative : zipRoot + "/" + relative
+                                  select entryName)
         {
-            if (!Directory.EnumerateFileSystemEntries(dir).Any())
-            {
-                var relative  = Path.GetRelativePath(sourceDir, dir).Replace(Path.DirectorySeparatorChar, '/') + "/";
-                var entryName = string.IsNullOrEmpty(zipRoot) ? relative : zipRoot + "/" + relative;
-                archive.CreateEntry(entryName);
-            }
+            archive.CreateEntry(entryName);
         }
     }
 
@@ -275,7 +282,7 @@ public sealed class WorkspaceFileSystemRepository(IConfiguration config) : IWork
     /// </summary>
     /// <param name="apigeeRoot">The root directory of the workspace.</param>
     /// <param name="proxyName">The name of the proxy.</param>
-    private static void ScaffoldApiProxy(string apigeeRoot, string proxyName)
+    private void ScaffoldApiProxy(string apigeeRoot, string proxyName)
     {
         var baseDir = Path.Combine(apigeeRoot, "apiproxies", proxyName);
         foreach (var sub in ProxySubFolders)
@@ -301,7 +308,7 @@ public sealed class WorkspaceFileSystemRepository(IConfiguration config) : IWork
                 new XAttribute("name", "default"),
                 new XElement("Description", "Default target endpoint"),
                 new XElement("HTTPTargetConnection",
-                    new XElement("URL", "https://httpbin.org/anything"))));
+                    new XElement("URL", _config["ApigeeTemplates:DefaultTargetUrl"] ?? new UriBuilder(Uri.UriSchemeHttps, "httpbin.org", 443, "anything").ToString()))));
 
         SaveXml(targetEndpoint, Path.Combine(baseDir, "apiproxy", "targets", "default.xml"));
     }
@@ -336,11 +343,11 @@ public sealed class WorkspaceFileSystemRepository(IConfiguration config) : IWork
             "apiproxies"   => WorkspaceItemType.ApiProxy,
             "sharedflows"  => WorkspaceItemType.SharedFlow,
             "environments" => WorkspaceItemType.Environment,
-            _              => WorkspaceItemType.Directory
+            _ => WorkspaceItemType.Directory,
         };
 
         var children = Directory.GetFileSystemEntries(path)
-            .OrderBy(p => File.Exists(p) ? 1 : 0).ThenBy(p => p)
+            .OrderBy(p => File.Exists(p) ? 1 : 0).ThenBy(p => p, StringComparer.OrdinalIgnoreCase)
             .Select(c => BuildItem(c, rootPath)).ToList();
 
         return new WorkspaceItem(name, path, rel, itemType, children);

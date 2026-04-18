@@ -19,17 +19,17 @@ public partial class Trace : ComponentBase, IAsyncDisposable
     /// <summary>
     /// Indicates if a trace session is currently active.
     /// </summary>
-    private bool _isTracing = false;
+    private bool _isTracing;
 
     /// <summary>
     /// Indicates if a loading operation is in progress (e.g., starting trace).
     /// </summary>
-    private bool _loading = false;
+    private bool _loading;
 
     /// <summary>
     /// Stores the last error message encountered during trace operations.
     /// </summary>
-    private string? _error = null;
+    private string? _error;
 
     /// <summary>
     /// The path of the selected workspace.
@@ -39,17 +39,17 @@ public partial class Trace : ComponentBase, IAsyncDisposable
     /// <summary>
     /// The current trace session, if any.
     /// </summary>
-    private TraceSession? _session = null;
+    private TraceSession? _session;
 
     /// <summary>
     /// Cancellation token source for polling trace transactions.
     /// </summary>
-    private CancellationTokenSource? _pollCts = null;
- 
+    private CancellationTokenSource? _pollCts;
+
     /// <summary>
     /// List of captured trace transactions for the current session.
     /// </summary>
-    private IReadOnlyList<TraceTransaction> _transactions = [];    
+    private IReadOnlyList<TraceTransaction> _transactions = [];
 
     /// <summary>
     /// List of available workspaces.
@@ -72,7 +72,7 @@ public partial class Trace : ComponentBase, IAsyncDisposable
     /// </summary>
     [Inject]
     public required IWorkspaceRepository WorkspaceRepo { get; set; }
-    
+
     /// <summary>
     /// Service for displaying toast notifications.
     /// </summary>
@@ -82,7 +82,7 @@ public partial class Trace : ComponentBase, IAsyncDisposable
     /// <summary>
     /// Loads the list of workspaces on component initialization.
     /// </summary>
-    protected override void OnInitialized() => 
+    protected override void OnInitialized() =>
         _workspaces = WorkspaceRepo.ListAll();
 
     /// <summary>
@@ -95,7 +95,7 @@ public partial class Trace : ComponentBase, IAsyncDisposable
         _proxyName = string.Empty;
         _proxies = [];
 
-        var ws = _workspaces.FirstOrDefault(w => w.RootPath == _selectedWorkspacePath);
+        var ws = _workspaces.FirstOrDefault(w => string.Equals(w.RootPath, _selectedWorkspacePath, StringComparison.OrdinalIgnoreCase));
         if (ws is not null)
         {
             _proxies = WorkspaceRepo.ListApiProxies(ws);
@@ -106,7 +106,7 @@ public partial class Trace : ComponentBase, IAsyncDisposable
     /// Handles proxy selection changes.
     /// </summary>
     /// <param name="e">The change event arguments.</param>
-    private void OnProxyChanged(ChangeEventArgs e) => 
+    private void OnProxyChanged(ChangeEventArgs e) =>
         _proxyName = e.Value?.ToString() ?? string.Empty;
 
     /// <summary>
@@ -126,7 +126,7 @@ public partial class Trace : ComponentBase, IAsyncDisposable
 
         try
         {
-            _session = await Emulator.StartTraceAsync(_proxyName);
+            _session = await Emulator.StartTraceAsync(_proxyName, _pollCts?.Token ?? CancellationToken.None);
             _isTracing = true;
             _transactions = [];
 
@@ -164,9 +164,9 @@ public partial class Trace : ComponentBase, IAsyncDisposable
 
         if (_session is not null)
         {
-            try 
-            { 
-                await Emulator.StopTraceAsync(_session.SessionId); 
+            try
+            {
+                await Emulator.StopTraceAsync(_session.SessionId, _pollCts?.Token ?? CancellationToken.None);
             }
             catch { /* best-effort */ }
         }
@@ -201,9 +201,9 @@ public partial class Trace : ComponentBase, IAsyncDisposable
                     await InvokeAsync(StateHasChanged);
                 }
             }
-            catch (OperationCanceledException) 
-            { 
-                break; 
+            catch (OperationCanceledException)
+            {
+                break;
             }
             catch (Exception ex)
             {
@@ -215,7 +215,7 @@ public partial class Trace : ComponentBase, IAsyncDisposable
                 break;
             }
 
-            await Task.Delay(2_000, ct).ConfigureAwait(false);
+            await Task.Delay(2_000, ct);
         }
     }
 

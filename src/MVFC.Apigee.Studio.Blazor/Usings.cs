@@ -19,3 +19,4 @@ global using MVFC.Apigee.Studio.Domain.Enums;
 global using MVFC.Apigee.Studio.Blazor.Components.Shared;
 global using System.Net.Http;
 global using Microsoft.AspNetCore.Components.Routing;
+global using System.Globalization;

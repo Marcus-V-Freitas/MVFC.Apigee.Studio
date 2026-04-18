@@ -20,7 +20,7 @@ public sealed class PolicyTemplateRepository : IPolicyTemplateRepository
     /// <summary>
     /// Dictionary mapping policy template names to XML builder functions.
     /// </summary>
-    private static readonly IReadOnlyDictionary<string, Func<IDictionary<string, string>, XElement>> _builders = 
+    private static readonly Dictionary<string, Func<IDictionary<string, string>, XElement>> _builders =
         new Dictionary<string, Func<IDictionary<string, string>, XElement>>(StringComparer.OrdinalIgnoreCase)
     {
         ["AssignMessage"] = p => new XElement("AssignMessage",
@@ -260,19 +260,19 @@ public sealed class PolicyTemplateRepository : IPolicyTemplateRepository
     /// });
     /// </code>
     /// </summary>
-    /// <param name="template">The policy template to use.</param>
+    /// <param name="policyTemplate">The policy template to use.</param>
     /// <param name="parameters">Dictionary of parameter names and values.</param>
     /// <returns>The generated policy XML as a string.</returns>
     /// <exception cref="NotSupportedException">If the template is not supported.</exception>
-    public string GeneratePolicyXml(PolicyTemplate template, IDictionary<string, string> parameters)
+    public string GeneratePolicyXml(PolicyTemplate policyTemplate, IDictionary<string, string> parameters)
     {
-        if (_builders.TryGetValue(template.Name, out var builder))
+        if (_builders.TryGetValue(policyTemplate.Name, out var builder))
         {
             var element = builder(parameters);
             var doc = new XDocument(new XDeclaration("1.0", "UTF-8", "yes"), element);
             return doc.ToString();
         }
 
-        throw new NotSupportedException($"Gerador não implementado para a política: {template.Name}");
+        throw new NotSupportedException($"Gerador não implementado para a política: {policyTemplate.Name}");
     }
 }

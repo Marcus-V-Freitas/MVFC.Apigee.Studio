@@ -72,23 +72,23 @@ public partial class Home : ComponentBase
     /// <summary>
     /// Closes the create workspace form and clears error messages.
     /// </summary>
-    private void CloseCreateForm() 
-    { 
-        _showCreate = false; 
-        _createError = string.Empty; 
+    private void CloseCreateForm()
+    {
+        _showCreate = false;
+        _createError = string.Empty;
     }
 
     /// <summary>
     /// Adds a new empty proxy entry to the list for workspace creation.
     /// </summary>
-    private void AddProxyEntry() => 
+    private void AddProxyEntry() =>
         _proxyEntries.Add(string.Empty);
-    
+
     /// <summary>
     /// Removes a proxy entry at the specified index from the list.
     /// </summary>
     /// <param name="idx">The index of the proxy entry to remove.</param>
-    private void RemoveProxyEntry(int idx) => 
+    private void RemoveProxyEntry(int idx) =>
         _proxyEntries.RemoveAt(idx);
 
     /// <summary>
@@ -108,9 +108,9 @@ public partial class Home : ComponentBase
             _workspaces.Add(ws);
             CloseCreateForm();
         }
-        catch (Exception ex) 
-        { 
-            _createError = ex.Message; 
+        catch (Exception ex)
+        {
+            _createError = ex.Message;
         }
     }
 
@@ -118,9 +118,9 @@ public partial class Home : ComponentBase
     /// Sets the workspace to be deleted (shows confirmation dialog).
     /// </summary>
     /// <param name="ws">The workspace to delete.</param>
-    private void AskDelete(ApigeeWorkspace ws) => 
+    private void AskDelete(ApigeeWorkspace ws) =>
         _pendingDelete = ws;
-    
+
     /// <summary>
     /// Cancels the workspace deletion operation.
     /// </summary>
@@ -132,9 +132,9 @@ public partial class Home : ComponentBase
     /// </summary>
     private void ConfirmDelete()
     {
-        if (_pendingDelete is null) 
+        if (_pendingDelete is null)
             return;
-        
+
         WorkspaceRepo.Delete(_pendingDelete);
         _workspaces.Remove(_pendingDelete);
         _pendingDelete = null;

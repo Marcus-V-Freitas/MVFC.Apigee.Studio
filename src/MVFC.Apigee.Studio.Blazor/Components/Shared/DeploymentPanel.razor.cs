@@ -74,7 +74,7 @@ public partial class DeploymentPanel : ComponentBase
     /// </summary>
     /// <param name="m">The deployment mode ("proxy" or "full").</param>
     /// <returns>The CSS class string.</returns>
-    private string TabClass(string m) => _deployMode == m ? "btn btn-primary btn-sm" : "btn btn-ghost btn-sm";
+    private string TabClass(string m) => string.Equals(_deployMode, m, StringComparison.OrdinalIgnoreCase) ? "btn btn-primary btn-sm" : "btn btn-ghost btn-sm";
 
     /// <summary>
     /// Sets the deployment mode to "proxy".

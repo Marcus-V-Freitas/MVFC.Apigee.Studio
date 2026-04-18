@@ -1,5 +1,5 @@
 namespace MVFC.Apigee.Studio.Blazor.Components.Pages;
-    
+
 /// <summary>
 /// Blazor page component for browsing and editing files in an Apigee workspace.
 /// Provides a file tree, Monaco editor integration, context menu actions, and quick add features for files and folders.
@@ -86,7 +86,7 @@ public partial class WorkspaceDetail : ComponentBase, IAsyncDisposable
     /// <summary>
     /// Indicates if the quick add drawer is open.
     /// </summary>
-    private bool _quickAddOpen = false;
+    private bool _quickAddOpen;
 
     /// <summary>
     /// The path for the quick add operation.
@@ -122,12 +122,6 @@ public partial class WorkspaceDetail : ComponentBase, IAsyncDisposable
     public required ToastService Toast { get; set; }
 
     /// <summary>
-    /// Service for running Apigee lint checks on XML files.
-    /// </summary>
-    [Inject]
-    public required ApigeeLintService LintService { get; set; }
-
-    /// <summary>
     /// JavaScript runtime for interop calls.
     /// </summary>
     [Inject]
@@ -143,20 +137,32 @@ public partial class WorkspaceDetail : ComponentBase, IAsyncDisposable
     /// Gets the placeholder text for the new item input based on type.
     /// </summary>
     private string NewItemPlaceholder => _newItemIsDir ? "folder-name" : "file.xml";
-    
+
     /// <summary>
     /// Loads the workspace and file tree on initialization and resets editor state.
     /// </summary>
     protected override async Task OnInitializedAsync()
     {
-        _workspace = WorkspaceRepo.ListAll().FirstOrDefault(w => w.Name == WorkspaceName);
+        _workspace = WorkspaceRepo.ListAll().FirstOrDefault(w => string.Equals(w.Name, WorkspaceName, StringComparison.OrdinalIgnoreCase));
 
         if (_workspace is not null)
             _tree = await WorkspaceRepo.LoadTreeAsync(_workspace);
 
-        // State is managed by EditorStateService, but we reset it on first load of this workspace
-        // Usually, we might want to persist tabs, but for now we follow original logic of clearing.
         EditorState.Reset();
+    }
+
+    /// <summary>
+    /// Executes actions after the component has rendered.
+    /// If the new item modal is open, automatically focuses the input field for better user experience.
+    /// </summary>
+    /// <param name="firstRender">Indicates whether this is the first render of the component.</param>
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_showNewItem)
+        {
+            await Task.Yield();
+            await _newItemInput.FocusAsync();
+        }
     }
 
     /// <summary>
@@ -165,8 +171,10 @@ public partial class WorkspaceDetail : ComponentBase, IAsyncDisposable
     /// <returns>The language name as a string.</returns>
     private string DetectLanguage()
     {
-        if (EditorState.ActiveTab is null) return "";
-        var ext = Path.GetExtension(EditorState.ActiveTab.FullPath).TrimStart('.').ToLower();
+        if (EditorState.ActiveTab is null)
+            return "";
+
+        var ext = Path.GetExtension(EditorState.ActiveTab.FullPath).TrimStart('.').ToLower(CultureInfo.InvariantCulture);
         return ext switch
         {
             "xml" => "XML",
@@ -176,7 +184,7 @@ public partial class WorkspaceDetail : ComponentBase, IAsyncDisposable
             "md" => "Markdown",
             "css" => "CSS",
             "html" => "HTML",
-            _ => ext.ToUpper()
+            _ => ext.ToUpperInvariant(),
         };
     }
 
@@ -208,7 +216,7 @@ public partial class WorkspaceDetail : ComponentBase, IAsyncDisposable
         var isCurrent = EditorState.ActiveTab == tab;
         if (tab.IsDirty)
         {
-            if (isCurrent && _editor is not null) 
+            if (isCurrent && _editor is not null)
                 tab.IsDirty = await _editor.IsDirty();
 
             if (tab.IsDirty)
@@ -228,7 +236,7 @@ public partial class WorkspaceDetail : ComponentBase, IAsyncDisposable
     /// <param name="path">The file path to load.</param>
     private async Task LoadFile(string path)
     {
-        var existing = EditorState.OpenTabs.FirstOrDefault(t => t.FullPath == path);
+        var existing = EditorState.OpenTabs.FirstOrDefault(t => string.Equals(t.FullPath, path, StringComparison.OrdinalIgnoreCase));
         if (existing is not null)
         {
             await SwitchTab(existing);
@@ -252,23 +260,24 @@ public partial class WorkspaceDetail : ComponentBase, IAsyncDisposable
     /// </summary>
     private async Task SaveFile()
     {
-        if (EditorState.ActiveTab is null || _saving || _editor is null) return;
-        
+        if (EditorState.ActiveTab is null || _saving || _editor is null)
+            return;
+
         _saving = true;
         StateHasChanged();
-        
+
         try
         {
             var content = await _editor.GetValue();
             await WorkspaceRepo.SaveFileAsync(EditorState.ActiveTab.FullPath, content);
             await _editor.ClearDirty();
-            EditorState.UpdateActiveTabContent(content, false);
+            EditorState.UpdateActiveTabContent(content, isDirty: false);
             Toast.ShowSuccess("✔ Arquivo salvo com sucesso!");
 
-            if (_workspace != null && EditorState.ActiveTab.FullPath.EndsWith(".xml"))
+            if (_workspace != null && EditorState.ActiveTab.FullPath.EndsWith(".xml", StringComparison.OrdinalIgnoreCase))
             {
-                var lintResults = await LintService.RunLintAsync(_workspace);
-                var activeFileLint = lintResults.FirstOrDefault(r => r.FilePath.Replace("\\", "/").EndsWith(EditorState.ActiveTab.FileName));
+                var lintResults = await ApigeeLintService.RunLintAsync(_workspace);
+                var activeFileLint = lintResults.FirstOrDefault(r => r.FilePath.Replace("\\", "/", StringComparison.OrdinalIgnoreCase).EndsWith(EditorState.ActiveTab.FileName, StringComparison.OrdinalIgnoreCase));
                 await _editor.SetMarkers(activeFileLint?.Messages ?? (IEnumerable<object>)[]);
             }
         }
@@ -287,7 +296,8 @@ public partial class WorkspaceDetail : ComponentBase, IAsyncDisposable
     /// </summary>
     private async Task FormatDocument()
     {
-        if (_editor is not null) await _editor.FormatDocument();
+        if (_editor is not null)
+            await _editor.FormatDocument();
     }
 
     /// <summary>
@@ -295,8 +305,9 @@ public partial class WorkspaceDetail : ComponentBase, IAsyncDisposable
     /// </summary>
     private async Task DeleteSelectedFile()
     {
-        if (EditorState.ActiveTab is null || _workspace is null) return;
-        
+        if (EditorState.ActiveTab is null || _workspace is null)
+            return;
+
         var fileName = EditorState.ActiveTab.FileName;
         var confirm = await JS.InvokeAsync<bool>("confirm", $"Remover arquivo '{fileName}'?");
         if (!confirm) return;
@@ -340,7 +351,7 @@ public partial class WorkspaceDetail : ComponentBase, IAsyncDisposable
     private void ContextAdd(bool isDir)
     {
         _showContextMenu = false;
-        OpenNewItemDialog(isDir, _contextMenuItem);
+        OpenNewItemDialogWorspace(isDir, _contextMenuItem);
     }
 
     /// <summary>
@@ -362,7 +373,7 @@ public partial class WorkspaceDetail : ComponentBase, IAsyncDisposable
         else
         {
             await WorkspaceRepo.DeleteFileAsync(_contextMenuItem.FullPath);
-            var tab = EditorState.OpenTabs.FirstOrDefault(t => t.FullPath == _contextMenuItem.FullPath);
+            var tab = EditorState.OpenTabs.FirstOrDefault(t => string.Equals(t.FullPath, _contextMenuItem.FullPath, StringComparison.OrdinalIgnoreCase));
             if (tab is not null) EditorState.CloseTab(tab);
         }
 
@@ -375,14 +386,14 @@ public partial class WorkspaceDetail : ComponentBase, IAsyncDisposable
     /// Opens the new item dialog for creating a file or directory.
     /// </summary>
     /// <param name="isDir">Whether the new item is a directory.</param>
-    private void OpenNewItemDialog(bool isDir) => OpenNewItemDialog(isDir, null);
+    private void OpenNewItemDialog(bool isDir) => OpenNewItemDialogWorspace(isDir, targetDir: null);
 
     /// <summary>
     /// Opens the new item dialog for a specific directory context.
     /// </summary>
     /// <param name="isDir">Whether the new item is a directory.</param>
     /// <param name="targetDir">The target directory context.</param>
-    private void OpenNewItemDialog(bool isDir, WorkspaceItem? targetDir = null)
+    private void OpenNewItemDialogWorspace(bool isDir, WorkspaceItem? targetDir = null)
     {
         _targetDirContext = targetDir;
         _newItemIsDir = isDir;
@@ -396,8 +407,8 @@ public partial class WorkspaceDetail : ComponentBase, IAsyncDisposable
     /// <param name="e">The keyboard event arguments.</param>
     private async Task HandleNewItemKey(KeyboardEventArgs e)
     {
-        if (e.Key == "Enter") await ConfirmNewItem();
-        if (e.Key == "Escape") _showNewItem = false;
+        if (string.Equals(e.Key, "Enter", StringComparison.OrdinalIgnoreCase)) await ConfirmNewItem();
+        if (string.Equals(e.Key, "Escape", StringComparison.OrdinalIgnoreCase)) _showNewItem = false;
     }
 
     /// <summary>
@@ -409,25 +420,48 @@ public partial class WorkspaceDetail : ComponentBase, IAsyncDisposable
         if (string.IsNullOrWhiteSpace(_newItemName)) { _newItemError = "Informe um nome."; return; }
         if (_workspace is null) return;
 
-        var basePath = _targetDirContext is not null
-            ? (_targetDirContext.Type == WorkspaceItemType.File ? Path.GetDirectoryName(_targetDirContext.FullPath)! : _contextMenuItem!.FullPath)
-            : (EditorState.ActiveTab is not null ? Path.GetDirectoryName(EditorState.ActiveTab.FullPath)! : _workspace.RootPath);
-
+        var basePath = GetBasePathForNewItem();
         var fullPath = Path.Combine(basePath, _newItemName);
 
         try
         {
-            if (_newItemIsDir) await WorkspaceRepo.CreateDirectoryAsync(fullPath);
-            else 
-            { 
-                await WorkspaceRepo.CreateFileAsync(fullPath); 
-                await LoadFile(fullPath); 
+            if (_newItemIsDir)
+            {
+                await WorkspaceRepo.CreateDirectoryAsync(fullPath);
+            }
+            else
+            {
+                await WorkspaceRepo.CreateFileAsync(fullPath);
+                await LoadFile(fullPath);
             }
 
             _showNewItem = false;
             _tree = await WorkspaceRepo.LoadTreeAsync(_workspace);
         }
         catch (Exception ex) { _newItemError = ex.Message; }
+    }
+
+    /// <summary>
+    /// Determines the base path where a new file or directory should be created,
+    /// based on the current dialog context (target directory, context menu item, or active tab).
+    /// If a target directory context is set and is a file, returns the directory of that file.
+    /// If it is a directory, returns the full path of the context menu item.
+    /// Otherwise, uses the directory of the active tab or, if none, the workspace root path.
+    /// </summary>
+    /// <returns>The base path for creating the new item.</returns>
+    private string GetBasePathForNewItem()
+    {
+        if (_targetDirContext is not null)
+        {
+            if (_targetDirContext.Type == WorkspaceItemType.File)
+                return Path.GetDirectoryName(_targetDirContext.FullPath)!;
+            return _contextMenuItem!.FullPath;
+        }
+
+        if (EditorState.ActiveTab is not null)
+            return Path.GetDirectoryName(EditorState.ActiveTab.FullPath)!;
+
+        return _workspace!.RootPath;
     }
 
     /// <summary>
@@ -454,10 +488,10 @@ public partial class WorkspaceDetail : ComponentBase, IAsyncDisposable
     {
         if (_workspace is not null)
             _tree = await WorkspaceRepo.LoadTreeAsync(_workspace);
-        
+
         if (!string.IsNullOrEmpty(path))
             await LoadFile(path);
-        
+
         StateHasChanged();
     }
 }

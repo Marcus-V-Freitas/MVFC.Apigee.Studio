@@ -13,7 +13,7 @@ builder.Services.AddInfrastructure(builder.Configuration);
 /// <summary>
 /// Configures a named HttpClient ("EmulatorRuntime") for reverse proxy to the emulator runtime (default: http://localhost:8998).
 /// </summary>
-var runtimeUrl = builder.Configuration["EmulatorRuntime:BaseUrl"] ?? "http://localhost:8998";
+var runtimeUrl = builder.Configuration["EmulatorRuntime:BaseUrl"] ?? new UriBuilder(Uri.UriSchemeHttp, "localhost", 8998).ToString();
 builder.Services.AddHttpClient("EmulatorRuntime", client =>
 {
     client.BaseAddress = new Uri(runtimeUrl);
@@ -31,9 +31,7 @@ builder.Services.AddScoped<GeneratePolicyUseCase>();
 /// Registers UI and linting services for dependency injection.
 /// </summary>
 builder.Services.AddScoped<ToastService>();
-builder.Services.AddScoped<ApigeeLintService>();
 builder.Services.AddScoped<EditorStateService>();
-builder.Services.AddSingleton<SkeletonTemplateService>();
 
 /// <summary>
 /// Registers the proxy trace service as a singleton to persist across middleware requests.

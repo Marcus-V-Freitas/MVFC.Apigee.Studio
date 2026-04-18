@@ -25,12 +25,12 @@ public interface IProxyTraceService
     /// <summary>
     /// Activates transaction capture.
     /// </summary>
-    void Start();
+    void StartTrace();
 
     /// <summary>
     /// Deactivates transaction capture.
     /// </summary>
-    void Stop();
+    void StopTrace();
 
     /// <summary>
     /// Registers the active workspace and proxy so that the middleware

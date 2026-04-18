@@ -1,4 +1,4 @@
-﻿namespace MVFC.Apigee.Studio.Infrastructure.Logs;
+namespace MVFC.Apigee.Studio.Infrastructure.Logs;
 
 public static partial class LogDefinitions
 {
@@ -34,4 +34,7 @@ public static partial class LogDefinitions
 
     [LoggerMessage(LogLevel.Warning, "Emulator health check failed")]
     public static partial void LogEmulatorNotHealth(this ILogger logger, Exception ex);
+    
+    [LoggerMessage(LogLevel.Warning, "Erro ao parsear deployments JSON: {Message}")]
+    public static partial void LogParseDeploymentsError(this ILogger logger, string message);
 }

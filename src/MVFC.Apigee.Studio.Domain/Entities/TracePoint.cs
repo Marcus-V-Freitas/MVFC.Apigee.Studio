@@ -47,5 +47,5 @@ public sealed class TracePoint
     /// Variables captured at this point.
     /// </summary>
     public IReadOnlyDictionary<string, string> Variables { get; init; }
-        = new Dictionary<string, string>();
+        = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 }

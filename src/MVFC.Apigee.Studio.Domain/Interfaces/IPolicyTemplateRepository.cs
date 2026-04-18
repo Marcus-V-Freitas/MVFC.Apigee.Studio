@@ -15,12 +15,12 @@ public interface IPolicyTemplateRepository
     /// </summary>
     /// <param name="name">The name of the policy template.</param>
     PolicyTemplate? GetByName(string name);
-    
+
     /// <summary>
     /// Generates the policy XML from a template and parameters.
     /// </summary>
-    /// <param name="template">The policy template to use.</param>
+    /// <param name="policyTemplate">The policy template to use.</param>
     /// <param name="parameters">Parameters to fill in the template.</param>
     /// <returns>The generated policy XML as a string.</returns>
-    string GeneratePolicyXml(PolicyTemplate template, IDictionary<string, string> parameters);
+    string GeneratePolicyXml(PolicyTemplate policyTemplate, IDictionary<string, string> parameters);
 }

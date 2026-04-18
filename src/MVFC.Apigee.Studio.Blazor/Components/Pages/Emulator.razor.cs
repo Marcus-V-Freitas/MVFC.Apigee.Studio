@@ -1,4 +1,4 @@
-﻿namespace MVFC.Apigee.Studio.Blazor.Components.Pages;
+namespace MVFC.Apigee.Studio.Blazor.Components.Pages;
 
 /// <summary>
 /// Blazor page component for managing the Apigee Emulator lifecycle and deployments.
@@ -20,7 +20,7 @@ public partial class Emulator : ComponentBase
     /// <summary>
     /// The base URL of the Apigee Emulator.
     /// </summary>
-    private string _baseUrl = string.Empty;
+    private string _baseUrl = new UriBuilder(Uri.UriSchemeHttp, "localhost", 8080).ToString();
 
     /// <summary>
     /// Stores the last error message encountered when checking emulator status.
@@ -86,21 +86,34 @@ public partial class Emulator : ComponentBase
     /// <summary>
     /// Application configuration provider.
     /// </summary>
-    [Inject] 
+    [Inject]
     public required IConfiguration Config { get; set; }
 
     /// <summary>
     /// Indicates if deployment actions should be disabled (when deploying or emulator is not alive).
     /// </summary>
-    private bool DeployDisabled => 
+    private bool DeployDisabled =>
         _deploying || !_alive;
+
+    /// <summary>
+    /// Returns the status text for the emulator to display in the UI.
+    /// Shows "Verificando..." if checking, "Emulator online" if alive,
+    /// or "Emulator offline" otherwise.
+    /// </summary>
+    /// <returns>Status text for the emulator.</returns>
+    private string GetStatusText()
+    {
+        if (_checking)
+            return "Verificando...";
+        return _alive ? "Emulator online" : "Emulator offline";
+    }
 
     /// <summary>
     /// Loads emulator configuration, available images, and checks emulator status on initialization.
     /// </summary>
     protected override async Task OnInitializedAsync()
     {
-        _baseUrl = Config["ApigeeEmulator:BaseUrl"] ?? "http://localhost:8080";
+        _baseUrl = Config["ApigeeEmulator:BaseUrl"] ?? new UriBuilder(Uri.UriSchemeHttp, "localhost", 8080).ToString();
         _image = Config["ApigeeEmulator:Image"] ?? "gcr.io/apigee-release/hybrid/apigee-emulator:latest";
         await LoadImages();
         await Check();
@@ -152,9 +165,9 @@ public partial class Emulator : ComponentBase
             _dockerMessage = "\u2718 Erro ao iniciar: " + ex.Message;
             _dockerError = true;
         }
-        finally 
-        { 
-            _dockerBusy = false; 
+        finally
+        {
+            _dockerBusy = false;
         }
     }
 
@@ -177,9 +190,9 @@ public partial class Emulator : ComponentBase
             _dockerMessage = "\u2718 Erro ao parar: " + ex.Message;
             _dockerError = true;
         }
-        finally 
-        { 
-            _dockerBusy = false; 
+        finally
+        {
+            _dockerBusy = false;
         }
     }
 
@@ -211,17 +224,17 @@ public partial class Emulator : ComponentBase
     /// </summary>
     private async Task QuickDeploy()
     {
-        if (string.IsNullOrWhiteSpace(_zipPath)) 
-        { 
-            _message = "Informe o caminho do ZIP."; 
-            _isError = true; 
-            return; 
+        if (string.IsNullOrWhiteSpace(_zipPath))
+        {
+            _message = "Informe o caminho do ZIP.";
+            _isError = true;
+            return;
         }
 
         _deploying = true;
         _message = string.Empty;
         _isError = false;
-        
+
         try
         {
             await EmulatorClient.DeployBundleAsync(_env, _zipPath);
@@ -232,9 +245,9 @@ public partial class Emulator : ComponentBase
             _message = "\u2718 Erro: " + ex.Message;
             _isError = true;
         }
-        finally 
-        { 
-            _deploying = false; 
+        finally
+        {
+            _deploying = false;
         }
     }
 }

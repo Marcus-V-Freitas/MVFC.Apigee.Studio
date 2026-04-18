@@ -18,7 +18,7 @@ public static class InfrastructureServiceExtensions
         services.AddSingleton<IPolicyTemplateRepository, PolicyTemplateRepository>();
         services.AddSingleton<IBundleFlowReader, BundleFlowReader>();
 
-        var managementUrl = configuration["ApigeeEmulator:BaseUrl"] ?? "http://localhost:8080";
+        var managementUrl = configuration["ApigeeEmulator:BaseUrl"] ?? new UriBuilder(Uri.UriSchemeHttp, "localhost", 8080).ToString();
 
         services.AddHttpClient<IApigeeEmulatorClient, ApigeeEmulatorClient>(client =>
         {

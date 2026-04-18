@@ -39,7 +39,7 @@ public sealed class EditorStateService
     /// <param name="content">The file content to display in the tab.</param>
     public void OpenTab(string path, string content)
     {
-        var existing = _openTabs.FirstOrDefault(t => t.FullPath == path);
+        var existing = _openTabs.FirstOrDefault(t => string.Equals(t.FullPath, path, StringComparison.OrdinalIgnoreCase));
         if (existing is not null)
         {
             _activeTab = existing;
@@ -79,8 +79,8 @@ public sealed class EditorStateService
 
         if (_activeTab == tab)
         {
-            _activeTab = _openTabs.Count > 0 
-                ? _openTabs[Math.Min(index, _openTabs.Count - 1)] 
+            _activeTab = _openTabs.Count > 0
+                ? _openTabs[Math.Min(index, _openTabs.Count - 1)]
                 : null;
         }
 
@@ -108,7 +108,7 @@ public sealed class EditorStateService
     /// <param name="path">The full file path of the tab to update.</param>
     public void ClearDirty(string path)
     {
-        var tab = _openTabs.FirstOrDefault(t => t.FullPath == path);
+        var tab = _openTabs.FirstOrDefault(t => string.Equals(t.FullPath, path, StringComparison.OrdinalIgnoreCase));
         if (tab is not null)
         {
             tab.IsDirty = false;

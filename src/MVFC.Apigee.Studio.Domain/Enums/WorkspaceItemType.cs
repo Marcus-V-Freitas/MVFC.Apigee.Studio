@@ -3,30 +3,30 @@
 /// <summary>
 /// Represents the types of items that can exist within a workspace.
 /// </summary>
-public enum WorkspaceItemType 
-{ 
+public enum WorkspaceItemType
+{
     /// <summary>
     /// An API Proxy item, typically representing an API implementation or gateway configuration.
     /// </summary>
-    ApiProxy, 
+    ApiProxy,
 
     /// <summary>
     /// A Shared Flow item, used for reusable logic or policies across multiple APIs.
     /// </summary>
-    SharedFlow, 
+    SharedFlow,
 
     /// <summary>
     /// An Environment item, representing a deployment or runtime environment.
     /// </summary>
-    Environment, 
+    Environment,
 
     /// <summary>
     /// A File item, representing a single file within the workspace.
     /// </summary>
-    File, 
+    File,
 
     /// <summary>
     /// A Directory item, representing a folder or directory within the workspace.
     /// </summary>
-    Directory, 
+    Directory,
 }

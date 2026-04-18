@@ -9,7 +9,7 @@ public partial class MonacoEditor : ComponentBase, IAsyncDisposable
     /// <summary>
     /// Indicates whether the editor has been created in the DOM.
     /// </summary>
-    private bool _editorCreated = false;
+    private bool _editorCreated;
 
     /// <summary>
     /// The HTML element ID for the Monaco editor instance.
@@ -114,6 +114,9 @@ public partial class MonacoEditor : ComponentBase, IAsyncDisposable
         {
             await JS.InvokeVoidAsync("monacoInterop.dispose", Id);
         }
-        catch { }
+        catch
+        {
+            // Ignore errors during disposal (e.g., if JS runtime is already gone)
+        }
     }
 }

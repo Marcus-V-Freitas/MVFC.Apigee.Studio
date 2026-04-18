@@ -2,8 +2,6 @@ namespace MVFC.Apigee.Studio.Blazor.Components.Shared;
 
 public partial class FileExplorer : ComponentBase
 {
-    private string _searchQuery = string.Empty;
-
     [Parameter]
     public WorkspaceItem? Tree { get; set; }
 

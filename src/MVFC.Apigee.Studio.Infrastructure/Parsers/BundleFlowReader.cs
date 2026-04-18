@@ -1,12 +1,15 @@
 namespace MVFC.Apigee.Studio.Infrastructure.Parsers;
 
 /// <summary>
+/// <para>
 /// Reads the ProxyEndpoint.xml from the bundle on disk and extracts the policy steps
 /// in execution order, inferring HasError by the status code.
-///
+/// </para>
+/// <para>
 /// Expected structure on disk:
 ///   {workspaceRoot}/src/main/apigee/apiproxies/{proxyName}/apiproxy/proxies/default.xml
 ///   {workspaceRoot}/src/main/apigee/apiproxies/{proxyName}/apiproxy/policies/*.xml
+/// </para>
 /// </summary>
 public sealed class BundleFlowReader(ILogger<BundleFlowReader> logger) : IBundleFlowReader
 {

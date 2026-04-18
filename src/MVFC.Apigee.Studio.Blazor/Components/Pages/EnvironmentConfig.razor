@@ -14,9 +14,9 @@
             <label>Workspace</label>
             <select class="input" @bind="_selectedWorkspaceName" @bind:after="OnWorkspaceChanged">
                 <option value="">-- Selecione --</option>
-                @foreach (var w in _workspaces)
+                @foreach (var name in _workspaces.Select(w => w.Name))
                 {
-                    <option value="@w.Name">@w.Name</option>
+                    <option value="@name">@name</option>
                 }
             </select>
         </div>

@@ -22,7 +22,7 @@ public sealed class ToastEntry(Guid Id, string Message, ToastLevel Level)
     /// The severity level of the toast.
     /// </summary>
     public ToastLevel Level { get; } = Level;
-    
+
     /// <summary>
     /// Indicates whether the toast is in the process of exiting (for animation or removal).
     /// </summary>

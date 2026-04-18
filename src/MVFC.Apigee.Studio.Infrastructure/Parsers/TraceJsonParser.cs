@@ -1,15 +1,17 @@
 ﻿namespace MVFC.Apigee.Studio.Infrastructure.Parsers;
 
 /// <summary>
-/// Parses the JSON payload returned by the Apigee Emulator trace endpoint.
-///
+/// <para>Parses the JSON payload returned by the Apigee Emulator trace endpoint.</para>
+/// <para>
 /// The emulator returns a JSON with a "Messages" array. Each message contains
 /// a "point" array with entries of type: StateChange, FlowInfo, Condition,
 /// Execution, Paused, Resumed. Only the relevant types are processed:
-///
+/// </para>
+/// <para>
 ///   StateChange  → phase separator (From → To)
 ///   Condition    → flow/route condition evaluation
 ///   Execution    → executed policy
+/// </para>
 /// </summary>
 public static class TraceJsonParser
 {
@@ -19,7 +21,7 @@ public static class TraceJsonParser
     /// Parses the root JSON element returned by GET /v1/emulator/trace/transactions
     /// and returns a list of <see cref="TraceTransaction"/>.
     /// </summary>
-    public static List<TraceTransaction> ParseTransactions(JsonElement root)
+    public static IReadOnlyList<TraceTransaction> ParseTransactions(JsonElement root)
     {
         var result = new List<TraceTransaction>();
 
@@ -31,62 +33,81 @@ public static class TraceJsonParser
             if (!msg.TryGetProperty("point", out var pointArray))
                 continue;
 
-            var points = new List<TracePoint>();
-            var verb = string.Empty;
-            var uri = string.Empty;
-            var statusCode = string.Empty;
-            long firstTs = 0;
-            long lastTs = 0;
-
-            foreach (var point in pointArray.EnumerateArray())
-            {
-                var pointId = TryGetString(point, "id") ?? string.Empty;
-
-                if (!point.TryGetProperty("results", out var results))
-                    continue;
-
-                foreach (var res in results.EnumerateArray())
-                {
-                    var actionResult = TryGetString(res, "ActionResult");
-
-                    if (actionResult == "RequestMessage" && string.IsNullOrEmpty(verb))
-                    {
-                        verb = TryGetString(res, "verb") ?? string.Empty;
-                        uri = TryGetString(res, "uRI") ?? string.Empty;
-                    }
-
-                    if (actionResult == "ResponseMessage" && string.IsNullOrEmpty(statusCode))
-                        statusCode = TryGetString(res, "statusCode") ?? string.Empty;
-
-                    if (actionResult == "DebugInfo")
-                    {
-                        var ts = TryGetString(res, "timestamp");
-                        if (ts is not null && TryParseEmulatorTimestamp(ts, out var ms))
-                        {
-                            if (firstTs == 0) firstTs = ms;
-                            lastTs = ms;
-                        }
-                    }
-                }
-
-                if (pointId is not ("StateChange" or "Condition" or "Execution"))
-                    continue;
-
-                points.Add(ParseTracePoint(point, pointId));
-            }
+            var (points, verb, uri, statusCode, firstTs, lastTs) = ParsePoints(pointArray);
 
             result.Add(new TraceTransaction
             {
                 MessageId = Guid.NewGuid().ToString("N"),
                 RequestMethod = verb,
                 RequestUri = uri,
-                ResponseCode = int.TryParse(statusCode, out var sc) ? sc : 0,
+                ResponseCode = int.TryParse(statusCode, CultureInfo.InvariantCulture, out var sc) ? sc : 0,
                 TotalTimeMs = lastTs > firstTs ? lastTs - firstTs : 0,
-                Points = points
+                Points = points,
             });
         }
 
         return result;
+    }
+
+    private static (List<TracePoint> points, string verb, string uri, string statusCode, long firstTs, long lastTs)
+        ParsePoints(JsonElement pointArray)
+    {
+        var points = new List<TracePoint>();
+        var verb = string.Empty;
+        var uri = string.Empty;
+        var statusCode = string.Empty;
+        long firstTs = 0;
+        long lastTs = 0;
+
+        foreach (var point in pointArray.EnumerateArray())
+        {
+            var pointId = TryGetString(point, "id") ?? string.Empty;
+
+            if (!point.TryGetProperty("results", out var results))
+                continue;
+
+            ExtractRequestResponseInfo(results, ref verb, ref uri, ref statusCode, ref firstTs, ref lastTs);
+
+            if (pointId is not ("StateChange" or "Condition" or "Execution"))
+                continue;
+
+            points.Add(ParseTracePoint(point, pointId));
+        }
+
+        return (points, verb, uri, statusCode, firstTs, lastTs);
+    }
+
+    private static void ExtractRequestResponseInfo(
+        JsonElement results,
+        ref string verb,
+        ref string uri,
+        ref string statusCode,
+        ref long firstTs,
+        ref long lastTs)
+    {
+        foreach (var res in results.EnumerateArray())
+        {
+            var actionResult = TryGetString(res, "ActionResult");
+
+            if (string.Equals(actionResult, "RequestMessage", StringComparison.OrdinalIgnoreCase) && string.IsNullOrEmpty(verb))
+            {
+                verb = TryGetString(res, "verb") ?? string.Empty;
+                uri = TryGetString(res, "uRI") ?? string.Empty;
+            }
+
+            if (string.Equals(actionResult, "ResponseMessage", StringComparison.OrdinalIgnoreCase) && string.IsNullOrEmpty(statusCode))
+                statusCode = TryGetString(res, "statusCode") ?? string.Empty;
+
+            if (string.Equals(actionResult, "DebugInfo", StringComparison.OrdinalIgnoreCase))
+            {
+                var ts = TryGetString(res, "timestamp");
+                if (ts is not null && TryParseEmulatorTimestamp(ts, out var ms))
+                {
+                    if (firstTs == 0) firstTs = ms;
+                    lastTs = ms;
+                }
+            }
+        }
     }
 
     /// <summary>
@@ -127,8 +148,8 @@ public static class TraceJsonParser
                 break;
         }
 
-        var hasError = variables.GetValueOrDefault("result") == "false"
-                    || variables.GetValueOrDefault("failed") == "true";
+        var hasError = string.Equals(variables.GetValueOrDefault("result"), "false", StringComparison.OrdinalIgnoreCase) ||
+                       string.Equals(variables.GetValueOrDefault("failed"), "true", StringComparison.OrdinalIgnoreCase);
 
         return new TracePoint
         {
@@ -138,7 +159,7 @@ public static class TraceJsonParser
             Description = description,
             ElapsedTimeMs = 0,
             HasError = hasError,
-            Variables = variables
+            Variables = variables,
         };
     }
 
@@ -175,7 +196,7 @@ public static class TraceJsonParser
                 {
                     "RequestMessage" => "request.header.",
                     "ResponseMessage" => "response.header.",
-                    _ => "message.header."
+                    _ => "message.header.",
                 };
 
                 foreach (var header in headersArray.EnumerateArray())
@@ -194,7 +215,7 @@ public static class TraceJsonParser
                 {
                     "RequestMessage" => "request.",
                     "ResponseMessage" => "response.",
-                    _ => "message."
+                    _ => "message.",
                 };
 
                 variables.TryAdd($"{prefix}content", bodyEl.GetString() ?? string.Empty);
@@ -206,7 +227,7 @@ public static class TraceJsonParser
 
     /// <summary>
     /// Returns the string value of <paramref name="key"/> in <paramref name="el"/>,
-    /// or <c>null</c> if absent or not a string.
+    /// or null if absent or not a string.
     /// </summary>
     public static string? TryGetString(JsonElement el, string key)
         => el.TryGetProperty(key, out var v) && v.ValueKind == JsonValueKind.String
@@ -220,13 +241,10 @@ public static class TraceJsonParser
     public static bool TryParseEmulatorTimestamp(string ts, out long epochMs)
     {
         epochMs = 0;
-        if (!DateTime.TryParseExact(
-                ts,
-                TimestampFormat,
-                System.Globalization.CultureInfo.InvariantCulture,
-                System.Globalization.DateTimeStyles.None,
-                out var dt))
+        if (!DateTime.TryParseExact(ts, TimestampFormat, CultureInfo.InvariantCulture, DateTimeStyles.None, out var dt))
+        {
             return false;
+        }
 
         epochMs = new DateTimeOffset(dt, TimeSpan.Zero).ToUnixTimeMilliseconds();
         return true;

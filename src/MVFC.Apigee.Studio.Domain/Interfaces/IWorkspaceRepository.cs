@@ -9,7 +9,7 @@ public interface IWorkspaceRepository
     /// Lists all available workspaces.
     /// </summary>
     IReadOnlyList<ApigeeWorkspace> ListAll();
-    
+
     /// <summary>
     /// Creates a new workspace.
     /// </summary>
@@ -17,7 +17,7 @@ public interface IWorkspaceRepository
     /// <param name="customPath">Custom path for the workspace, or null to use the default location.</param>
     /// <param name="initialProxies">Optional list of initial proxies to include.</param>
     ApigeeWorkspace Create(string name, string? customPath, IReadOnlyList<string>? initialProxies = null);
-    
+
     /// <summary>
     /// Deletes the specified workspace.
     /// </summary>
@@ -32,27 +32,27 @@ public interface IWorkspaceRepository
     /// Reads the contents of a file asynchronously.
     /// </summary>
     Task<string> ReadFileAsync(string absolutePath, CancellationToken ct = default);
-    
+
     /// <summary>
     /// Saves content to a file asynchronously.
     /// </summary>
     Task SaveFileAsync(string absolutePath, string content, CancellationToken ct = default);
-    
+
     /// <summary>
     /// Creates a new file asynchronously.
     /// </summary>
     Task CreateFileAsync(string absolutePath, CancellationToken ct = default);
-    
+
     /// <summary>
     /// Creates a new directory asynchronously.
     /// </summary>
     Task CreateDirectoryAsync(string absolutePath, CancellationToken ct = default);
-    
+
     /// <summary>
     /// Deletes a file asynchronously.
     /// </summary>
     Task DeleteFileAsync(string absolutePath, CancellationToken ct = default);
-    
+
     /// <summary>
     /// Deletes a directory asynchronously.
     /// </summary>
@@ -62,7 +62,7 @@ public interface IWorkspaceRepository
     /// Builds a ZIP bundle for a specific proxy or shared flow in the workspace.
     /// </summary>
     Task<string> BuildBundleZipAsync(ApigeeWorkspace workspace, string proxyOrFlowName, CancellationToken ct = default);
-    
+
     /// <summary>
     /// Builds a ZIP archive of the entire workspace.
     /// </summary>
@@ -72,7 +72,7 @@ public interface IWorkspaceRepository
     /// Lists all API proxies in the workspace.
     /// </summary>
     IReadOnlyList<string> ListApiProxies(ApigeeWorkspace workspace);
-    
+
     /// <summary>
     /// Lists all shared flows in the workspace.
     /// </summary>

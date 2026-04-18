@@ -6,6 +6,8 @@
 /// </summary>
 public partial class ToastContainer : ComponentBase, IDisposable
 {
+    private bool _disposed;
+
     /// <summary>
     /// List of currently displayed toast entries.
     /// </summary>
@@ -40,10 +42,10 @@ public partial class ToastContainer : ComponentBase, IDisposable
         _toasts.Add(entry);
         await InvokeAsync(StateHasChanged);
         await Task.Delay(50);
-        await InvokeAsync(async () => 
-        { 
-            await Lucide(); 
-            StateHasChanged(); 
+        await InvokeAsync(async () =>
+        {
+            await Lucide();
+            StateHasChanged();
         });
 
         await Task.Delay(3800);
@@ -79,11 +81,11 @@ public partial class ToastContainer : ComponentBase, IDisposable
         ToastLevel.Warning => "triangle-alert",
         _ => "info",
     };
-    
+
     /// <summary>
     /// Invokes JavaScript to initialize Lucide icons.
     /// </summary>
-    private async ValueTask Lucide() => 
+    private async ValueTask Lucide() =>
         await JS.InvokeVoidAsync("initLucide");
 
     /// <summary>
@@ -91,7 +93,27 @@ public partial class ToastContainer : ComponentBase, IDisposable
     /// </summary>
     public void Dispose()
     {
+        Dispose(disposing: true);
         GC.SuppressFinalize(this);
-        Toast.OnShow -= HandleToast;
+    }
+
+    /// <summary>
+    /// Dispose pattern implementation.
+    /// </summary>
+    /// <param name="disposing">Indica se está sendo chamado explicitamente.</param>
+    protected virtual void Dispose(bool disposing)
+    {
+        if (_disposed)
+            return;
+
+        if (disposing)
+        {
+            Toast.OnShow -= HandleToast;
+            // Libere outros recursos gerenciados aqui, se necessário.
+        }
+
+        // Libere recursos não gerenciados aqui, se houver.
+
+        _disposed = true;
     }
 }

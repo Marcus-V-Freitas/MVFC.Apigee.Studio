@@ -2,13 +2,15 @@ namespace MVFC.Apigee.Studio.Application.UseCases;
 
 /// <summary>
 /// Orchestrates deployment to the local Apigee Emulator.
-///
+/// <para>
 /// The emulator endpoint is:
 ///   POST /v1/emulator/deploy?environment={env}
 ///   Body: ZIP file of the entire workspace with structure src/main/apigee/...
-///
+/// </para>
+/// <para>
 /// The emulator validates that the folder src/main/apigee/environments/{env}/
 /// exists inside the ZIP — if not, it returns 400 InvalidEnvironment.
+/// </para>
 /// </summary>
 public sealed class DeployToEmulatorUseCase(
     IWorkspaceRepository workspaceRepository,

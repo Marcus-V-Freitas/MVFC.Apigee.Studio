@@ -7,6 +7,6 @@
 /// <param name="Message">The message text to display in the toast.</param>
 /// <param name="Level">The severity level of the toast (Success, Error, Warning, Info).</param>
 public sealed record ToastMessage(
-    Guid Id, 
-    string Message, 
+    Guid Id,
+    string Message,
     ToastLevel Level);

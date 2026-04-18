@@ -9,13 +9,13 @@ public partial class TraceViewer : ComponentBase
     /// <summary>
     /// List of trace transactions to display.
     /// </summary>
-    [Parameter] 
+    [Parameter]
     public IReadOnlyList<TraceTransaction> Transactions { get; set; } = [];
 
     /// <summary>
     /// JavaScript runtime for invoking JS interop (e.g., icon initialization).
     /// </summary>
-    [Inject] 
+    [Inject]
     public required IJSRuntime JSRuntime { get; set; }
 
     /// <summary>
@@ -27,6 +27,22 @@ public partial class TraceViewer : ComponentBase
     /// Dictionary of selected trace points per transaction message ID.
     /// </summary>
     private readonly Dictionary<string, TracePoint> _selectedPoints = [];
+
+    /// <summary>
+    /// Returns a CSS class representing the HTTP response status code category.
+    /// "status-5xx" for server errors (500+), "status-4xx" for client errors (400–499),
+    /// and "status-2xx" for successful or other responses.
+    /// </summary>
+    /// <param name="responseCode">The HTTP response status code.</param>
+    /// <returns>A CSS class string for styling the status badge.</returns>
+    private static string GetStatusClass(int responseCode)
+    {
+        if (responseCode >= 500)
+            return "status-5xx";
+        if (responseCode >= 400)
+            return "status-4xx";
+        return "status-2xx";
+    }
 
     /// <summary>
     /// Initializes Lucide icons after the component is rendered.
@@ -106,7 +122,7 @@ public partial class TraceViewer : ComponentBase
 
         foreach (var pt in points)
         {
-            if (pt.PointType == "StateChange")
+            if (string.Equals(pt.PointType, "StateChange", StringComparison.OrdinalIgnoreCase))
             {
                 current = new PhaseGroup(pt.PolicyName, []);
                 groups.Add(current);
@@ -157,7 +173,7 @@ public partial class TraceViewer : ComponentBase
         "PROXY_POST_RESP_SENT" => "phase-clr-post-resp",
         "END" => "phase-clr-end",
         "DEBUG_SESSION" => "phase-clr-debug",
-        _ => "phase-clr-generic"
+        _ => "phase-clr-generic",
     };
 
     /// <summary>
@@ -178,7 +194,7 @@ public partial class TraceViewer : ComponentBase
         "PROXY_POST_RESP_SENT" => "PostClient Flow",
         "END" => "End",
         "DEBUG_SESSION" => "Debug Session",
-        _ => phase
+        _ => phase,
     };
 
     /// <summary>
@@ -199,6 +215,6 @@ public partial class TraceViewer : ComponentBase
         "PROXY_POST_RESP_SENT" => "zap",
         "END" => "flag",
         "DEBUG_SESSION" => "bug",
-        _ => "activity"
+        _ => "activity",
     };
 }

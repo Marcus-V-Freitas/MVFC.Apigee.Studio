@@ -43,7 +43,7 @@
     <div class="emulator-status-row">
         <div class="emulator-status-label">
             <span class="status-dot @(_alive ? "dot-green" : "dot-red")"></span>
-            <span>@(_checking ? "Verificando..." : (_alive ? "Emulator online" : "Emulator offline"))</span>
+            <span>@GetStatusText()</span>
         </div>
         <button class="btn btn-ghost btn-sm" @onclick="Check" disabled="@_checking">&#8635; Refresh</button>
     </div>

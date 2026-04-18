@@ -1,3 +1,5 @@
+using System.Linq;
+
 namespace MVFC.Apigee.Studio.Blazor.Services;
 
 /// <summary>
@@ -21,7 +23,7 @@ public sealed class ProxyTraceService : IProxyTraceService
     /// <summary>
     /// Activates trace capture. After calling this method, the service will accept and distribute trace transactions.
     /// </summary>
-    public void Start()
+    public void StartTrace()
     {
         lock (_lock)
             IsActive = true;
@@ -31,7 +33,7 @@ public sealed class ProxyTraceService : IProxyTraceService
     /// Deactivates trace capture and clears the active proxy information.
     /// After calling this method, the service will stop accepting trace transactions.
     /// </summary>
-    public void Stop()
+    public void StopTrace()
     {
         lock (_lock)
         {
@@ -59,19 +61,16 @@ public sealed class ProxyTraceService : IProxyTraceService
     /// <param name="transaction">The trace transaction to publish.</param>
     public void Publish(TraceTransaction transaction)
     {
-        if (!IsActive) 
+        if (!IsActive)
             return;
 
         List<ChannelWriter<TraceTransaction>> dead = [];
 
         lock (_lock)
         {
-            foreach (var writer in _subscribers)
-            {
-                if (!writer.TryWrite(transaction))
-                    dead.Add(writer);
-            }
-
+            dead.AddRange(from writer in _subscribers
+                          where !writer.TryWrite(transaction)
+                          select writer);
             foreach (var d in dead)
                 _subscribers.Remove(d);
         }

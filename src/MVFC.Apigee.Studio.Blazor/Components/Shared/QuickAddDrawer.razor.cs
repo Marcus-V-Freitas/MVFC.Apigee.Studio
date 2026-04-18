@@ -108,12 +108,6 @@ public partial class QuickAddDrawer : ComponentBase
     public required ToastService Toast { get; set; }
 
     /// <summary>
-    /// Service for generating skeleton XML and JSON for Apigee structures.
-    /// </summary>
-    [Inject]
-    public required SkeletonTemplateService Skeleton { get; set; }
-
-    /// <summary>
     /// Gets the CSS class for the quick message (error or success).
     /// </summary>
     private string QuickMessageClass => _quickError ? "error-text" : "success-text";
@@ -154,11 +148,11 @@ public partial class QuickAddDrawer : ComponentBase
     private void SelectQuickTemplate(PolicyTemplate t)
     {
         _quickTemplate = t;
-        _quickParams = t.Parameters.ToDictionary(p => p, _ => string.Empty);
-        
-        if (_quickParams.ContainsKey("PolicyName")) 
+        _quickParams = t.Parameters.ToDictionary(p => p, _ => string.Empty, StringComparer.OrdinalIgnoreCase);
+
+        if (_quickParams.ContainsKey("PolicyName"))
             _quickParams["PolicyName"] = t.Name + "Policy";
-        
+
         UpdateLivePreview();
     }
 
@@ -167,9 +161,9 @@ public partial class QuickAddDrawer : ComponentBase
     /// </summary>
     /// <param name="k">The parameter key.</param>
     /// <returns>The parameter value.</returns>
-    private string GetQParam(string k) => 
+    private string GetQParam(string k) =>
         _quickParams.TryGetValue(k, out var v) ? v : string.Empty;
-    
+
     /// <summary>
     /// Sets the value of a quick parameter and updates the live XML preview.
     /// </summary>
@@ -196,7 +190,7 @@ public partial class QuickAddDrawer : ComponentBase
     private async Task ConfirmQuickPolicy()
     {
         if (_quickTemplate is null || Workspace is null) return;
-        
+
         _quickGenerating = true;
         _quickMessage = string.Empty;
         _quickError = false;
@@ -211,18 +205,18 @@ public partial class QuickAddDrawer : ComponentBase
 
             _quickMessage = "✔ Criado: " + Path.GetFileName(path);
             Toast.ShowSuccess("Política '" + Path.GetFileName(path) + "' criada.");
-            
+
             await OnItemCreated.InvokeAsync(path);
             await Close();
         }
-        catch (Exception ex) 
-        { 
-            _quickMessage = "✘ " + ex.Message; 
+        catch (Exception ex)
+        {
+            _quickMessage = "✘ " + ex.Message;
             _quickError = true;
         }
-        finally 
-        { 
-            _quickGenerating = false; 
+        finally
+        {
+            _quickGenerating = false;
         }
     }
 
@@ -232,10 +226,10 @@ public partial class QuickAddDrawer : ComponentBase
     private async Task ConfirmQuickFile()
     {
         if (string.IsNullOrWhiteSpace(_quickFileName) || Workspace is null) return;
-        
+
         _quickMessage = string.Empty;
         _quickError = false;
-        
+
         try
         {
             if (string.Equals(Category, "apiproxies", StringComparison.OrdinalIgnoreCase))
@@ -250,10 +244,10 @@ public partial class QuickAddDrawer : ComponentBase
                 await Close();
             }
         }
-        catch (Exception ex) 
-        { 
-            _quickMessage = "✘ " + ex.Message; 
-            _quickError = true; 
+        catch (Exception ex)
+        {
+            _quickMessage = "✘ " + ex.Message;
+            _quickError = true;
         }
     }
 
@@ -262,11 +256,12 @@ public partial class QuickAddDrawer : ComponentBase
     /// </summary>
     private async Task ConfirmQuickSharedFlow()
     {
-        if (string.IsNullOrWhiteSpace(_quickFileName) || Workspace is null) return;
-        
+        if (string.IsNullOrWhiteSpace(_quickFileName) || Workspace is null)
+            return;
+
         _quickMessage = string.Empty;
         _quickError = false;
-        
+
         try
         {
             var name = _quickFileName.Trim();
@@ -278,10 +273,10 @@ public partial class QuickAddDrawer : ComponentBase
             await WorkspaceRepo.CreateDirectoryAsync(polDir);
             await WorkspaceRepo.CreateDirectoryAsync(resDir);
 
-            var bundleXml = Skeleton.GetSharedFlowBundleXml(name);
+            var bundleXml = SkeletonTemplateService.GetSharedFlowBundleXml(name);
             await WorkspaceRepo.SaveFileAsync(Path.Combine(sfDir, name + ".xml"), bundleXml);
 
-            var sharedFlowXml = Skeleton.GetSharedFlowXml(name);
+            var sharedFlowXml = SkeletonTemplateService.GetSharedFlowXml(name);
             await WorkspaceRepo.SaveFileAsync(Path.Combine(resDir, "default.xml"), sharedFlowXml);
 
             _quickMessage = "✔ Shared Flow '" + name + "' criado.";
@@ -289,10 +284,10 @@ public partial class QuickAddDrawer : ComponentBase
             await OnItemCreated.InvokeAsync(null); // Just refresh tree
             await Close();
         }
-        catch (Exception ex) 
-        { 
-            _quickMessage = "✘ " + ex.Message; 
-            _quickError = true; 
+        catch (Exception ex)
+        {
+            _quickMessage = "✘ " + ex.Message;
+            _quickError = true;
         }
     }
 
@@ -301,30 +296,31 @@ public partial class QuickAddDrawer : ComponentBase
     /// </summary>
     private async Task ConfirmQuickEnvironment()
     {
-        if (string.IsNullOrWhiteSpace(_quickFileName) || Workspace is null) return;
-        
+        if (string.IsNullOrWhiteSpace(_quickFileName) || Workspace is null)
+            return;
+
         _quickMessage = string.Empty;
         _quickError = false;
-        
+
         try
         {
             var envName = _quickFileName.Trim();
             var envDir = Path.Combine(Workspace.RootPath, "environments", envName);
             await WorkspaceRepo.CreateDirectoryAsync(envDir);
 
-            await WorkspaceRepo.SaveFileAsync(Path.Combine(envDir, "deployments.json"), Skeleton.GetDeploymentsJson());
-            await WorkspaceRepo.SaveFileAsync(Path.Combine(envDir, "flowhooks.json"), Skeleton.GetFlowhooksJson());
-            await WorkspaceRepo.SaveFileAsync(Path.Combine(envDir, "targetservers.json"), Skeleton.GetTargetServersJson());
+            await WorkspaceRepo.SaveFileAsync(Path.Combine(envDir, "deployments.json"), SkeletonTemplateService.GetDeploymentsJson());
+            await WorkspaceRepo.SaveFileAsync(Path.Combine(envDir, "flowhooks.json"), SkeletonTemplateService.GetFlowhooksJson());
+            await WorkspaceRepo.SaveFileAsync(Path.Combine(envDir, "targetservers.json"), SkeletonTemplateService.GetTargetServersJson());
 
             _quickMessage = "✔ Environment '" + envName + "' criado.";
             Toast.ShowSuccess("Environment '" + envName + "' criado.");
             await OnItemCreated.InvokeAsync(null);
             await Close();
         }
-        catch (Exception ex) 
-        { 
-            _quickMessage = "✘ " + ex.Message; 
-            _quickError = true; 
+        catch (Exception ex)
+        {
+            _quickMessage = "✘ " + ex.Message;
+            _quickError = true;
         }
     }
 
@@ -351,9 +347,9 @@ public partial class QuickAddDrawer : ComponentBase
         await WorkspaceRepo.CreateDirectoryAsync(resourcesDir);
         await WorkspaceRepo.CreateDirectoryAsync(targetsDir);
 
-        await WorkspaceRepo.SaveFileAsync(Path.Combine(apiproxyDir, name + ".xml"), Skeleton.GetApiProxyDescriptorXml(name));
-        await WorkspaceRepo.SaveFileAsync(Path.Combine(proxiesDir, "default.xml"), Skeleton.GetProxyEndpointXml(name));
-        await WorkspaceRepo.SaveFileAsync(Path.Combine(targetsDir, "default.xml"), Skeleton.GetTargetEndpointXml());
+        await WorkspaceRepo.SaveFileAsync(Path.Combine(apiproxyDir, name + ".xml"), SkeletonTemplateService.GetApiProxyDescriptorXml(name));
+        await WorkspaceRepo.SaveFileAsync(Path.Combine(proxiesDir, "default.xml"), SkeletonTemplateService.GetProxyEndpointXml(name));
+        await WorkspaceRepo.SaveFileAsync(Path.Combine(targetsDir, "default.xml"), SkeletonTemplateService.GetTargetEndpointXml());
 
         var defaultProxyFile = Path.Combine(proxiesDir, "default.xml");
         Toast.ShowSuccess("API Proxy '" + name + "' criado com default.xml em proxies e targets.");

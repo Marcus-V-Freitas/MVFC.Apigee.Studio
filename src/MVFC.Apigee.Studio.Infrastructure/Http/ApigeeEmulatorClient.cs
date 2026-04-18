@@ -1,8 +1,8 @@
 namespace MVFC.Apigee.Studio.Infrastructure.Http;
 
 /// <summary>
-/// HTTP client for the local Apigee Emulator.
-///
+/// <para>HTTP client for the local Apigee Emulator.</para>
+/// <para>
 /// Emulator endpoints (port 8080):
 ///   GET    /v1/emulator/healthz
 ///   GET    /v1/emulator/version
@@ -10,6 +10,7 @@ namespace MVFC.Apigee.Studio.Infrastructure.Http;
 ///   POST   /v1/emulator/trace?proxyName={proxy}
 ///   GET    /v1/emulator/trace/transactions?sessionid={id}
 ///   DELETE /v1/emulator/trace?sessionid={id}
+/// </para>
 /// </summary>
 public sealed class ApigeeEmulatorClient(
     HttpClient http,
@@ -54,15 +55,18 @@ public sealed class ApigeeEmulatorClient(
         var url = "/v1/emulator/deploy?environment=" + Uri.EscapeDataString(environment);
         _logger.LogDeployApi(zipPath, url);
 
-        await using var fs = File.OpenRead(zipPath);
-        using var content = new StreamContent(fs);
-        content.Headers.ContentType = new MediaTypeHeaderValue("application/zip");
-
-        using var resp = await _http.PostAsync(url, content, ct);
-        if (!resp.IsSuccessStatusCode)
+        var fs = File.OpenRead(zipPath);
+        await using (fs.ConfigureAwait(false))
         {
-            var body = await resp.Content.ReadAsStringAsync(ct);
-            throw new HttpRequestException($"Deploy falhou ({(int)resp.StatusCode}): {body}");
+            using var content = new StreamContent(fs);
+            content.Headers.ContentType = new MediaTypeHeaderValue("application/zip");
+
+            using var resp = await _http.PostAsync(url, content, ct);
+            if (!resp.IsSuccessStatusCode)
+            {
+                var body = await resp.Content.ReadAsStringAsync(ct);
+                throw new HttpRequestException($"Deploy falhou ({resp.StatusCode}): {body}");
+            }
         }
     }
 
@@ -79,7 +83,7 @@ public sealed class ApigeeEmulatorClient(
             ?? [
                 "gcr.io/apigee-release/hybrid/apigee-emulator:1.12.0",
                 "gcr.io/apigee-release/hybrid/apigee-emulator:1.11.0",
-                "gcr.io/apigee-release/hybrid/apigee-emulator:1.10.0"
+                "gcr.io/apigee-release/hybrid/apigee-emulator:1.10.0",
             ];
 
         var images = new List<string>(defaultImages);
@@ -90,7 +94,7 @@ public sealed class ApigeeEmulatorClient(
             {
                 RedirectStandardOutput = true,
                 UseShellExecute = false,
-                CreateNoWindow = true
+                CreateNoWindow = true,
             };
 
             using var proc = Process.Start(psi);
@@ -99,11 +103,9 @@ public sealed class ApigeeEmulatorClient(
                 var output = await proc.StandardOutput.ReadToEndAsync(ct);
                 await proc.WaitForExitAsync(ct);
 
-                foreach (var img in output
+                images.AddRange(output
                     .Split('\n', StringSplitOptions.RemoveEmptyEntries)
-                    .Where(l => l.Contains("apigee", StringComparison.OrdinalIgnoreCase))
-                    .Where(l => !images.Contains(l)))
-                    images.Add(img);
+                    .Where(l => l.Contains("apigee", StringComparison.OrdinalIgnoreCase) && !images.Contains(l)));
             }
         }
         catch (Exception ex)
@@ -137,11 +139,11 @@ public sealed class ApigeeEmulatorClient(
         var url = $"/v1/emulator/trace?proxyName={Uri.EscapeDataString(proxyName)}";
         _logger.LogStartTraceSession(proxyName);
 
-        using var response = await _http.PostAsync(url, null, ct);
+        using var response = await _http.PostAsync(url, content: null, ct);
         if (!response.IsSuccessStatusCode)
         {
             var body = await response.Content.ReadAsStringAsync(ct);
-            throw new HttpRequestException($"Trace start falhou ({(int)response.StatusCode}): {body}");
+            throw new HttpRequestException($"Trace start falhou ({response.StatusCode}): {body}");
         }
 
         var json = await response.Content.ReadFromJsonAsync<JsonElement>(cancellationToken: ct);
@@ -155,7 +157,7 @@ public sealed class ApigeeEmulatorClient(
             SessionId = sessionId,
             ApiProxy = proxyName,
             Application = application,
-            StartedAt = DateTime.UtcNow
+            StartedAt = DateTime.UtcNow,
         };
     }
 
@@ -172,7 +174,7 @@ public sealed class ApigeeEmulatorClient(
         if (!response.IsSuccessStatusCode)
         {
             var body = await response.Content.ReadAsStringAsync(ct);
-            throw new HttpRequestException($"GetTraceTransactions falhou ({(int)response.StatusCode}): {body}");
+            throw new HttpRequestException($"GetTraceTransactions falhou ({response.StatusCode}): {body}");
         }
 
         var root = await response.Content.ReadFromJsonAsync<JsonElement>(cancellationToken: ct);
@@ -203,7 +205,7 @@ public sealed class ApigeeEmulatorClient(
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             UseShellExecute = false,
-            CreateNoWindow = true
+            CreateNoWindow = true,
         };
 
         using var proc = Process.Start(psi)

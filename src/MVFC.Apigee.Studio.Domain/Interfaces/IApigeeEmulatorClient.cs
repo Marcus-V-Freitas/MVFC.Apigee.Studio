@@ -1,14 +1,15 @@
 namespace MVFC.Apigee.Studio.Domain.Interfaces;
 
 /// <summary>
-/// Contract for communication with the Apigee Emulator (local Docker container).
-///
+/// <para>Contract for communication with the Apigee Emulator (local Docker container).</para>
+/// <para>
 /// Emulator endpoints (port 8080):
 ///   GET    /v1/emulator/healthz
 ///   POST   /v1/emulator/deploy?environment={env}
 ///   POST   /v1/emulator/trace?proxyName={proxy}             — starts a trace session
 ///   GET    /v1/emulator/trace/transactions?sessionid={id}  — transaction polling
 ///   DELETE /v1/emulator/trace?sessionid={id}               — ends session
+/// </para>
 /// </summary>
 public interface IApigeeEmulatorClient
 {

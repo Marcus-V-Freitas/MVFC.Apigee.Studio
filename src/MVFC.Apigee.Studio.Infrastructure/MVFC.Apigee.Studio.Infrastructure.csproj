@@ -1,11 +1,12 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <TargetFramework>net10.0</TargetFramework>
-    <Nullable>enable</Nullable>
-    <ImplicitUsings>enable</ImplicitUsings>
+     <TargetFramework>net10.0</TargetFramework>
+     <Nullable>enable</Nullable>
+     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
+	
   <ItemGroup>
-    <ProjectReference Include="..\MVFC.Apigee.Studio.Domain\MVFC.Apigee.Studio.Domain.csproj" />
+     <ProjectReference Include="..\MVFC.Apigee.Studio.Domain\MVFC.Apigee.Studio.Domain.csproj" />
   </ItemGroup>
 	
 </Project>

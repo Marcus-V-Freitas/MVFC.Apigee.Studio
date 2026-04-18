@@ -1,10 +1,11 @@
 ﻿namespace MVFC.Apigee.Studio.Blazor.Components.Shared;
 
 /// <summary>
+/// <para>
 /// Blazor component representing a node in the workspace file tree.
 /// Supports expand/collapse, file selection, context menu, and quick add actions for specific folders.
-/// 
-/// Quick add examples:
+/// </para>
+/// <para>Quick add examples:</para>
 /// <code>
 /// // environments  -> creates a new environment (folder + minimal JSONs)
 /// // sharedflows   -> creates a new shared flow (skeleton)
@@ -27,38 +28,38 @@ public partial class TreeNode : ComponentBase
             "environments",
             "resources",
             "targets",
-            "proxies"
+            "proxies",
         };
 
     /// <summary>
     /// The workspace item represented by this tree node.
     /// </summary>
-    [Parameter] 
+    [Parameter]
     public required WorkspaceItem Item { get; set; }
-    
+
     /// <summary>
     /// The currently selected file path in the tree.
     /// </summary>
-    [Parameter] 
+    [Parameter]
     public string? SelectedFilePath { get; set; }
-    
+
     /// <summary>
     /// Event callback triggered when a file is selected.
     /// </summary>
-    [Parameter] 
+    [Parameter]
     public EventCallback<string> OnFileSelected { get; set; }
 
     /// <summary>
     /// Event callback triggered when the quick add button is clicked.
     /// The tuple contains the path and the quick add category.
     /// </summary>
-    [Parameter] 
+    [Parameter]
     public EventCallback<(string Path, string Category)> OnQuickAdd { get; set; }
-    
+
     /// <summary>
     /// Event callback triggered when the context menu is opened for a workspace item.
     /// </summary>
-    [Parameter] 
+    [Parameter]
     public EventCallback<(MouseEventArgs e, WorkspaceItem item)> OnContextMenu { get; set; }
 
     /// <summary>
@@ -99,12 +100,12 @@ public partial class TreeNode : ComponentBase
     /// &lt;Step&gt;
     ///     &lt;Name&gt;MyPolicy&lt;/Name&gt;
     /// &lt;/Step&gt;
-    /// 
+    ///
     /// // For a target file:
     /// &lt;RouteRule name="MyTarget"&gt;
     ///     &lt;TargetEndpoint&gt;MyTarget&lt;/TargetEndpoint&gt;
     /// &lt;/RouteRule&gt;
-    /// 
+    ///
     /// // For a shared flow file:
     /// &lt;FlowCallout name="FlowCallout_MyFlow"&gt;
     ///     &lt;SharedFlowBundle&gt;MyFlow&lt;/SharedFlowBundle&gt;
@@ -118,15 +119,15 @@ public partial class TreeNode : ComponentBase
         var nameWithoutExt = Path.GetFileNameWithoutExtension(item.Name);
         var dirName = Path.GetFileName(Path.GetDirectoryName(item.FullPath))?.ToLowerInvariant();
 
-        if (dirName == "policies")
+        if (string.Equals(dirName, "policies", StringComparison.OrdinalIgnoreCase))
         {
             return $"<Step>\n    <Name>{nameWithoutExt}</Name>\n</Step>";
         }
-        if (dirName == "targets")
+        if (string.Equals(dirName, "targets", StringComparison.OrdinalIgnoreCase))
         {
             return $"<RouteRule name=\"{nameWithoutExt}\">\n    <TargetEndpoint>{nameWithoutExt}</TargetEndpoint>\n</RouteRule>";
         }
-        if (dirName == "sharedflows")
+        if (string.Equals(dirName, "sharedflows", StringComparison.OrdinalIgnoreCase))
         {
             return $"<FlowCallout name=\"FlowCallout_{nameWithoutExt}\">\n    <SharedFlowBundle>{nameWithoutExt}</SharedFlowBundle>\n</FlowCallout>";
         }

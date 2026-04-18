@@ -1,4 +1,4 @@
-﻿namespace MVFC.Apigee.Studio.Blazor.Components.Pages;
+namespace MVFC.Apigee.Studio.Blazor.Components.Pages;
 
 /// <summary>
 /// Blazor component for making HTTP API requests.
@@ -24,7 +24,7 @@ public partial class ApiClient : ComponentBase
     /// <summary>
     /// The URL to which the request will be sent.
     /// </summary>
-    private string _url = "http://localhost:8998/";   
+    private string _url = new UriBuilder(Uri.UriSchemeHttp, "localhost", 8998, "/").ToString();
 
     /// <summary>
     /// The request body content (for methods that support a body).
@@ -44,7 +44,7 @@ public partial class ApiClient : ComponentBase
     /// <summary>
     /// Indicates whether a request is currently being sent.
     /// </summary>
-    private bool _isLoading;   
+    private bool _isLoading;
 
     /// <summary>
     /// The time taken to receive the response, in milliseconds.
@@ -58,9 +58,23 @@ public partial class ApiClient : ComponentBase
     public required HttpClient Http { get; set; }
 
     /// <summary>
+    /// Configuration to retrieve default emulator URL.
+    /// </summary>
+    [Inject]
+    public required IConfiguration Config { get; set; }
+
+    /// <summary>
+    /// Initializes the component by loading the default URL from configuration.
+    /// </summary>
+    protected override void OnInitialized()
+    {
+        _url = Config["EmulatorRuntime:BaseUrl"] ?? new UriBuilder(Uri.UriSchemeHttp, "localhost", 8998, "/").ToString();
+    }
+
+    /// <summary>
     /// Adds a new empty header entry to the request.
     /// </summary>
-    private void AddHeader() => 
+    private void AddHeader() =>
         _headers.Add(new HeaderEntry());
 
     /// <summary>
@@ -111,7 +125,7 @@ public partial class ApiClient : ComponentBase
             {
                 if (header.Key.StartsWith("Content-", StringComparison.OrdinalIgnoreCase) && request.Content != null)
                 {
-                    try { request.Content.Headers.TryAddWithoutValidation(header.Key, header.Value); } catch { }
+                    request.Content.Headers.TryAddWithoutValidation(header.Key, header.Value);
                 }
                 else
                 {
@@ -120,11 +134,11 @@ public partial class ApiClient : ComponentBase
             }
 
             var sw = Stopwatch.StartNew();
-            _response = await Http.SendAsync(request).ConfigureAwait(false);
+            _response = await Http.SendAsync(request);
             sw.Stop();
 
             _responseTimeMs = sw.ElapsedMilliseconds;
-            _responseBody = await _response.Content.ReadAsStringAsync().ConfigureAwait(false);
+            _responseBody = await _response.Content.ReadAsStringAsync();
 
             if (IsJsonResponse(_response))
             {

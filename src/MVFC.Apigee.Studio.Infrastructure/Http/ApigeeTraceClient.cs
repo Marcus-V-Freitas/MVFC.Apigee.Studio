@@ -1,10 +1,11 @@
 namespace MVFC.Apigee.Studio.Infrastructure.Http;
 
 /// <summary>
+/// <para>
 /// Client for querying the Apigee Emulator Management API (:8080) to list deployed APIs.
 /// The trace itself is captured by the TraceMiddleware via reverse proxy (:8998).
-///
-/// Example usage:
+/// </para>
+/// <para>Example usage:</para>
 /// <code>
 /// var client = new ApigeeTraceClient(httpClient, logger);
 /// var apis = await client.ListDeployedApisAsync("local");
@@ -57,19 +58,17 @@ public sealed class ApigeeTraceClient(HttpClient http, ILogger<ApigeeTraceClient
     /// </summary>
     /// <param name="raw">The raw JSON string from the API response.</param>
     /// <returns>A list of (ApiProxy, Revision) tuples.</returns>
-    private static List<(string, string)> ParseDeployments(string raw)
+    private List<(string, string)> ParseDeployments(string raw)
     {
         var result = new List<(string, string)>();
-        
+
         try
         {
             using var json = JsonDocument.Parse(raw);
             var root = json.RootElement;
 
             // Try format { "deployments": [...] } or direct array
-            var deployments = root.ValueKind == JsonValueKind.Array
-                ? root
-                : root.TryGetProperty("deployments", out var dep) ? dep : root;
+            var deployments = ExtractDeploymentsArray(root);
 
             foreach (var d in deployments.EnumerateArray())
             {
@@ -80,8 +79,31 @@ public sealed class ApigeeTraceClient(HttpClient http, ILogger<ApigeeTraceClient
                     result.Add((api, rev));
             }
         }
-        catch (JsonException) { }
+        catch (JsonException ex)
+        {
+            _logger.LogParseDeploymentsError(ex.Message);
+        }
 
         return result;
+    }
+
+    /// <summary>
+    /// Extracts the deployments array from the root JSON element.
+    /// Handles both array root and { "deployments": [...] } object formats.
+    /// </summary>
+    /// <param name="root">The root <see cref="JsonElement"/> of the parsed JSON.</param>
+    /// <returns>
+    /// The <see cref="JsonElement"/> representing the deployments array,
+    /// or the root itself if already an array.
+    /// </returns>
+    private static JsonElement ExtractDeploymentsArray(JsonElement root)
+    {
+        if (root.ValueKind == JsonValueKind.Array)
+            return root;
+
+        if (root.TryGetProperty("deployments", out var dep))
+            return dep;
+
+        return root;
     }
 }

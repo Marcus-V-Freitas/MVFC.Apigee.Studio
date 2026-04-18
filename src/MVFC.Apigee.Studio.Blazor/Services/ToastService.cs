@@ -15,28 +15,28 @@ public sealed class ToastService
     /// Shows a success toast notification with the specified message.
     /// </summary>
     /// <param name="msg">The message to display.</param>
-    public void ShowSuccess(string msg) => 
+    public void ShowSuccess(string msg) =>
         Emit(msg, ToastLevel.Success);
-    
+
     /// <summary>
     /// Shows an error toast notification with the specified message.
     /// </summary>
     /// <param name="msg">The message to display.</param>
-    public void ShowError(string msg) => 
+    public void ShowError(string msg) =>
         Emit(msg, ToastLevel.Error);
-    
+
     /// <summary>
     /// Shows a warning toast notification with the specified message.
     /// </summary>
     /// <param name="msg">The message to display.</param>
-    public void ShowWarning(string msg) => 
+    public void ShowWarning(string msg) =>
         Emit(msg, ToastLevel.Warning);
-    
+
     /// <summary>
     /// Shows an informational toast notification with the specified message.
     /// </summary>
     /// <param name="msg">The message to display.</param>
-    public void ShowInfo(string msg) => 
+    public void ShowInfo(string msg) =>
         Emit(msg, ToastLevel.Info);
 
     /// <summary>
