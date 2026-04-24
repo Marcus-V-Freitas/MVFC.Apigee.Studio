@@ -65,10 +65,10 @@ public partial class ApiClient : ComponentBase, IDisposable
     private long _responseTimeMs;
 
     /// <summary>
-    /// The <see cref="HttpClient"/> used to send HTTP requests.
+    /// The <see cref="IHttpClientFactory"/> used to create HTTP clients.
     /// </summary>
     [Inject]
-    public required HttpClient Http { get; set; }
+    public required IHttpClientFactory HttpFactory { get; set; }
 
     /// <summary>
     /// Configuration to retrieve default emulator URL.
@@ -130,7 +130,11 @@ public partial class ApiClient : ComponentBase, IDisposable
     /// <returns>A configured <see cref="JsonSerializerOptions"/> instance.</returns>
     private static JsonSerializerOptions CreateOptions()
     {
-        var options = new JsonSerializerOptions { WriteIndented = true };
+        var options = new JsonSerializerOptions 
+        { 
+            WriteIndented = true,
+            Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+        };
         options.Converters.Add(new JsonStringEnumConverter());
         return options;
     }
@@ -171,7 +175,8 @@ public partial class ApiClient : ComponentBase, IDisposable
             }
 
             var sw = Stopwatch.StartNew();
-            using var response = await Http.SendAsync(request);
+            using var client = HttpFactory.CreateClient("ApiClient");
+            using var response = await client.SendAsync(request);
             sw.Stop();
 
             _responseTimeMs = sw.ElapsedMilliseconds;

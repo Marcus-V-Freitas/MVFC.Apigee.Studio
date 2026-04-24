@@ -20,3 +20,5 @@ global using MVFC.Apigee.Studio.Blazor.Components.Shared;
 global using System.Net.Http;
 global using Microsoft.AspNetCore.Components.Routing;
 global using System.Globalization;
+global using System.Text.Encodings.Web;
+global using System.Net;
