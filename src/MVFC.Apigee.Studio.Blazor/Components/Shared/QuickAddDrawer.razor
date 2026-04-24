@@ -105,6 +105,40 @@
                     }
                 </div>
             }
+            else if (Category == "resources")
+            {
+                <div class="drawer-body drawer-body--single field-stack">
+                    <div class="form-field">
+                        <label>Subpasta</label>
+                        <select class="input" @bind="_resourceSubfolder">
+                            <option value="">Raiz (sem subpasta)</option>
+                            <option value="jsc">jsc</option>
+                            <option value="xsl">xsl</option>
+                            <option value="py">py</option>
+                            <option value="java">java</option>
+                            <option value="hosted">hosted</option>
+                            <option value="node">node</option>
+                            <option value="custom">Outra...</option>
+                        </select>
+                    </div>
+                    @if (_resourceSubfolder == "custom")
+                    {
+                        <div class="form-field">
+                            <label>Nome da subpasta</label>
+                            <input class="input" @bind="_customSubfolder" placeholder="minha-pasta" />
+                        </div>
+                    }
+                    <div class="form-field">
+                        <label>Nome do arquivo</label>
+                        <input class="input" @bind="_quickFileName" placeholder="meu-recurso.js" />
+                    </div>
+                    <button class="btn btn-primary" @onclick="ConfirmQuickFile">Criar Arquivo</button>
+                    @if (!string.IsNullOrEmpty(_quickMessage))
+                    {
+                        <p class="mt-2 @QuickMessageClass">@_quickMessage</p>
+                    }
+                </div>
+            }
             else
             {
                 var labelText       = Category == "apiproxies" ? "Nome da API (proxy)" : "Nome do arquivo";

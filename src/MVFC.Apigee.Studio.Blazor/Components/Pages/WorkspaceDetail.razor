@@ -23,7 +23,9 @@ else
                 <EditorTabs Tabs="EditorState.OpenTabs" 
                             ActiveTab="EditorState.ActiveTab"
                             OnTabSwitch="SwitchTab"
-                            OnTabClose="CloseTab" />
+                            OnTabClose="CloseTab"
+                            OnCloseOtherTabs="CloseOtherTabs"
+                            OnCloseAllTabs="CloseAllTabs" />
 
                 @if (EditorState.ActiveTab is not null)
                 {
@@ -81,6 +83,19 @@ else
                     <h3 class="card-title">@(_newItemIsDir ? "Nova Pasta" : "Novo Arquivo")</h3>
                 </div>
                 <div class="card-body">
+                    @if (_targetDirContext is null && _tree is not null)
+                    {
+                        <div class="form-field" style="margin-bottom: var(--space-3);">
+                            <label style="font-size: var(--text-xs); font-weight: 600; color: var(--color-text-muted); text-transform: uppercase;">Destino</label>
+                            <select class="input new-item-input" @bind="_selectedNewItemPath">
+                                <option value="@_workspace!.RootPath">Raiz do Workspace</option>
+                                @foreach (var dir in CollectDirectories(_tree))
+                                {
+                                    <option value="@dir.FullPath">@dir.RelativePath</option>
+                                }
+                            </select>
+                        </div>
+                    }
                     <input class="input new-item-input" @bind="_newItemName"
                            placeholder="@NewItemPlaceholder"
                            @onkeydown="HandleNewItemKey" 

@@ -5,7 +5,8 @@
         {
             var isActive = tab == ActiveTab;
             <div class="editor-tab @(isActive ? "active" : "")" 
-                 @onclick="() => Switch(tab)">
+                 @onclick="() => Switch(tab)"
+                 @oncontextmenu="e => HandleTabContextMenu(e, tab)" @oncontextmenu:preventDefault="true">
                 <span class="tab-title">
                     @if (tab.IsDirty) { <span class="editor-dirty-dot">●</span> }
                     @tab.FileName
@@ -14,4 +15,15 @@
             </div>
         }
     </div>
+
+    @if (_showTabCtx)
+    {
+        <div class="ctx-backdrop" @onclick="CloseTabContextMenu" @oncontextmenu="CloseTabContextMenu" @oncontextmenu:preventDefault="true"></div>
+        <div class="context-menu-wrapper card" style="left: @(_ctxX)px; top: @(_ctxY)px;">
+            <button class="context-menu-btn" @onclick="CtxCloseThis">Fechar esta aba</button>
+            <button class="context-menu-btn" @onclick="CtxCloseOthers">Fechar outras abas</button>
+            <hr class="context-menu-sep" />
+            <button class="context-menu-btn btn-danger" @onclick="CtxCloseAll">Fechar todas</button>
+        </div>
+    }
 }

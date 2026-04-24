@@ -37,6 +37,16 @@ public partial class QuickAddDrawer : ComponentBase
     private string _quickXmlEditable = string.Empty;
 
     /// <summary>
+    /// The subfolder for resource creation.
+    /// </summary>
+    private string _resourceSubfolder = string.Empty;
+
+    /// <summary>
+    /// Custom subfolder name when "custom" is selected.
+    /// </summary>
+    private string _customSubfolder = string.Empty;
+
+    /// <summary>
     /// Indicates if the last quick add operation resulted in an error.
     /// </summary>
     private bool _quickError;
@@ -132,6 +142,8 @@ public partial class QuickAddDrawer : ComponentBase
             _quickFileName = string.Empty;
             _quickMessage = string.Empty;
             _quickXmlEditable = string.Empty;
+            _resourceSubfolder = string.Empty;
+            _customSubfolder = string.Empty;
             _quickError = false;
         }
     }
@@ -238,7 +250,18 @@ public partial class QuickAddDrawer : ComponentBase
             }
             else
             {
-                var fullPath = Path.Combine(BasePath, _quickFileName);
+                var targetDir = BasePath;
+                if (string.Equals(Category, "resources", StringComparison.OrdinalIgnoreCase))
+                {
+                    var sub = string.Equals(_resourceSubfolder, "custom", StringComparison.Ordinal) ? _customSubfolder : _resourceSubfolder;
+                    if (!string.IsNullOrWhiteSpace(sub))
+                    {
+                        targetDir = Path.Combine(BasePath, sub.Trim());
+                        await WorkspaceRepo.CreateDirectoryAsync(targetDir);
+                    }
+                }
+
+                var fullPath = Path.Combine(targetDir, _quickFileName);
                 await WorkspaceRepo.CreateFileAsync(fullPath);
                 await OnItemCreated.InvokeAsync(fullPath);
                 await Close();

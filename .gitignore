@@ -19,3 +19,4 @@ publish/
 ## Runtime
 *.zip
 wwwroot/.publish
+src/MVFC.Apigee.Studio.Blazor/Properties/PublishProfiles/FolderProfile.pubxml

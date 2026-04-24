@@ -89,6 +89,11 @@ public partial class WorkspaceDetail : ComponentBase, IAsyncDisposable
     private bool _quickAddOpen;
 
     /// <summary>
+    /// The path of the directory selected in the new item modal dropdown.
+    /// </summary>
+    private string? _selectedNewItemPath;
+
+    /// <summary>
     /// The path for the quick add operation.
     /// </summary>
     private string _quickAddPath = string.Empty;
@@ -227,6 +232,51 @@ public partial class WorkspaceDetail : ComponentBase, IAsyncDisposable
         }
 
         EditorState.CloseTab(tab);
+        StateHasChanged();
+    }
+
+    /// <summary>
+    /// Closes all tabs except the specified one, prompting for unsaved changes if needed.
+    /// </summary>
+    private async Task CloseOtherTabs(EditorTab keep)
+    {
+        if (EditorState.ActiveTab is not null && _editor is not null)
+        {
+            EditorState.ActiveTab.IsDirty = await _editor.IsDirty();
+            EditorState.ActiveTab.Content = await _editor.GetValue();
+        }
+
+        var toClose = EditorState.OpenTabs.Where(t => t != keep).ToList();
+        var dirtyTabs = toClose.Where(t => t.IsDirty).ToList();
+        if (dirtyTabs.Count != 0)
+        {
+            var discard = await JS.InvokeAsync<bool>("confirm", $"Existem {dirtyTabs.Count} aba(s) com alterações não salvas. Descartar?");
+            if (!discard) return;
+        }
+
+        EditorState.CloseOtherTabs(keep);
+        StateHasChanged();
+    }
+
+    /// <summary>
+    /// Closes all tabs, prompting for unsaved changes if needed.
+    /// </summary>
+    private async Task CloseAllTabs()
+    {
+        if (EditorState.ActiveTab is not null && _editor is not null)
+        {
+            EditorState.ActiveTab.IsDirty = await _editor.IsDirty();
+            EditorState.ActiveTab.Content = await _editor.GetValue();
+        }
+
+        var dirtyTabs = EditorState.OpenTabs.Where(t => t.IsDirty).ToList();
+        if (dirtyTabs.Count != 0)
+        {
+            var discard = await JS.InvokeAsync<bool>("confirm", $"Existem {dirtyTabs.Count} aba(s) com alterações não salvas. Descartar?");
+            if (!discard) return;
+        }
+
+        EditorState.CloseAllTabs();
         StateHasChanged();
     }
 
@@ -398,6 +448,7 @@ public partial class WorkspaceDetail : ComponentBase, IAsyncDisposable
         _targetDirContext = targetDir;
         _newItemIsDir = isDir;
         _newItemName = _newItemError = string.Empty;
+        _selectedNewItemPath = null;
         _showNewItem = true;
     }
 
@@ -451,6 +502,9 @@ public partial class WorkspaceDetail : ComponentBase, IAsyncDisposable
     /// <returns>The base path for creating the new item.</returns>
     private string GetBasePathForNewItem()
     {
+        if (!string.IsNullOrEmpty(_selectedNewItemPath))
+            return _selectedNewItemPath;
+
         if (_targetDirContext is not null)
         {
             if (_targetDirContext.Type == WorkspaceItemType.File)
@@ -493,5 +547,25 @@ public partial class WorkspaceDetail : ComponentBase, IAsyncDisposable
             await LoadFile(path);
 
         StateHasChanged();
+    }
+
+    /// <summary>
+    /// Recursively collects all directory paths in the workspace tree.
+    /// </summary>
+    /// <param name="node">The current workspace item node.</param>
+    private static IEnumerable<WorkspaceItem> CollectDirectories(WorkspaceItem node)
+    {
+        if (node.Type is WorkspaceItemType.Directory or WorkspaceItemType.ApiProxy or WorkspaceItemType.SharedFlow or WorkspaceItemType.Environment)
+        {
+            yield return node;
+        }
+
+        foreach (var child in node.Children)
+        {
+            foreach (var childDir in CollectDirectories(child))
+            {
+                yield return childDir;
+            }
+        }
     }
 }

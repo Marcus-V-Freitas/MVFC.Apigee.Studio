@@ -79,6 +79,14 @@ public interface IWorkspaceRepository
     IReadOnlyList<string> ListSharedFlows(ApigeeWorkspace workspace);
 
     /// <summary>
+    /// Registers an existing directory as a workspace without modifying its content.
+    /// Creates a directory junction in the workspaces root pointing to the existing path.
+    /// </summary>
+    /// <param name="existingPath">The absolute path to the existing directory.</param>
+    /// <returns>The registered <see cref="ApigeeWorkspace"/>.</returns>
+    ApigeeWorkspace RegisterExisting(string existingPath);
+
+    /// <summary>
     /// Ensures that the folder src/main/apigee/environments/{envName}/ exists on disk.
     /// Creates it empty if it does not exist.
     /// </summary>

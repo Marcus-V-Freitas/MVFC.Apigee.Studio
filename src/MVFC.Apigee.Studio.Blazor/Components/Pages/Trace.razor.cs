@@ -59,7 +59,7 @@ public partial class Trace : ComponentBase, IAsyncDisposable
     /// <summary>
     /// List of captured trace transactions for the current session.
     /// </summary>
-    private IReadOnlyList<TraceTransaction> _transactions = [];
+    private List<TraceTransaction> _transactions = [];
 
     /// <summary>
     /// List of available workspaces.
@@ -178,7 +178,7 @@ public partial class Trace : ComponentBase, IAsyncDisposable
 
             _session = await Emulator.StartTraceAsync(_proxyName, ct);
             _isTracing = true;
-            _transactions = [];
+            _transactions.Clear();
 
             _pollTask = PollLoopAsync(ct);
 
@@ -238,7 +238,7 @@ public partial class Trace : ComponentBase, IAsyncDisposable
     /// </summary>
     private void ClearTransactions()
     {
-        _transactions = [];
+        _transactions.Clear();
         StateHasChanged();
     }
 

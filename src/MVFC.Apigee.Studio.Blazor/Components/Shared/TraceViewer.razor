@@ -25,7 +25,7 @@
 
                 <div class="trace-tx @(isExpanded ? "trace-tx--open" : "")">
 
-                    <button @key="isExpanded" class="trace-tx-header" @onclick="() => Toggle(tx.MessageId)">
+                    <button @key="tx.MessageId" class="trace-tx-header" @onclick="() => Toggle(tx.MessageId)">
                         <span class="tx-method @methodClass">@tx.RequestMethod</span>
                         <span class="tx-uri">@tx.RequestUri</span>
                         <div class="tx-meta">

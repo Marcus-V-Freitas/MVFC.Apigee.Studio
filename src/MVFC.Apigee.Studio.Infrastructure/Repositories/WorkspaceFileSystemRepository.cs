@@ -99,6 +99,37 @@ public sealed class WorkspaceFileSystemRepository(IConfiguration config) : IWork
             Directory.Delete(workspace.RootPath, recursive: true);
     }
 
+    /// <inheritdoc/>
+    public ApigeeWorkspace RegisterExisting(string existingPath)
+    {
+        var fullPath = existingPath.Trim();
+
+        if (!Directory.Exists(fullPath))
+            throw new DirectoryNotFoundException($"Diretório não encontrado: {fullPath}");
+
+        var name = Path.GetFileName(fullPath);
+        var linkPath = Path.Combine(WorkspacesRoot, name);
+
+        // If already inside WorkspacesRoot, just return it
+        if (string.Equals(Path.GetDirectoryName(fullPath), WorkspacesRoot, StringComparison.OrdinalIgnoreCase))
+            return new ApigeeWorkspace(name, fullPath);
+
+        // If a junction/dir with the same name already exists, use a unique name
+        if (Directory.Exists(linkPath))
+        {
+            var counter = 2;
+            while (Directory.Exists(linkPath + "-" + counter))
+                counter++;
+            name += "-" + counter;
+            linkPath = Path.Combine(WorkspacesRoot, name);
+        }
+
+        Directory.CreateDirectory(WorkspacesRoot);
+        Directory.CreateSymbolicLink(linkPath, fullPath);
+
+        return new ApigeeWorkspace(name, linkPath);
+    }
+
     /// <summary>
     /// Ensures that the specified environment exists in the workspace and writes a deployments.json file.
     /// </summary>

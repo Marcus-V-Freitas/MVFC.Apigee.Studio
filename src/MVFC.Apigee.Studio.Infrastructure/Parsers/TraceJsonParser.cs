@@ -1,4 +1,4 @@
-﻿namespace MVFC.Apigee.Studio.Infrastructure.Parsers;
+namespace MVFC.Apigee.Studio.Infrastructure.Parsers;
 
 /// <summary>
 /// <para>Parses the JSON payload returned by the Apigee Emulator trace endpoint.</para>
@@ -35,9 +35,16 @@ public static class TraceJsonParser
 
             var (points, verb, uri, statusCode, firstTs, lastTs) = ParsePoints(pointArray);
 
+            var msgId = TryGetString(msg, "messageId");
+            if (string.IsNullOrEmpty(msgId))
+            {
+                // Fallback to stable hash if messageId is missing
+                msgId = string.Create(CultureInfo.InvariantCulture, $"{firstTs}_{uri.GetHashCode(StringComparison.Ordinal)}");
+            }
+
             result.Add(new TraceTransaction
             {
-                MessageId = Guid.NewGuid().ToString("N"),
+                MessageId = msgId,
                 RequestMethod = verb,
                 RequestUri = uri,
                 ResponseCode = int.TryParse(statusCode, CultureInfo.InvariantCulture, out var sc) ? sc : 0,

@@ -117,6 +117,31 @@ public sealed class EditorStateService
     }
 
     /// <summary>
+    /// Closes all tabs except the specified one.
+    /// </summary>
+    /// <param name="keep">The tab to keep open.</param>
+    public void CloseOtherTabs(EditorTab keep)
+    {
+        var toRemove = _openTabs.Where(t => t != keep).ToList();
+        foreach (var tab in toRemove)
+        {
+            _openTabs.Remove(tab);
+        }
+
+        _activeTab = keep;
+
+        OnTabsChanged?.Invoke();
+    }
+
+    /// <summary>
+    /// Closes all open tabs.
+    /// </summary>
+    public void CloseAllTabs()
+    {
+        Reset();
+    }
+
+    /// <summary>
     /// Closes all tabs and resets the active tab.
     /// </summary>
     public void Reset()

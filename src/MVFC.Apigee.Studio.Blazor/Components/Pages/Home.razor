@@ -5,6 +5,7 @@
 
 <div class="toolbar">
     <button class="btn btn-primary" @onclick="OpenCreateForm">+ New Workspace</button>
+    <button class="btn btn-ghost" @onclick="OpenImportForm">📂 Importar Pasta Existente</button>
 </div>
 
 @if (_showCreate)
@@ -45,6 +46,25 @@
         @if (!string.IsNullOrEmpty(_createError))
         {
             <p class="error-text">@_createError</p>
+        }
+    </div>
+}
+
+@if (_showImport)
+{
+    <div class="create-form card">
+        <h3>Importar Pasta Existente</h3>
+        <p class="help-text">Selecione uma pasta que já contenha uma estrutura Apigee (apiproxies/, sharedflows/, environments/).</p>
+        <label>Caminho absoluto da pasta
+            <input class="input" @bind="_importPath" placeholder="C:\MeusProxies\meu-workspace" @onkeydown="HandleImportKey" />
+        </label>
+        <div class="form-actions">
+            <button class="btn btn-primary" @onclick="HandleImport">Importar</button>
+            <button class="btn btn-ghost" @onclick="CloseImportForm">Cancelar</button>
+        </div>
+        @if (!string.IsNullOrEmpty(_importError))
+        {
+            <p class="error-text">@_importError</p>
         }
     </div>
 }
