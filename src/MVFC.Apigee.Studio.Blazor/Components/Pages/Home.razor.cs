@@ -64,6 +64,23 @@ public partial class Home : ComponentBase
     public required IWorkspaceRepository WorkspaceRepo { get; set; }
 
     /// <summary>
+    /// Application configuration.
+    /// </summary>
+    [Inject]
+    public required IConfiguration Config { get; set; }
+
+    /// <summary>
+    /// Toast notification service.
+    /// </summary>
+    [Inject]
+    public required ToastService Toast { get; set; }
+
+    /// <summary>
+    /// The global directory path where new workspaces are created.
+    /// </summary>
+    private string _workspacesRoot = string.Empty;
+
+    /// <summary>
     /// Use case for creating a new workspace with optional proxies and custom path.
     /// </summary>
     [Inject]
@@ -73,15 +90,64 @@ public partial class Home : ComponentBase
     /// Loads the list of workspaces on component initialization.
     /// </summary>
     protected override void OnInitialized()
-        => _workspaces = [.. WorkspaceRepo.ListAll()];
+    {
+        _workspacesRoot = Config["WorkspacesRoot"] ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "apigee-workspaces");
+        _workspaces = [.. WorkspaceRepo.ListAll()];
+    }
 
     /// <summary>
-    /// Opens the create workspace form and resets related fields.
+    /// Saves the global workspaces root path to appsettings.json.
+    /// </summary>
+    private async Task SaveWorkspacesRoot()
+    {
+        try
+        {
+            var appSettingsPath = Path.Combine(Directory.GetCurrentDirectory(), "appsettings.json");
+            System.Text.Json.Nodes.JsonObject root;
+
+            if (File.Exists(appSettingsPath))
+            {
+                var json = await File.ReadAllTextAsync(appSettingsPath);
+                root = System.Text.Json.Nodes.JsonNode.Parse(json) as System.Text.Json.Nodes.JsonObject ?? new System.Text.Json.Nodes.JsonObject();
+            }
+            else
+            {
+                root = new System.Text.Json.Nodes.JsonObject();
+            }
+
+            root["WorkspacesRoot"] = _workspacesRoot;
+
+            var options = new System.Text.Json.JsonSerializerOptions { WriteIndented = true };
+            await File.WriteAllTextAsync(appSettingsPath, root.ToJsonString(options));
+
+            // Wait briefly for IConfiguration file watcher to catch the change
+            await Task.Delay(500);
+
+            Toast.ShowSuccess("Pasta raiz atualizada com sucesso!");
+            _workspaces = [.. WorkspaceRepo.ListAll()];
+        }
+        catch (Exception ex)
+        {
+            Toast.ShowError("Erro ao salvar a pasta: " + ex.Message);
+        }
+    }
+
+    /// <summary>
+    /// Toggles the create workspace form. Closes the import form if open.
     /// </summary>
     private void OpenCreateForm()
     {
-        _showCreate = true; _newName = _newPath = _createError = string.Empty;
-        _proxyEntries = [];
+        if (_showCreate)
+        {
+            CloseCreateForm();
+        }
+        else
+        {
+            _showCreate = true;
+            _showImport = false;
+            _newName = _newPath = _createError = string.Empty;
+            _proxyEntries = [];
+        }
     }
 
     /// <summary>
@@ -156,12 +222,20 @@ public partial class Home : ComponentBase
     }
 
     /// <summary>
-    /// Opens the import workspace form and resets related fields.
+    /// Toggles the import workspace form. Closes the create form if open.
     /// </summary>
     private void OpenImportForm()
     {
-        _showImport = true;
-        _importPath = _importError = string.Empty;
+        if (_showImport)
+        {
+            CloseImportForm();
+        }
+        else
+        {
+            _showImport = true;
+            _showCreate = false;
+            _importPath = _importError = string.Empty;
+        }
     }
 
     /// <summary>

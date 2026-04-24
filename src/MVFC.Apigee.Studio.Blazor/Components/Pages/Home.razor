@@ -8,6 +8,17 @@
     <button class="btn btn-ghost" @onclick="OpenImportForm">📂 Importar Pasta Existente</button>
 </div>
 
+<div class="card mb-4" style="padding: var(--space-4);">
+    <h3 style="margin-top: 0; margin-bottom: var(--space-3); font-size: var(--text-base);">Configurações</h3>
+    <label style="margin-bottom: 0;">Pasta Raiz para Novos Workspaces
+        <div style="display: flex; gap: var(--space-2); margin-top: var(--space-2); flex-wrap: wrap;">
+            <input class="input" style="flex: 1; min-width: 250px;" @bind="_workspacesRoot" placeholder="C:\Users\...\apigee-workspaces" />
+            <button class="btn btn-primary" @onclick="SaveWorkspacesRoot" style="white-space: nowrap;">💾 Salvar Raiz</button>
+        </div>
+    </label>
+    <span class="help-text mt-2" style="display: block;">Todos os workspaces não-importados serão salvos dentro desta pasta.</span>
+</div>
+
 @if (_showCreate)
 {
     <div class="create-form card">

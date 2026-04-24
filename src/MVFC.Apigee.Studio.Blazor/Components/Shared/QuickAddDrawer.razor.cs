@@ -262,6 +262,12 @@ public partial class QuickAddDrawer : ComponentBase
                 }
 
                 var fullPath = Path.Combine(targetDir, _quickFileName);
+                if (File.Exists(fullPath))
+                {
+                    Toast.ShowError("Um arquivo com este nome já existe neste local.");
+                    return;
+                }
+                
                 await WorkspaceRepo.CreateFileAsync(fullPath);
                 await OnItemCreated.InvokeAsync(fullPath);
                 await Close();
@@ -289,6 +295,12 @@ public partial class QuickAddDrawer : ComponentBase
         {
             var name = _quickFileName.Trim();
             var sfDir = Path.Combine(Workspace.RootPath, "sharedflows", name, "sharedflowbundle");
+            if (Directory.Exists(sfDir))
+            {
+                Toast.ShowError("Um Shared Flow com este nome já existe.");
+                return;
+            }
+            
             var polDir = Path.Combine(sfDir, "policies");
             var resDir = Path.Combine(sfDir, "sharedflows");
 
@@ -329,6 +341,12 @@ public partial class QuickAddDrawer : ComponentBase
         {
             var envName = _quickFileName.Trim();
             var envDir = Path.Combine(Workspace.RootPath, "environments", envName);
+            if (Directory.Exists(envDir))
+            {
+                Toast.ShowError("Um Environment com este nome já existe.");
+                return;
+            }
+            
             await WorkspaceRepo.CreateDirectoryAsync(envDir);
 
             await WorkspaceRepo.SaveFileAsync(Path.Combine(envDir, "deployments.json"), SkeletonTemplateService.GetDeploymentsJson());
@@ -359,6 +377,12 @@ public partial class QuickAddDrawer : ComponentBase
             throw new InvalidOperationException("Informe o nome da API.");
 
         var apiproxyDir = Path.Combine(BasePath, name, "apiproxy");
+        if (Directory.Exists(apiproxyDir))
+        {
+            Toast.ShowError("Um API Proxy com este nome já existe.");
+            return;
+        }
+        
         var policiesDir = Path.Combine(apiproxyDir, "policies");
         var proxiesDir = Path.Combine(apiproxyDir, "proxies");
         var resourcesDir = Path.Combine(apiproxyDir, "resources");

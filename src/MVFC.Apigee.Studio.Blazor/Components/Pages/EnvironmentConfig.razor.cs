@@ -1,11 +1,13 @@
-﻿namespace MVFC.Apigee.Studio.Blazor.Components.Pages;
+namespace MVFC.Apigee.Studio.Blazor.Components.Pages;
 
 /// <summary>
 /// Blazor page component for managing Apigee environment configuration files (KVMs, caches, target servers) per workspace and environment.
 /// Allows the user to select a workspace, manage environments, and edit/save related configuration JSON files.
 /// </summary>
-public partial class EnvironmentConfig : ComponentBase
+public partial class EnvironmentConfig : ComponentBase, IDisposable
 {
+    private bool _disposed;
+
     /// <summary>
     /// The name of the currently selected workspace.
     /// </summary>
@@ -79,6 +81,12 @@ public partial class EnvironmentConfig : ComponentBase
     public required ToastService Toast { get; set; }
 
     /// <summary>
+    /// Service for managing session state across navigations.
+    /// </summary>
+    [Inject]
+    public required SessionStateService SessionState { get; set; }
+
+    /// <summary>
     /// Indicates if no workspace is currently selected.
     /// </summary>
     public bool WorkspaceNotSelected =>
@@ -87,8 +95,42 @@ public partial class EnvironmentConfig : ComponentBase
     /// <summary>
     /// Loads the list of workspaces on component initialization.
     /// </summary>
-    protected override void OnInitialized() =>
+    protected override void OnInitialized()
+    {
         _workspaces = WorkspaceRepo.ListAll();
+
+        if (SessionState.Has("envconfig:workspaceName"))
+        {
+            _selectedWorkspaceName = SessionState.Get<string>("envconfig:workspaceName") ?? "";
+            _selectedEnvironment = SessionState.Get<string>("envconfig:environment") ?? "";
+
+            var envs = SessionState.Get<List<string>>("envconfig:environments");
+            if (envs != null)
+            {
+                _environments.Clear();
+                _environments.AddRange(envs);
+            }
+
+            _kvmJson = SessionState.Get<string>("envconfig:kvmJson") ?? "[]";
+            _cachesJson = SessionState.Get<string>("envconfig:cachesJson") ?? "[]";
+            _targetServersJson = SessionState.Get<string>("envconfig:targetServersJson") ?? "[]";
+
+            _kvmIsDirty = SessionState.Get<bool>("envconfig:kvmIsDirty");
+            _cachesIsDirty = SessionState.Get<bool>("envconfig:cachesIsDirty");
+            _targetIsDirty = SessionState.Get<bool>("envconfig:targetIsDirty");
+
+            _workspace = _workspaces.FirstOrDefault(w => string.Equals(w.Name, _selectedWorkspaceName, StringComparison.OrdinalIgnoreCase));
+        }
+        else
+        {
+            var globalWorkspace = SessionState.Get<string>("global:lastWorkspace");
+            if (!string.IsNullOrEmpty(globalWorkspace))
+            {
+                _selectedWorkspaceName = globalWorkspace;
+                OnWorkspaceChanged();
+            }
+        }
+    }
 
     /// <summary>
     /// Handles workspace selection changes, loads environments for the selected workspace.
@@ -250,5 +292,61 @@ public partial class EnvironmentConfig : ComponentBase
         {
             Toast.ShowError("Erro: " + ex.Message);
         }
+    }
+
+    private void UpdateKvm(ChangeEventArgs e)
+    {
+        _kvmJson = e.Value?.ToString() ?? "";
+        _kvmIsDirty = true;
+    }
+
+    private void UpdateCaches(ChangeEventArgs e)
+    {
+        _cachesJson = e.Value?.ToString() ?? "";
+        _cachesIsDirty = true;
+    }
+
+    private void UpdateTargetServers(ChangeEventArgs e)
+    {
+        _targetServersJson = e.Value?.ToString() ?? "";
+        _targetIsDirty = true;
+    }
+
+    /// <summary>
+    /// Saves the current component state to the session state service.
+    /// </summary>
+    public void Dispose()
+    {
+        Dispose(disposing: true);
+        GC.SuppressFinalize(this);
+    }
+
+    /// <summary>
+    /// Dispose pattern implementation.
+    /// </summary>
+    protected virtual void Dispose(bool disposing)
+    {
+        if (_disposed)
+            return;
+
+        if (disposing)
+        {
+            SessionState.Set("envconfig:workspaceName", _selectedWorkspaceName);
+            SessionState.Set("envconfig:environment", _selectedEnvironment);
+            SessionState.Set("envconfig:environments", _environments.ToList());
+            SessionState.Set("envconfig:kvmJson", _kvmJson);
+            SessionState.Set("envconfig:cachesJson", _cachesJson);
+            SessionState.Set("envconfig:targetServersJson", _targetServersJson);
+            SessionState.Set("envconfig:kvmIsDirty", _kvmIsDirty);
+            SessionState.Set("envconfig:cachesIsDirty", _cachesIsDirty);
+            SessionState.Set("envconfig:targetIsDirty", _targetIsDirty);
+
+            if (!string.IsNullOrEmpty(_selectedWorkspaceName))
+            {
+                SessionState.Set("global:lastWorkspace", _selectedWorkspaceName);
+            }
+        }
+
+        _disposed = true;
     }
 }

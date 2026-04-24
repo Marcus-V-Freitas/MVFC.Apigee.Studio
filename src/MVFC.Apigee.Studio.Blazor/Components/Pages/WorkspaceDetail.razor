@@ -1,6 +1,11 @@
 @page "/workspace/{WorkspaceName}"
 
-<h1>@WorkspaceName</h1>
+<div style="display: flex; align-items: center; gap: var(--space-3); margin-bottom: var(--space-4);">
+    <a href="/" class="btn-icon" title="Voltar aos Workspaces" style="text-decoration: none;">
+        <i data-lucide="arrow-left"></i>
+    </a>
+    <h1 style="margin: 0;">@WorkspaceName</h1>
+</div>
 
 @if (_workspace is null)
 {

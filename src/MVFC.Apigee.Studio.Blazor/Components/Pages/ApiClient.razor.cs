@@ -4,8 +4,10 @@ namespace MVFC.Apigee.Studio.Blazor.Components.Pages;
 /// Blazor component for making HTTP API requests.
 /// Allows the user to configure HTTP method, URL, headers, and body, send the request, and view the response.
 /// </summary>
-public partial class ApiClient : ComponentBase
+public partial class ApiClient : ComponentBase, IDisposable
 {
+    private bool _disposed;
+
     /// <summary>
     /// List of HTTP headers to include in the request.
     /// </summary>
@@ -37,9 +39,20 @@ public partial class ApiClient : ComponentBase
     private string _responseBody = "";
 
     /// <summary>
-    /// The HTTP response message received after sending the request.
+    /// The response state containing status and headers.
     /// </summary>
-    private HttpResponseMessage? _response;
+    private ResponseState? _responseState;
+
+    /// <summary>
+    /// Represents the simplified state of an HTTP response for UI and persistence.
+    /// </summary>
+    public class ResponseState
+    {
+        public int StatusCode { get; set; }
+        public string StatusName { get; set; } = string.Empty;
+        public bool IsSuccessStatusCode { get; set; }
+        public string HeadersString { get; set; } = string.Empty;
+    }
 
     /// <summary>
     /// Indicates whether a request is currently being sent.
@@ -64,11 +77,35 @@ public partial class ApiClient : ComponentBase
     public required IConfiguration Config { get; set; }
 
     /// <summary>
+    /// Service for managing session state across navigations.
+    /// </summary>
+    [Inject]
+    public required SessionStateService SessionState { get; set; }
+
+    /// <summary>
     /// Initializes the component by loading the default URL from configuration.
     /// </summary>
     protected override void OnInitialized()
     {
         _url = Config["EmulatorRuntime:BaseUrl"] ?? new UriBuilder(Uri.UriSchemeHttp, "localhost", 8998, "/").ToString();
+
+        if (SessionState.Has("apiclient:url"))
+        {
+            _url = SessionState.Get<string>("apiclient:url") ?? _url;
+            _method = SessionState.Get<string>("apiclient:method") ?? "GET";
+            _body = SessionState.Get<string>("apiclient:body") ?? "";
+
+            var savedHeaders = SessionState.Get<List<HeaderEntry>>("apiclient:headers");
+            if (savedHeaders != null && savedHeaders.Count != 0)
+            {
+                _headers.Clear();
+                _headers.AddRange(savedHeaders);
+            }
+
+            _responseBody = SessionState.Get<string>("apiclient:responseBody") ?? "";
+            _responseTimeMs = SessionState.Get<long>("apiclient:responseTimeMs");
+            _responseState = SessionState.Get<ResponseState>("apiclient:responseState");
+        }
     }
 
     /// <summary>
@@ -108,7 +145,7 @@ public partial class ApiClient : ComponentBase
             return;
 
         _isLoading = true;
-        _response = null;
+        _responseState = null;
         _responseBody = string.Empty;
         StateHasChanged();
 
@@ -134,13 +171,21 @@ public partial class ApiClient : ComponentBase
             }
 
             var sw = Stopwatch.StartNew();
-            _response = await Http.SendAsync(request);
+            using var response = await Http.SendAsync(request);
             sw.Stop();
 
             _responseTimeMs = sw.ElapsedMilliseconds;
-            _responseBody = await _response.Content.ReadAsStringAsync();
+            _responseBody = await response.Content.ReadAsStringAsync();
 
-            if (IsJsonResponse(_response))
+            _responseState = new ResponseState
+            {
+                StatusCode = (int)response.StatusCode,
+                StatusName = response.StatusCode.ToString(),
+                IsSuccessStatusCode = response.IsSuccessStatusCode,
+                HeadersString = string.Join('\n', response.Headers.Select(h => $"{h.Key}: {string.Join(", ", h.Value)}")),
+            };
+
+            if (IsJsonResponse(response))
             {
                 using var parsedJson = JsonDocument.Parse(_responseBody);
                 _responseBody = JsonSerializer.Serialize(parsedJson, _options);
@@ -171,4 +216,35 @@ public partial class ApiClient : ComponentBase
     /// <returns>True if the response is JSON; otherwise, false.</returns>
     private static bool IsJsonResponse(HttpResponseMessage? response) =>
         response?.Content?.Headers?.ContentType?.MediaType?.Equals("application/json", StringComparison.OrdinalIgnoreCase) == true;
+
+    /// <summary>
+    /// Saves the current component state to the session state service.
+    /// </summary>
+    public void Dispose()
+    {
+        Dispose(disposing: true);
+        GC.SuppressFinalize(this);
+    }
+
+    /// <summary>
+    /// Dispose pattern implementation.
+    /// </summary>
+    protected virtual void Dispose(bool disposing)
+    {
+        if (_disposed)
+            return;
+
+        if (disposing)
+        {
+            SessionState.Set("apiclient:url", _url);
+            SessionState.Set("apiclient:method", _method);
+            SessionState.Set("apiclient:body", _body);
+            SessionState.Set("apiclient:headers", _headers.ToList());
+            SessionState.Set("apiclient:responseBody", _responseBody);
+            SessionState.Set("apiclient:responseTimeMs", _responseTimeMs);
+            SessionState.Set("apiclient:responseState", _responseState);
+        }
+
+        _disposed = true;
+    }
 }

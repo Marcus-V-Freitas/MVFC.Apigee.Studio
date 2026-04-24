@@ -102,10 +102,35 @@ public partial class Trace : ComponentBase, IAsyncDisposable
     public required DeployToEmulatorUseCase DeployUseCase { get; set; }
 
     /// <summary>
+    /// Service for managing session state across navigations.
+    /// </summary>
+    [Inject]
+    public required SessionStateService SessionState { get; set; }
+
+    /// <summary>
     /// Loads the list of workspaces on component initialization.
     /// </summary>
-    protected override void OnInitialized() =>
+    protected override void OnInitialized()
+    {
         _workspaces = WorkspaceRepo.ListAll();
+
+        if (SessionState.Has("trace:workspacePath"))
+        {
+            _selectedWorkspacePath = SessionState.Get<string>("trace:workspacePath");
+            _proxyName = SessionState.Get<string>("trace:proxyName") ?? string.Empty;
+            _proxies = SessionState.Get<List<string>>("trace:proxies") ?? [];
+            _activeTab = SessionState.Get<string>("trace:activeTab") ?? "trace";
+            _transactions = SessionState.Get<List<TraceTransaction>>("trace:transactions") ?? [];
+            _session = SessionState.Get<TraceSession>("trace:session");
+            _isTracing = SessionState.Get<bool>("trace:isTracing");
+
+            if (_isTracing && _session != null)
+            {
+                _pollCts = new CancellationTokenSource();
+                _pollTask = PollLoopAsync(_pollCts.Token);
+            }
+        }
+    }
 
     /// <summary>
     /// Handles workspace selection changes and loads proxies for the selected workspace.
@@ -307,6 +332,14 @@ public partial class Trace : ComponentBase, IAsyncDisposable
     public async ValueTask DisposeAsync()
     {
         GC.SuppressFinalize(this);
-        await StopTraceInternalAsync();
+        await CancelPollAsync();
+
+        SessionState.Set("trace:workspacePath", _selectedWorkspacePath);
+        SessionState.Set("trace:proxyName", _proxyName);
+        SessionState.Set("trace:proxies", _proxies.ToList());
+        SessionState.Set("trace:activeTab", _activeTab);
+        SessionState.Set("trace:transactions", _transactions);
+        SessionState.Set("trace:session", _session);
+        SessionState.Set("trace:isTracing", _isTracing);
     }
 }

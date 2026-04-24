@@ -5,8 +5,10 @@ namespace MVFC.Apigee.Studio.Blazor.Components.Pages;
 /// Allows the user to check emulator status, start/stop the Docker container, list available images,
 /// and deploy bundles to a selected environment.
 /// </summary>
-public partial class Emulator : ComponentBase
+public partial class Emulator : ComponentBase, IDisposable
 {
+    private bool _disposed;
+
     /// <summary>
     /// Indicates if the emulator is alive (reachable and running).
     /// </summary>
@@ -90,6 +92,12 @@ public partial class Emulator : ComponentBase
     public required IConfiguration Config { get; set; }
 
     /// <summary>
+    /// Service for managing session state across navigations.
+    /// </summary>
+    [Inject]
+    public required SessionStateService SessionState { get; set; }
+
+    /// <summary>
     /// Indicates if deployment actions should be disabled (when deploying or emulator is not alive).
     /// </summary>
     private bool DeployDisabled =>
@@ -115,6 +123,14 @@ public partial class Emulator : ComponentBase
     {
         _baseUrl = Config["ApigeeEmulator:BaseUrl"] ?? new UriBuilder(Uri.UriSchemeHttp, "localhost", 8080).ToString();
         _image = Config["ApigeeEmulator:Image"] ?? "gcr.io/apigee-release/hybrid/apigee-emulator:latest";
+
+        if (SessionState.Has("emulator:image"))
+        {
+            _image = SessionState.Get<string>("emulator:image") ?? _image;
+            _zipPath = SessionState.Get<string>("emulator:zipPath") ?? string.Empty;
+            _env = SessionState.Get<string>("emulator:env") ?? "local";
+        }
+
         await LoadImages();
         await Check();
     }
@@ -249,5 +265,32 @@ public partial class Emulator : ComponentBase
         {
             _deploying = false;
         }
+    }
+
+    /// <summary>
+    /// Saves the current component state to the session state service.
+    /// </summary>
+    public void Dispose()
+    {
+        Dispose(disposing: true);
+        GC.SuppressFinalize(this);
+    }
+
+    /// <summary>
+    /// Dispose pattern implementation.
+    /// </summary>
+    protected virtual void Dispose(bool disposing)
+    {
+        if (_disposed)
+            return;
+
+        if (disposing)
+        {
+            SessionState.Set("emulator:image", _image);
+            SessionState.Set("emulator:zipPath", _zipPath);
+            SessionState.Set("emulator:env", _env);
+        }
+
+        _disposed = true;
     }
 }

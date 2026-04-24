@@ -1,4 +1,4 @@
-﻿namespace MVFC.Apigee.Studio.Blazor.Components.Layout;
+namespace MVFC.Apigee.Studio.Blazor.Components.Layout;
 
 /// <summary>
 /// Blazor navigation menu component that manages the sidebar state and responds to navigation and editor tab changes.
@@ -32,6 +32,12 @@ public partial class NavMenu : ComponentBase, IDisposable
     [Inject]
     public required EditorStateService EditorState { get; set; }
 
+    /// <summary>
+    /// Service for managing session state across navigations.
+    /// </summary>
+    [Inject]
+    public required SessionStateService SessionState { get; set; }
+
     private bool _sidebarOpen;
 
     /// <summary>
@@ -41,6 +47,15 @@ public partial class NavMenu : ComponentBase, IDisposable
     {
         Nav.LocationChanged += HandleLocationChanged;
         EditorState.OnTabsChanged += HandleTabsChanged;
+        SessionState.OnStateChanged += HandleSessionStateChanged;
+    }
+
+    /// <summary>
+    /// Handles session state changes to update the UI when the active workspace changes.
+    /// </summary>
+    private void HandleSessionStateChanged()
+    {
+        _ = InvokeAsync(StateHasChanged);
     }
 
     /// <summary>
@@ -105,6 +120,7 @@ public partial class NavMenu : ComponentBase, IDisposable
         {
             Nav.LocationChanged -= HandleLocationChanged;
             EditorState.OnTabsChanged -= HandleTabsChanged;
+            SessionState.OnStateChanged -= HandleSessionStateChanged;
         }
 
         _disposed = true;

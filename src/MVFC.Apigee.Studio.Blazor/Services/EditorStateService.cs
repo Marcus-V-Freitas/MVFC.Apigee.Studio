@@ -150,4 +150,17 @@ public sealed class EditorStateService
         _activeTab = null;
         OnTabsChanged?.Invoke();
     }
+
+    /// <summary>
+    /// Restores the editor tabs from saved state without triggering Reset.
+    /// </summary>
+    public void RestoreTabs(IEnumerable<EditorTab> tabs, string? activeTabPath)
+    {
+        _openTabs.Clear();
+        _openTabs.AddRange(tabs);
+        _activeTab = activeTabPath is not null
+            ? _openTabs.FirstOrDefault(t => string.Equals(t.FullPath, activeTabPath, StringComparison.OrdinalIgnoreCase))
+            : _openTabs.FirstOrDefault();
+        OnTabsChanged?.Invoke();
+    }
 }

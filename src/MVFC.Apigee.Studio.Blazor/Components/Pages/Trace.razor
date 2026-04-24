@@ -25,7 +25,7 @@
             <div class="trace-control-row">
                 <div class="form-field flex-1">
                     <label>Workspace</label>
-                    <select class="form-input" @onchange="OnWorkspaceChanged" disabled="@_isTracing">
+                    <select class="form-input" @onchange="OnWorkspaceChanged" disabled="@_isTracing" value="@_selectedWorkspacePath">
                         <option value="">-- Selecione o Workspace --</option>
                         @foreach (var ws in _workspaces)
                         {
@@ -36,7 +36,7 @@
 
                 <div class="form-field flex-1">
                     <label>Proxy</label>
-                    <select class="form-input" @onchange="OnProxyChanged" disabled="@IsWorkspaceNotReady">
+                    <select class="form-input" @onchange="OnProxyChanged" disabled="@IsWorkspaceNotReady" value="@_proxyName">
                         <option value="">-- Selecione o Proxy --</option>
                         @foreach (var p in _proxies)
                         {

@@ -72,7 +72,7 @@
     </div>
 </div>
 
-@if (_response != null)
+@if (_responseState != null)
 {
     <div class="card mt-4 response-card">
         <div class="response-header">
@@ -80,8 +80,8 @@
             <div class="response-meta">
                 <span>
                     Status:
-                    <strong class="@(_response.IsSuccessStatusCode ? "status-success" : "status-danger")">
-                        @((int)_response.StatusCode) @(_response.StatusCode)
+                    <strong class="@(_responseState.IsSuccessStatusCode ? "status-success" : "status-danger")">
+                        @_responseState.StatusCode @_responseState.StatusName
                     </strong>
                 </span>
                 <span>
@@ -94,7 +94,7 @@
             <div class="response-headers-section">
                 <strong>Headers:</strong>
                 <pre class="response-headers-pre">
-                    @string.Join("\n", _response.Headers.Select(h => $"{h.Key}: {string.Join(", ", h.Value)}"))
+                    @_responseState.HeadersString
                 </pre>
             </div>
 

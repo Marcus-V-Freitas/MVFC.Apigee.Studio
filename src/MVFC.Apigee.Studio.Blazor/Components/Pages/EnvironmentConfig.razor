@@ -57,7 +57,7 @@
                 <h3>KVMs (maps.json)</h3>
                 <button class="btn btn-ghost btn-sm" @onclick="LoadKvm">Refresh</button>
             </div>
-            <textarea class="input mt-2 config-textarea" @bind="_kvmJson"></textarea>
+            <textarea class="input mt-2 config-textarea" value="@_kvmJson" @oninput="UpdateKvm"></textarea>
             <button class="btn btn-primary mt-2" @onclick="SaveKvm">Save KVMs</button>
             @if (_kvmIsDirty)
             {
@@ -71,7 +71,7 @@
                 <h3>Caches (caches.json)</h3>
                 <button class="btn btn-ghost btn-sm" @onclick="LoadCaches">Refresh</button>
             </div>
-            <textarea class="input mt-2 config-textarea" @bind="_cachesJson"></textarea>
+            <textarea class="input mt-2 config-textarea" value="@_cachesJson" @oninput="UpdateCaches"></textarea>
             <button class="btn btn-primary mt-2" @onclick="SaveCaches">Save Caches</button>
             @if (_cachesIsDirty)
             {
@@ -85,7 +85,7 @@
                 <h3>Target Servers (targetservers.json)</h3>
                 <button class="btn btn-ghost btn-sm" @onclick="LoadTargetServers">Refresh</button>
             </div>
-            <textarea class="input mt-2 config-textarea" @bind="_targetServersJson"></textarea>
+            <textarea class="input mt-2 config-textarea" value="@_targetServersJson" @oninput="UpdateTargetServers"></textarea>
             <button class="btn btn-primary mt-2" @onclick="SaveTargetServers">Save Target Servers</button>
             @if (_targetIsDirty)
             {

@@ -1,6 +1,11 @@
 <div class="app-shell @(_sidebarOpen ? "sidebar-open" : "")">
     <div class="sidebar-overlay" @onclick="CloseSidebar"></div>
     
+    @{
+        var lastWorkspace = SessionState.Get<string>("global:lastWorkspace");
+        var explorerHref = string.IsNullOrEmpty(lastWorkspace) ? "/" : $"/workspace/{Uri.EscapeDataString(lastWorkspace)}";
+    }
+    
     <aside class="sidebar">
         <div class="sidebar-logo">
             <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" width="26" height="26">
@@ -12,9 +17,17 @@
         </div>
         <nav class="sidebar-nav">
             <NavLink href="/" Match="NavLinkMatch.All" class="nav-item" @onclick="CloseSidebar">
-                <i data-lucide="layout-grid" class="nav-icon"></i>
+                <i data-lucide="folder-kanban" class="nav-icon"></i>
                 <span>Workspaces</span>
             </NavLink>
+
+            @if (!string.IsNullOrEmpty(lastWorkspace))
+            {
+                <NavLink href="@explorerHref" Match="NavLinkMatch.Prefix" class="nav-item" @onclick="CloseSidebar">
+                    <i data-lucide="files" class="nav-icon"></i>
+                    <span>Explorer</span>
+                </NavLink>
+            }
 
             <NavLink href="/emulator" class="nav-item" @onclick="CloseSidebar">
                 <i data-lucide="terminal" class="nav-icon"></i>

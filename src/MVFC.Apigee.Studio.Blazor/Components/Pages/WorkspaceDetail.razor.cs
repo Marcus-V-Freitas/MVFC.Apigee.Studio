@@ -139,6 +139,12 @@ public partial class WorkspaceDetail : ComponentBase, IAsyncDisposable
     public required EditorStateService EditorState { get; set; }
 
     /// <summary>
+    /// Service for managing session state across navigations.
+    /// </summary>
+    [Inject]
+    public required SessionStateService SessionState { get; set; }
+
+    /// <summary>
     /// Gets the placeholder text for the new item input based on type.
     /// </summary>
     private string NewItemPlaceholder => _newItemIsDir ? "folder-name" : "file.xml";
@@ -153,7 +159,20 @@ public partial class WorkspaceDetail : ComponentBase, IAsyncDisposable
         if (_workspace is not null)
             _tree = await WorkspaceRepo.LoadTreeAsync(_workspace);
 
-        EditorState.Reset();
+        var wsKey = $"workspace:{WorkspaceName}";
+        SessionState.Set("global:lastWorkspace", WorkspaceName);
+        
+        if (SessionState.Has($"{wsKey}:tabs"))
+        {
+            var tabs = SessionState.Get<List<EditorTab>>($"{wsKey}:tabs") ?? [];
+            var activeTab = SessionState.Get<string>($"{wsKey}:activeTab");
+            _searchQuery = SessionState.Get<string>($"{wsKey}:search") ?? string.Empty;
+            EditorState.RestoreTabs(tabs, activeTab);
+        }
+        else
+        {
+            EditorState.Reset();
+        }
     }
 
     /// <summary>
@@ -375,6 +394,28 @@ public partial class WorkspaceDetail : ComponentBase, IAsyncDisposable
     {
         GC.SuppressFinalize(this);
         // MonacoEditor handles its own disposal
+
+        if (EditorState.ActiveTab is not null && _editor is not null)
+        {
+            try
+            {
+                using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(500));
+                var isDirtyTask = _editor.IsDirty();
+                var contentTask = _editor.GetValue();
+
+                if (await Task.WhenAny(Task.WhenAll(isDirtyTask, contentTask), Task.Delay(500, cts.Token)) == Task.WhenAll(isDirtyTask, contentTask))
+                {
+                    EditorState.ActiveTab.IsDirty = isDirtyTask.Result;
+                    EditorState.ActiveTab.Content = contentTask.Result;
+                }
+            }
+            catch { /* ignore JS disconnected errors during disposal */ }
+        }
+
+        var wsKey = $"workspace:{WorkspaceName}";
+        SessionState.Set($"{wsKey}:tabs", EditorState.OpenTabs.ToList());
+        SessionState.Set($"{wsKey}:activeTab", EditorState.ActiveTab?.FullPath);
+        SessionState.Set($"{wsKey}:search", _searchQuery);
     }
 
     /// <summary>
@@ -478,18 +519,30 @@ public partial class WorkspaceDetail : ComponentBase, IAsyncDisposable
         {
             if (_newItemIsDir)
             {
+                if (Directory.Exists(fullPath))
+                {
+                    Toast.ShowError("Uma pasta com este nome já existe neste local.");
+                    return;
+                }
                 await WorkspaceRepo.CreateDirectoryAsync(fullPath);
             }
             else
             {
-                await WorkspaceRepo.CreateFileAsync(fullPath);
-                await LoadFile(fullPath);
+                if (File.Exists(fullPath)) 
+                {
+                    Toast.ShowError("Um arquivo com este nome já existe neste local."); 
+                    return; 
+                }
+                await WorkspaceRepo.CreateFileAsync(fullPath); await LoadFile(fullPath);
             }
 
             _showNewItem = false;
             _tree = await WorkspaceRepo.LoadTreeAsync(_workspace);
         }
-        catch (Exception ex) { _newItemError = ex.Message; }
+        catch (Exception ex) 
+        { 
+            _newItemError = ex.Message; 
+        }
     }
 
     /// <summary>
