@@ -166,14 +166,23 @@ public sealed class WorkspaceFileSystemRepository(IConfiguration config) : IWork
         writer.WriteStartArray("proxies");
 
         foreach (var p in proxies)
-            writer.WriteStringValue(p);
+        {
+            writer.WriteStartObject();
+            writer.WriteString("name", p);
+            writer.WriteEndObject();
+        }
 
         writer.WriteEndArray();
 
         if (sharedFlows.Count > 0)
         {
-            writer.WriteStartArray("sharedFlows");
-            foreach (var sf in sharedFlows) writer.WriteStringValue(sf);
+            writer.WriteStartArray("sharedflows");
+            foreach (var sf in sharedFlows)
+            {
+                writer.WriteStartObject();
+                writer.WriteString("name", sf);
+                writer.WriteEndObject();
+            }
             writer.WriteEndArray();
         }
 
@@ -257,7 +266,7 @@ public sealed class WorkspaceFileSystemRepository(IConfiguration config) : IWork
 
         await using (archive.ConfigureAwait(false))
         {
-            await AddDirectoryToZipIncludingEmpty(archive, workspace.RootPath, string.Empty);
+            await AddDirectoryToZipIncludingEmpty(archive, workspace.RootPath, "src/main/apigee");
         }
 
         return zip;
