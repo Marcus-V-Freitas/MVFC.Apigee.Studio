@@ -112,14 +112,35 @@ public static class TraceJsonParser
         {
             var actionResult = TryGetString(res, "ActionResult");
 
+            // Extract Verb and URI from RequestMessage
             if (string.Equals(actionResult, "RequestMessage", StringComparison.OrdinalIgnoreCase) && string.IsNullOrEmpty(verb))
             {
                 verb = TryGetString(res, "verb") ?? string.Empty;
                 uri = TryGetString(res, "uRI") ?? string.Empty;
             }
 
-            if (string.Equals(actionResult, "ResponseMessage", StringComparison.OrdinalIgnoreCase) && string.IsNullOrEmpty(statusCode))
-                statusCode = TryGetString(res, "statusCode") ?? string.Empty;
+            // Extract StatusCode from ResponseMessage or ResponseMessageSent
+            if ((string.Equals(actionResult, "ResponseMessage", StringComparison.OrdinalIgnoreCase) ||
+                 string.Equals(actionResult, "ResponseMessageSent", StringComparison.OrdinalIgnoreCase))
+                && string.IsNullOrEmpty(statusCode))
+            {
+                var sc = TryGetString(res, "statusCode");
+                if (!string.IsNullOrEmpty(sc)) statusCode = sc;
+            }
+
+            // Fallback: Extract from variables/properties if still empty
+            if (string.IsNullOrEmpty(statusCode) && res.TryGetProperty("properties", out var props) && props.TryGetProperty("property", out var propArray))
+            {
+                foreach (var prop in propArray.EnumerateArray())
+                {
+                    var name = TryGetString(prop, "name");
+                    if (name is "response.status.code" or "error.status.code" or "message.status.code")
+                    {
+                        var val = TryGetString(prop, "value");
+                        if (!string.IsNullOrEmpty(val) && !string.Equals(val, "0", StringComparison.Ordinal)) statusCode = val;
+                    }
+                }
+            }
 
             if (string.Equals(actionResult, "DebugInfo", StringComparison.OrdinalIgnoreCase))
             {

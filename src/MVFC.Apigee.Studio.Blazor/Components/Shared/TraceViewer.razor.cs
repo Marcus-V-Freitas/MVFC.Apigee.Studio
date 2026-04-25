@@ -1,4 +1,4 @@
-﻿namespace MVFC.Apigee.Studio.Blazor.Components.Shared;
+namespace MVFC.Apigee.Studio.Blazor.Components.Shared;
 
 /// <summary>
 /// Blazor component for visualizing trace transactions and their execution points in a grouped, expandable view.
@@ -37,7 +37,7 @@ public partial class TraceViewer : ComponentBase
     /// <returns>A CSS class string for styling the status badge.</returns>
     private static string GetStatusClass(int responseCode)
     {
-        if (responseCode >= 500)
+        if (responseCode >= 500 || responseCode == 0)
             return "status-5xx";
         if (responseCode >= 400)
             return "status-4xx";

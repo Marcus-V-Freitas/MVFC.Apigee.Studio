@@ -740,6 +740,8 @@ label {
   flex: 1;
   background: var(--color-bg);
   overflow: hidden;
+  align-items: stretch;
+  gap: var(--space-4);
 }
 
 @media (max-width: 768px) {
@@ -775,7 +777,7 @@ label {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  min-height: 0;
+  height: 600px; /* Altura fixa para alinhar com o editor */
 }
 
 .file-tree-body {
@@ -853,7 +855,7 @@ label {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  min-height: 0;
+  height: 600px;
 }
 
 .editor-header {
@@ -1042,7 +1044,6 @@ label {
 /* ─── Monaco Container ──────────────────────────────────────── */
 .monaco-container {
   flex: 1;
-  min-height: 0;
   overflow: hidden;
 }
 

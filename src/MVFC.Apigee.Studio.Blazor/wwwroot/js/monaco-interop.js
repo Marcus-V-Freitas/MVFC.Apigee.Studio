@@ -4,30 +4,31 @@
 window.monacoInterop = (function () {
     'use strict';
 
+    const MONACO_PATH = '/js';
     const _editors = {};
-    const _dirty   = {};          // dirty-state por editor
-    const MONACO_CDN = 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.52.0/min';
+    const _observers = {};      // ResizeObservers por editor
+    const _dirty = {};          // dirty-state por editor
 
     // Providers são registrados globalmente no objeto monaco — só pode ser feito UMA vez.
     let _providersRegistered = false;
 
     function _configureLoader() {
-        require.config({ paths: { vs: MONACO_CDN + '/vs' } });
+        require.config({ paths: { vs: MONACO_PATH + '/vs' } });
     }
 
     function _detectLanguage(filePath) {
         if (!filePath) return 'plaintext';
         const ext = filePath.split('.').pop().toLowerCase();
         switch (ext) {
-            case 'xml':  return 'xml';
+            case 'xml': return 'xml';
             case 'json': return 'json';
-            case 'js':   return 'javascript';
+            case 'js': return 'javascript';
             case 'yaml':
-            case 'yml':  return 'yaml';
-            case 'md':   return 'markdown';
-            case 'css':  return 'css';
+            case 'yml': return 'yaml';
+            case 'md': return 'markdown';
+            case 'css': return 'css';
             case 'html': return 'html';
-            default:     return 'plaintext';
+            default: return 'plaintext';
         }
     }
 
@@ -39,18 +40,18 @@ window.monacoInterop = (function () {
         monaco.languages.registerCompletionItemProvider('xml', {
             triggerCharacters: ['<'],
             provideCompletionItems(model, position) {
-                const word  = model.getWordUntilPosition(position);
+                const word = model.getWordUntilPosition(position);
                 const range = {
                     startLineNumber: position.lineNumber,
-                    endLineNumber:   position.lineNumber,
-                    startColumn:     word.startColumn,
-                    endColumn:       word.endColumn,
+                    endLineNumber: position.lineNumber,
+                    startColumn: word.startColumn,
+                    endColumn: word.endColumn,
                 };
                 return {
                     suggestions: [
                         {
                             label: 'ProxyEndpoint',
-                            kind:  monaco.languages.CompletionItemKind.Snippet,
+                            kind: monaco.languages.CompletionItemKind.Snippet,
                             insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
                             insertText:
                                 '<ProxyEndpoint name="${1:default}">\n' +
@@ -76,7 +77,7 @@ window.monacoInterop = (function () {
                         },
                         {
                             label: 'TargetEndpoint',
-                            kind:  monaco.languages.CompletionItemKind.Snippet,
+                            kind: monaco.languages.CompletionItemKind.Snippet,
                             insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
                             insertText:
                                 '<TargetEndpoint name="${1:default}">\n' +
@@ -98,7 +99,7 @@ window.monacoInterop = (function () {
                         },
                         {
                             label: 'AssignMessage',
-                            kind:  monaco.languages.CompletionItemKind.Snippet,
+                            kind: monaco.languages.CompletionItemKind.Snippet,
                             insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
                             insertText:
                                 '<AssignMessage name="${1:AM-PolicyName}">\n' +
@@ -115,7 +116,7 @@ window.monacoInterop = (function () {
                         },
                         {
                             label: 'VerifyAPIKey',
-                            kind:  monaco.languages.CompletionItemKind.Snippet,
+                            kind: monaco.languages.CompletionItemKind.Snippet,
                             insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
                             insertText:
                                 '<VerifyAPIKey name="${1:VAK-PolicyName}">\n' +
@@ -126,7 +127,7 @@ window.monacoInterop = (function () {
                         },
                         {
                             label: 'SpikeArrest',
-                            kind:  monaco.languages.CompletionItemKind.Snippet,
+                            kind: monaco.languages.CompletionItemKind.Snippet,
                             insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
                             insertText:
                                 '<SpikeArrest name="${1:SA-PolicyName}">\n' +
@@ -138,7 +139,7 @@ window.monacoInterop = (function () {
                         },
                         {
                             label: 'OAuthV2-VerifyToken',
-                            kind:  monaco.languages.CompletionItemKind.Snippet,
+                            kind: monaco.languages.CompletionItemKind.Snippet,
                             insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
                             insertText:
                                 '<OAuthV2 name="${1:OA-VerifyToken}">\n' +
@@ -149,7 +150,7 @@ window.monacoInterop = (function () {
                         },
                         {
                             label: 'OAuthV2-GenerateAccessToken',
-                            kind:  monaco.languages.CompletionItemKind.Snippet,
+                            kind: monaco.languages.CompletionItemKind.Snippet,
                             insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
                             insertText:
                                 '<OAuthV2 name="${1:OA-GenerateToken}">\n' +
@@ -165,7 +166,7 @@ window.monacoInterop = (function () {
                         },
                         {
                             label: 'Quota',
-                            kind:  monaco.languages.CompletionItemKind.Snippet,
+                            kind: monaco.languages.CompletionItemKind.Snippet,
                             insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
                             insertText:
                                 '<Quota name="${1:Q-PolicyName}">\n' +
@@ -181,7 +182,7 @@ window.monacoInterop = (function () {
                         },
                         {
                             label: 'RaiseFault',
-                            kind:  monaco.languages.CompletionItemKind.Snippet,
+                            kind: monaco.languages.CompletionItemKind.Snippet,
                             insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
                             insertText:
                                 '<RaiseFault name="${1:RF-PolicyName}">\n' +
@@ -199,7 +200,7 @@ window.monacoInterop = (function () {
                         },
                         {
                             label: 'ExtractVariables',
-                            kind:  monaco.languages.CompletionItemKind.Snippet,
+                            kind: monaco.languages.CompletionItemKind.Snippet,
                             insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
                             insertText:
                                 '<ExtractVariables name="${1:EV-PolicyName}">\n' +
@@ -215,7 +216,7 @@ window.monacoInterop = (function () {
                         },
                         {
                             label: 'ServiceCallout',
-                            kind:  monaco.languages.CompletionItemKind.Snippet,
+                            kind: monaco.languages.CompletionItemKind.Snippet,
                             insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
                             insertText:
                                 '<ServiceCallout name="${1:SC-PolicyName}">\n' +
@@ -230,7 +231,7 @@ window.monacoInterop = (function () {
                         },
                         {
                             label: 'ResponseCache',
-                            kind:  monaco.languages.CompletionItemKind.Snippet,
+                            kind: monaco.languages.CompletionItemKind.Snippet,
                             insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
                             insertText:
                                 '<ResponseCache name="${1:RC-PolicyName}">\n' +
@@ -248,7 +249,7 @@ window.monacoInterop = (function () {
                         },
                         {
                             label: 'KeyValueMapOperations',
-                            kind:  monaco.languages.CompletionItemKind.Snippet,
+                            kind: monaco.languages.CompletionItemKind.Snippet,
                             insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
                             insertText:
                                 '<KeyValueMapOperations name="${1:KVM-PolicyName}" mapIdentifier="${2:myMap}">\n' +
@@ -264,7 +265,7 @@ window.monacoInterop = (function () {
                         },
                         {
                             label: 'Javascript',
-                            kind:  monaco.languages.CompletionItemKind.Snippet,
+                            kind: monaco.languages.CompletionItemKind.Snippet,
                             insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
                             insertText:
                                 '<Javascript name="${1:JS-PolicyName}" timeLimit="200">\n' +
@@ -275,7 +276,7 @@ window.monacoInterop = (function () {
                         },
                         {
                             label: 'MessageLogging',
-                            kind:  monaco.languages.CompletionItemKind.Snippet,
+                            kind: monaco.languages.CompletionItemKind.Snippet,
                             insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
                             insertText:
                                 '<MessageLogging name="${1:ML-PolicyName}">\n' +
@@ -293,7 +294,7 @@ window.monacoInterop = (function () {
                         },
                         {
                             label: 'Flow',
-                            kind:  monaco.languages.CompletionItemKind.Snippet,
+                            kind: monaco.languages.CompletionItemKind.Snippet,
                             insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
                             insertText:
                                 '<Flow name="${1:FlowName}">\n' +
@@ -311,7 +312,7 @@ window.monacoInterop = (function () {
                         },
                         {
                             label: 'Step',
-                            kind:  monaco.languages.CompletionItemKind.Snippet,
+                            kind: monaco.languages.CompletionItemKind.Snippet,
                             insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
                             insertText:
                                 '<Step>\n' +
@@ -319,6 +320,90 @@ window.monacoInterop = (function () {
                                 '    <Condition>${2:request.verb = "GET"}</Condition>\n' +
                                 '</Step>',
                             documentation: 'Apigee policy Step with optional Condition',
+                            range,
+                        },
+                        {
+                            label: 'FlowCallout',
+                            kind: monaco.languages.CompletionItemKind.Snippet,
+                            insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+                            insertText:
+                                '<FlowCallout name="${1:FC-SharedFlowName}">\n' +
+                                '    <SharedFlowBundle>${2:sf-name}</SharedFlowBundle>\n' +
+                                '</FlowCallout>',
+                            documentation: 'Apigee FlowCallout policy',
+                            range,
+                        },
+                        {
+                            label: 'AccessControl',
+                            kind: monaco.languages.CompletionItemKind.Snippet,
+                            insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+                            insertText:
+                                '<AccessControl name="${1:AC-PolicyName}">\n' +
+                                '    <IPRules noRuleMatchAction="ALLOW">\n' +
+                                '        <MatchRule action="DENY">\n' +
+                                '            <SourceAddress mask="32">${2:127.0.0.1}</SourceAddress>\n' +
+                                '        </MatchRule>\n' +
+                                '    </IPRules>\n' +
+                                '</AccessControl>',
+                            documentation: 'Apigee AccessControl policy',
+                            range,
+                        },
+                        {
+                            label: 'BasicAuthentication',
+                            kind: monaco.languages.CompletionItemKind.Snippet,
+                            insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+                            insertText:
+                                '<BasicAuthentication name="${1:BA-PolicyName}">\n' +
+                                '    <Operation>Decode</Operation>\n' +
+                                '    <User ref="${2:request.header.username}"/>\n' +
+                                '    <Password ref="${3:request.header.password}"/>\n' +
+                                '    <AssignTo createNew="false">${4:request.header.Authorization}</AssignTo>\n' +
+                                '</BasicAuthentication>',
+                            documentation: 'Apigee BasicAuthentication policy',
+                            range,
+                        },
+                        {
+                            label: 'JSONToXML',
+                            kind: monaco.languages.CompletionItemKind.Snippet,
+                            insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+                            insertText:
+                                '<JSONToXML name="${1:JX-PolicyName}">\n' +
+                                '    <Options>\n' +
+                                '        <Namespace>${2:http://example.com}</Namespace>\n' +
+                                '    </Options>\n' +
+                                '    <OutputVariable>${3:response}</OutputVariable>\n' +
+                                '    <Source>${4:response}</Source>\n' +
+                                '</JSONToXML>',
+                            documentation: 'Apigee JSONToXML policy',
+                            range,
+                        },
+                        {
+                            label: 'XMLToJSON',
+                            kind: monaco.languages.CompletionItemKind.Snippet,
+                            insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+                            insertText:
+                                '<XMLToJSON name="${1:XJ-PolicyName}">\n' +
+                                '    <Options>\n' +
+                                '        <RecognizeNumber>true</RecognizeNumber>\n' +
+                                '        <RecognizeBoolean>true</RecognizeBoolean>\n' +
+                                '    </Options>\n' +
+                                '    <OutputVariable>${2:response}</OutputVariable>\n' +
+                                '    <Source>${3:response}</Source>\n' +
+                                '</XMLToJSON>',
+                            documentation: 'Apigee XMLToJSON policy',
+                            range,
+                        },
+                        {
+                            label: 'StatisticsCollector',
+                            kind: monaco.languages.CompletionItemKind.Snippet,
+                            insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+                            insertText:
+                                '<StatisticsCollector name="${1:SC-PolicyName}">\n' +
+                                '    <Statistics>\n' +
+                                '        <Statistic name="${2:myStat}" ref="${3:request.header.X-Stat}" type="string"/>\n' +
+                                '    </Statistics>\n' +
+                                '</StatisticsCollector>',
+                            documentation: 'Apigee StatisticsCollector policy',
                             range,
                         },
                     ],
@@ -337,13 +422,25 @@ window.monacoInterop = (function () {
                     startColumn: word.startColumn,
                     endColumn: word.endColumn,
                 };
-                
+
                 const apigeeVars = [
-                    'request.header.', 'request.queryparam.', 'request.content', 'request.verb', 'request.path', 
-                    'response.header.', 'response.content', 'response.status.code',
-                    'proxy.pathsuffix', 'proxy.basepath', 'proxy.url',
-                    'system.time', 'system.timestamp', 'system.uuid',
-                    'target.host', 'target.port', 'target.url', 'target.ip'
+                    // Request
+                    'request.verb', 'request.path', 'request.uri', 'request.querystring', 'request.content',
+                    'request.header.', 'request.queryparam.', 'request.formparam.',
+                    // Response
+                    'response.status.code', 'response.reason.phrase', 'response.content', 'response.header.',
+                    // Proxy
+                    'proxy.basepath', 'proxy.pathsuffix', 'proxy.name', 'proxy.url', 'proxy.client.ip',
+                    // Target
+                    'target.name', 'target.url', 'target.host', 'target.port', 'target.ip', 'target.basepath',
+                    // Client
+                    'client.ip', 'client.host', 'client.port', 'client.scheme',
+                    // System
+                    'system.time', 'system.timestamp', 'system.uuid', 'system.region.name',
+                    // Message (Context dependent)
+                    'message.content', 'message.verb', 'message.reason.phrase', 'message.status.code', 'message.header.',
+                    // Fault
+                    'fault.name', 'fault.type', 'fault.category', 'fault.reason',
                 ];
 
                 const suggestions = apigeeVars.map(v => ({
@@ -362,18 +459,18 @@ window.monacoInterop = (function () {
         monaco.languages.registerCompletionItemProvider('json', {
             triggerCharacters: ['"', '{'],
             provideCompletionItems(model, position) {
-                const word  = model.getWordUntilPosition(position);
+                const word = model.getWordUntilPosition(position);
                 const range = {
                     startLineNumber: position.lineNumber,
-                    endLineNumber:   position.lineNumber,
-                    startColumn:     word.startColumn,
-                    endColumn:       word.endColumn,
+                    endLineNumber: position.lineNumber,
+                    startColumn: word.startColumn,
+                    endColumn: word.endColumn,
                 };
                 return {
                     suggestions: [
                         {
                             label: 'deployments.json scaffold',
-                            kind:  monaco.languages.CompletionItemKind.Snippet,
+                            kind: monaco.languages.CompletionItemKind.Snippet,
                             insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
                             insertText: '{\n  "proxies": ["${1:proxy-name}"],\n  "sharedFlows": []\n}',
                             documentation: 'Apigee deployments.json',
@@ -381,7 +478,7 @@ window.monacoInterop = (function () {
                         },
                         {
                             label: 'flowhooks.json scaffold',
-                            kind:  monaco.languages.CompletionItemKind.Snippet,
+                            kind: monaco.languages.CompletionItemKind.Snippet,
                             insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
                             insertText:
                                 '{\n' +
@@ -395,7 +492,7 @@ window.monacoInterop = (function () {
                         },
                         {
                             label: 'targetserver entry',
-                            kind:  monaco.languages.CompletionItemKind.Snippet,
+                            kind: monaco.languages.CompletionItemKind.Snippet,
                             insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
                             insertText:
                                 '{\n' +
@@ -420,14 +517,14 @@ window.monacoInterop = (function () {
                 const regex = /<([a-zA-Z0-9_\-]+)([^>]*)>/g;
                 let match;
                 const text = model.getValue();
-                
+
                 while ((match = regex.exec(text)) !== null) {
                     // Ignora tags de fechamento se regex der match indesejado (mas o regex acima só pega aberturas/singles)
                     if (match[1].startsWith('/')) continue;
 
                     const tagName = match[1];
                     const attrs = match[2];
-                    
+
                     const nameMatch = attrs.match(/name=["']([^"']+)["']/i);
                     const isStructureNode = ['ProxyEndpoint', 'TargetEndpoint', 'Flow', 'Step', 'FaultRule', 'APIProxy', 'SharedFlow'].includes(tagName);
 
@@ -439,7 +536,7 @@ window.monacoInterop = (function () {
                         const position = model.getPositionAt(match.index);
                         // Tentamos achar a tag de fechamento para ter um range melhor (simplificado aqui)
                         const endPosition = model.getPositionAt(match.index + match[0].length);
-                        
+
                         symbols.push({
                             name: name,
                             detail: detail,
@@ -572,28 +669,42 @@ window.monacoInterop = (function () {
                         const model = monaco.editor.createModel(initialContent || '', language);
 
                         const editor = monaco.editor.create(container, {
-                            model:             model,
-                            theme:             'apigee-dark',
-                            automaticLayout:   true,
-                            dragAndDrop:       true,
-                            dropIntoEditor:    { enabled: true },
-                            fontSize:          13,
-                            fontFamily:        '"JetBrains Mono", "Fira Code", monospace',
-                            fontLigatures:     true,
-                            minimap:           { enabled: false },
+                            model: model,
+                            theme: 'apigee-dark',
+                            automaticLayout: false,
+                            dragAndDrop: true,
+                            dropIntoEditor: { enabled: true },
+                            fontSize: 13,
+                            fontFamily: '"JetBrains Mono", "Fira Code", monospace',
+                            fontLigatures: true,
+                            minimap: { enabled: false },
                             scrollBeyondLastLine: false,
-                            wordWrap:          'off',
-                            tabSize:           4,
-                            insertSpaces:      true,
-                            formatOnType:      true,
-                            formatOnPaste:     true,
+                            wordWrap: 'off',
+                            tabSize: 4,
+                            insertSpaces: true,
+                            formatOnType: true,
+                            formatOnPaste: true,
                             suggestOnTriggerCharacters: true,
-                            quickSuggestions:  { other: true, comments: false, strings: true },
+                            quickSuggestions: { other: true, comments: false, strings: true },
                             acceptSuggestionOnEnter: 'on',
                             renderLineHighlight: 'line',
                             bracketPairColorization: { enabled: true },
                             guides: { bracketPairs: true, indentation: true },
                         });
+
+                        // Resize observer manual para garantir que o layout nunca "fuja"
+                        // Throttled para evitar loops de feedback de grid/flexbox
+                        let resizeTimeout;
+                        const editorRO = new ResizeObserver(() => {
+                            if (resizeTimeout) clearTimeout(resizeTimeout);
+                            resizeTimeout = setTimeout(() => {
+                                if (editor && typeof editor.layout === 'function') {
+                                    editor.layout();
+                                }
+                            }, 50);
+                        });
+                        editorRO.observe(container);
+                        _observers[elementId] = editorRO;
 
                         // Forçar aplicação do tema e linguagem após criação
                         monaco.editor.setModelLanguage(model, language);
@@ -663,6 +774,10 @@ window.monacoInterop = (function () {
                     ed.dispose();
                     delete _editors[elementId];
                 }
+                if (_observers[elementId]) {
+                    _observers[elementId].disconnect();
+                    delete _observers[elementId];
+                }
                 delete _dirty[elementId];
             } catch (e) {
                 console.error('[monacoInterop] dispose failed:', e);
@@ -690,7 +805,7 @@ window.monacoInterop = (function () {
             try {
                 const ed = _editors[elementId];
                 if (!ed) return;
-                
+
                 _withMonaco(function (monaco) {
                     const model = ed.getModel();
                     if (!model) return;
