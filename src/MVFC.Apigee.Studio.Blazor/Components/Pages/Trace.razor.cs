@@ -196,7 +196,7 @@ public partial class Trace : ComponentBase, IAsyncDisposable
                 _isError = false;
                 StateHasChanged();
 
-                await DeployUseCase.ExecuteAsync(ws, _proxyName, "local", ct);
+                await DeployUseCase.ExecuteFullAsync(ws, "local", ct);
                 await Task.Delay(500, ct);
                 _error = null;
             }

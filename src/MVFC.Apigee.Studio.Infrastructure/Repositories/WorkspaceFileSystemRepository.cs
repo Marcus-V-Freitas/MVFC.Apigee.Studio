@@ -120,7 +120,7 @@ public sealed class WorkspaceFileSystemRepository(IConfiguration config) : IWork
             var counter = 2;
             while (Directory.Exists(linkPath + "-" + counter))
                 counter++;
-            name += "-" + counter;
+            name += string.Create(CultureInfo.InvariantCulture, $"-{counter}");
             linkPath = Path.Combine(WorkspacesRoot, name);
         }
 
@@ -232,29 +232,6 @@ public sealed class WorkspaceFileSystemRepository(IConfiguration config) : IWork
                 Directory.Delete(absolutePath, recursive: true);
         }, ct);
 
-    /// <inheritdoc/>
-    public async Task<string> BuildBundleZipAsync(ApigeeWorkspace workspace, string proxyOrFlowName, CancellationToken ct = default)
-    {
-        var apigeeRoot = ApigeeRoot(workspace);
-        var proxySrc   = Path.Combine(apigeeRoot, "apiproxies",  proxyOrFlowName);
-        var sfSrc      = Path.Combine(apigeeRoot, "sharedflows", proxyOrFlowName);
-
-        string sourceDir;
-        if (Directory.Exists(proxySrc))
-            sourceDir = proxySrc;
-        else if (Directory.Exists(sfSrc))
-            sourceDir = sfSrc;
-        else
-            throw new DirectoryNotFoundException($"Proxy or shared flow '{proxyOrFlowName}' not found in workspace.");
-
-        var zip = Path.Combine(Path.GetTempPath(),
-            proxyOrFlowName + "_" + DateTime.UtcNow.ToString("yyyyMMddHHmmss", CultureInfo.InvariantCulture) + ".zip");
-
-        await using (var archive = await ZipFile.OpenAsync(zip, ZipArchiveMode.Create, ct))
-            await AddDirectoryToZip(archive, sourceDir, string.Empty);
-
-        return zip;
-    }
 
     /// <inheritdoc/>
     public async Task<string> BuildWorkspaceZipAsync(ApigeeWorkspace workspace, CancellationToken ct = default)
@@ -270,22 +247,6 @@ public sealed class WorkspaceFileSystemRepository(IConfiguration config) : IWork
         }
 
         return zip;
-    }
-
-    /// <summary>
-    /// Adds all files from a directory to a zip archive asynchronously.
-    /// </summary>
-    /// <param name="archive">The zip archive.</param>
-    /// <param name="sourceDir">The source directory.</param>
-    /// <param name="zipRoot">The root path inside the zip archive.</param>
-    private static async Task AddDirectoryToZip(ZipArchive archive, string sourceDir, string zipRoot)
-    {
-        foreach (var file in Directory.EnumerateFiles(sourceDir, "*", SearchOption.AllDirectories))
-        {
-            var relative  = Path.GetRelativePath(sourceDir, file).Replace(Path.DirectorySeparatorChar, '/');
-            var entryName = string.IsNullOrEmpty(zipRoot) ? relative : zipRoot + "/" + relative;
-            await archive.CreateEntryFromFileAsync(file, entryName, CompressionLevel.Optimal);
-        }
     }
 
     /// <summary>

@@ -1,38 +1,14 @@
 <div class="deploy-panel card">
     <h3>Deploy to Emulator</h3>
-    <div class="deploy-tabs">
-        <button class="@TabClass(DeployModeFull)"  @onclick="SetDeployModeFull">Workspace completo</button>
-        <button class="@TabClass(DeployModeProxy)" @onclick="SetDeployModeProxy">Proxy / Shared Flow</button>
+    <div class="deploy-form">
+        <div class="form-field">
+            <label>Environment</label>
+            <input class="input" @bind="_deployEnv" placeholder="local" />
+        </div>
+        <button class="btn btn-primary" @onclick="DeployFull" disabled="@_deploying">
+            @(_deploying ? "Deploying..." : "Deploy Workspace")
+        </button>
     </div>
-
-    @if (_deployMode == DeployModeProxy)
-    {
-        <div class="deploy-form">
-            <div class="form-field">
-                <label>Proxy / Shared Flow name</label>
-                <input class="input" @bind="_deployTarget" placeholder="my-proxy" />
-            </div>
-            <div class="form-field">
-                <label>Environment</label>
-                <input class="input" @bind="_deployEnv" placeholder="local" />
-            </div>
-            <button class="btn btn-primary" @onclick="DeployProxy" disabled="@_deploying">
-                @(_deploying ? "Deploying..." : "Deploy")
-            </button>
-        </div>
-    }
-    else
-    {
-        <div class="deploy-form">
-            <div class="form-field">
-                <label>Environment</label>
-                <input class="input" @bind="_deployEnv" placeholder="local" />
-            </div>
-            <button class="btn btn-primary" @onclick="DeployFull" disabled="@_deploying">
-                @(_deploying ? "Deploying..." : "Deploy workspace completo")
-            </button>
-        </div>
-    }
 
     @if (!string.IsNullOrEmpty(_deployMessage))
     {

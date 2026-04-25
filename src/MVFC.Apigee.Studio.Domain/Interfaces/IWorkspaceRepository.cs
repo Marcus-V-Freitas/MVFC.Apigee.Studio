@@ -58,10 +58,6 @@ public interface IWorkspaceRepository
     /// </summary>
     Task DeleteDirectoryAsync(string absolutePath, CancellationToken ct = default);
 
-    /// <summary>
-    /// Builds a ZIP bundle for a specific proxy or shared flow in the workspace.
-    /// </summary>
-    Task<string> BuildBundleZipAsync(ApigeeWorkspace workspace, string proxyOrFlowName, CancellationToken ct = default);
 
     /// <summary>
     /// Builds a ZIP archive of the entire workspace.
