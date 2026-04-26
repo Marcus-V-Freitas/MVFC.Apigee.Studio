@@ -374,6 +374,8 @@ public partial class QuickAddDrawer : ComponentBase
             await WorkspaceRepo.SaveFileAsync(Path.Combine(envDir, "deployments.json"), SkeletonTemplateService.GetDeploymentsJson());
             await WorkspaceRepo.SaveFileAsync(Path.Combine(envDir, "flowhooks.json"), SkeletonTemplateService.GetFlowhooksJson());
             await WorkspaceRepo.SaveFileAsync(Path.Combine(envDir, "targetservers.json"), SkeletonTemplateService.GetTargetServersJson());
+            await WorkspaceRepo.SaveFileAsync(Path.Combine(envDir, "maps.json"), SkeletonTemplateService.GetKvmJson());
+            await WorkspaceRepo.SaveFileAsync(Path.Combine(envDir, "caches.json"), SkeletonTemplateService.GetCachesJson());
 
             _quickMessage = "✔ Environment '" + envName + "' criado.";
             Toast.ShowSuccess("Environment '" + envName + "' criado.");

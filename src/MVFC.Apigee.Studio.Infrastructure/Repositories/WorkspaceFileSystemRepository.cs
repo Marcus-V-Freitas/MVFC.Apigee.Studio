@@ -171,19 +171,19 @@ public sealed class WorkspaceFileSystemRepository(IConfiguration config) : IWork
         // Ensure maps.json, caches.json, targetservers.json and flowhooks.json exist to avoid Datastore Error in emulator
         var mapsPath = Path.Combine(envPath, "maps.json");
         if (!File.Exists(mapsPath))
-            await File.WriteAllTextAsync(mapsPath, "[\n  {\n    \"name\": \"my-kvm\",\n    \"scope\": \"environment\",\n    \"encrypted\": false,\n    \"entries\": {}\n  }\n]", Encoding.UTF8, ct);
+            await File.WriteAllTextAsync(mapsPath, SkeletonTemplateService.GetKvmJson(), Encoding.UTF8, ct);
 
         var cachesPath = Path.Combine(envPath, "caches.json");
         if (!File.Exists(cachesPath))
-            await File.WriteAllTextAsync(cachesPath, "[]", Encoding.UTF8, ct);
+            await File.WriteAllTextAsync(cachesPath, SkeletonTemplateService.GetCachesJson(), Encoding.UTF8, ct);
 
         var targetsPath = Path.Combine(envPath, "targetservers.json");
         if (!File.Exists(targetsPath))
-            await File.WriteAllTextAsync(targetsPath, "[]", Encoding.UTF8, ct);
+            await File.WriteAllTextAsync(targetsPath, SkeletonTemplateService.GetTargetServersJson(), Encoding.UTF8, ct);
 
         var flowhooksPath = Path.Combine(envPath, "flowhooks.json");
         if (!File.Exists(flowhooksPath))
-            await File.WriteAllTextAsync(flowhooksPath, "[]", Encoding.UTF8, ct);
+            await File.WriteAllTextAsync(flowhooksPath, SkeletonTemplateService.GetFlowhooksJson(), Encoding.UTF8, ct);
     }
 
     private static void EnsureLocalEnvironmentSync(string workspaceRoot)
@@ -201,12 +201,12 @@ public sealed class WorkspaceFileSystemRepository(IConfiguration config) : IWork
         // maps.json
         var mapsPath = Path.Combine(envPath, "maps.json");
         if (!File.Exists(mapsPath))
-            File.WriteAllText(mapsPath, "[\n  {\n    \"name\": \"my-kvm\",\n    \"scope\": \"environment\",\n    \"encrypted\": false,\n    \"entries\": {}\n  }\n]", Encoding.UTF8);
+            File.WriteAllText(mapsPath, SkeletonTemplateService.GetKvmJson(), Encoding.UTF8);
 
         // caches.json, targetservers.json, flowhooks.json
-        File.WriteAllText(Path.Combine(envPath, "caches.json"), "[]", Encoding.UTF8);
-        File.WriteAllText(Path.Combine(envPath, "targetservers.json"), "[]", Encoding.UTF8);
-        File.WriteAllText(Path.Combine(envPath, "flowhooks.json"), "[]", Encoding.UTF8);
+        File.WriteAllText(Path.Combine(envPath, "caches.json"), SkeletonTemplateService.GetCachesJson(), Encoding.UTF8);
+        File.WriteAllText(Path.Combine(envPath, "targetservers.json"), SkeletonTemplateService.GetTargetServersJson(), Encoding.UTF8);
+        File.WriteAllText(Path.Combine(envPath, "flowhooks.json"), SkeletonTemplateService.GetFlowhooksJson(), Encoding.UTF8);
     }
 
     /// <summary>

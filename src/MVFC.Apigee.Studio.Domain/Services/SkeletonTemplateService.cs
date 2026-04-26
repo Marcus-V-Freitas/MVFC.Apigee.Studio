@@ -1,7 +1,8 @@
-namespace MVFC.Apigee.Studio.Application.Services;
+namespace MVFC.Apigee.Studio.Domain.Services;
 
 /// <summary>
 /// Service for generating skeleton XML and JSON files for Apigee artifacts.
+/// These templates include examples to serve as documentation for the user.
 /// </summary>
 public static class SkeletonTemplateService
 {
@@ -75,19 +76,65 @@ public static class SkeletonTemplateService
     }
 
     /// <summary>
-    /// Generates a default flowhooks.json file.
+    /// Generates a default flowhooks.json file with examples.
     /// </summary>
     public static string GetFlowhooksJson()
     {
-        return JsonSerializer.Serialize(new { });
+        var data = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {           
+        };
+        return JsonSerializer.Serialize(data, JsonIndentedOptions);
     }
 
     /// <summary>
-    /// Generates a default targetservers.json file.
+    /// Generates a default targetservers.json file with an example.
     /// </summary>
     public static string GetTargetServersJson()
     {
-        return JsonSerializer.Serialize(Array.Empty<object>()) + "\n";
+        var data = new[]
+        {
+            new
+            {
+                name = "my-target-server",
+                host = "localhost",
+                port = 8080,
+                isEnabled = true
+            }
+        };
+        return JsonSerializer.Serialize(data, JsonIndentedOptions);
+    }
+
+    /// <summary>
+    /// Generates a default maps.json (KVM) file with an example.
+    /// </summary>
+    public static string GetKvmJson()
+    {
+        var data = new[]
+        {
+            new
+            {
+                name = "my-kvm",
+                scope = "environment",
+                encrypted = false,
+                entries = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                {
+                    { "key1", "example-value" }
+                }
+            }
+        };
+        return JsonSerializer.Serialize(data, JsonIndentedOptions);
+    }
+
+    /// <summary>
+    /// Generates a default caches.json file with an example.
+    /// </summary>
+    public static string GetCachesJson()
+    {
+        var data = new[]
+        {
+            new { name = "my-cache" }
+        };
+        return JsonSerializer.Serialize(data, JsonIndentedOptions);
     }
 
     /// <summary>

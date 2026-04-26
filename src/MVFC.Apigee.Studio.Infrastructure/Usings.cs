@@ -6,6 +6,7 @@ global using System.Net;
 global using System.IO.Compression;
 global using System.Text;
 global using System.Xml;
+global using MVFC.Apigee.Studio.Domain.Services;
 global using System.Xml.Linq;
 global using MVFC.Apigee.Studio.Domain.Entities;
 global using MVFC.Apigee.Studio.Domain.Enums;

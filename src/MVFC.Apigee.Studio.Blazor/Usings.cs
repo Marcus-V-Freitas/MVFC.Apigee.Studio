@@ -1,5 +1,5 @@
 global using MVFC.Apigee.Studio.Application.UseCases;
-global using MVFC.Apigee.Studio.Application.Services;
+global using MVFC.Apigee.Studio.Domain.Services;
 global using MVFC.Apigee.Studio.Blazor.Services;
 global using MVFC.Apigee.Studio.Domain.Interfaces;
 global using MVFC.Apigee.Studio.Infrastructure.Extensions;
