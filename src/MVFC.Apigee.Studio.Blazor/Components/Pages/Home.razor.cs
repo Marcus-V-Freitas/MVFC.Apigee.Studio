@@ -42,7 +42,6 @@ public partial class Home : ComponentBase
     /// </summary>
     private IList<ApigeeWorkspace> _workspaces = [];
 
-
     /// <summary>
     /// Repository for workspace operations (list, create, delete).
     /// </summary>
