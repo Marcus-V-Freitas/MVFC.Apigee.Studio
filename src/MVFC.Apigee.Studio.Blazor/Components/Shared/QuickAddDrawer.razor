@@ -15,24 +15,40 @@
             {
                 <div class="drawer-body">
                     <div class="drawer-list">
-                        @foreach (var group in _allTemplates.GroupBy(t => t.Category))
-                        {
-                            <div class="drawer-group">
-                                <span class="drawer-group-label">@group.Key</span>
-                                @foreach (var t in group)
+                        <div class="drawer-search">
+                            <input class="input drawer-search-input" 
+                                   placeholder="Filtrar políticas..." 
+                                   @bind="_policyFilter" 
+                                   @bind:event="oninput" />
+                        </div>
+                        <div class="drawer-group-container">
+                            @{
+                                var filteredGroups = _allTemplates
+                                    .Where(t => string.IsNullOrEmpty(_policyFilter) || 
+                                               t.Name.Contains(_policyFilter, StringComparison.OrdinalIgnoreCase) ||
+                                               (t.Description?.Contains(_policyFilter, StringComparison.OrdinalIgnoreCase) ?? false))
+                                    .GroupBy(t => t.Category);
+
+                                foreach (var group in filteredGroups)
                                 {
-                                    var isActive = t == _quickTemplate;
-                                    <button class="@(isActive ? "drawer-item drawer-item--active" : "drawer-item")"
-                                            @onclick="() => SelectQuickTemplate(t)">
-                                        <span class="drawer-item-name">@t.Name</span>
-                                        @if (!string.IsNullOrEmpty(t.Description))
+                                    <div class="drawer-group">
+                                        <span class="drawer-group-label">@group.Key</span>
+                                        @foreach (var t in group)
                                         {
-                                            <span class="drawer-item-desc">@t.Description</span>
+                                            var isActive = t == _quickTemplate;
+                                            <button class="@(isActive ? "drawer-item drawer-item--active" : "drawer-item")"
+                                                    @onclick="() => SelectQuickTemplate(t)">
+                                                <span class="drawer-item-name">@t.Name</span>
+                                                @if (!string.IsNullOrEmpty(t.Description))
+                                                {
+                                                    <span class="drawer-item-desc">@t.Description</span>
+                                                }
+                                            </button>
                                         }
-                                    </button>
+                                    </div>
                                 }
-                            </div>
-                        }
+                            }
+                        </div>
                     </div>
 
                     <div class="drawer-form">
@@ -55,8 +71,20 @@
                                 {
                                     <div class="form-field">
                                         <label>@p</label>
-                                        <input class="input" value="@GetQParam(p)"
-                                               @onchange="e => SetQParam(p, e.Value?.ToString() ?? string.Empty)" />
+                                        @if (p.Equals("ResourceType", StringComparison.OrdinalIgnoreCase))
+                                        {
+                                            <select class="input" value="@_resourceType" @onchange='e => SetQParam(p, e.Value?.ToString() ?? "jsc")'>
+                                                <option value="jsc">jsc (Javascript)</option>
+                                                <option value="py">py (Python)</option>
+                                                <option value="java">java (Java)</option>
+                                                <option value="node">node (Node.js)</option>
+                                            </select>
+                                        }
+                                        else
+                                        {
+                                            <input class="input" value="@GetQParam(p)"
+                                                   @onchange="e => SetQParam(p, e.Value?.ToString() ?? string.Empty)" />
+                                        }
                                     </div>
                                 }
                             </div>

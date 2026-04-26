@@ -45,6 +45,16 @@ public partial class QuickAddDrawer : ComponentBase
     /// Custom subfolder name when "custom" is selected.
     /// </summary>
     private string _customSubfolder = string.Empty;
+    
+    /// <summary>
+    /// Filter for policy templates.
+    /// </summary>
+    private string _policyFilter = string.Empty;
+
+    /// <summary>
+    /// Resource type for script-based policies (e.g., jsc, py, etc.).
+    /// </summary>
+    private string _resourceType = "jsc";
 
     /// <summary>
     /// Indicates if the last quick add operation resulted in an error.
@@ -144,6 +154,8 @@ public partial class QuickAddDrawer : ComponentBase
             _quickXmlEditable = string.Empty;
             _resourceSubfolder = string.Empty;
             _customSubfolder = string.Empty;
+            _policyFilter = string.Empty;
+            _resourceType = "jsc";
             _quickError = false;
         }
     }
@@ -164,6 +176,12 @@ public partial class QuickAddDrawer : ComponentBase
 
         if (_quickParams.ContainsKey("PolicyName"))
             _quickParams["PolicyName"] = t.Name + "Policy";
+        
+        if (_quickParams.ContainsKey("ResourceType"))
+        {
+            _resourceType = "jsc";
+            _quickParams["ResourceType"] = _resourceType;
+        }
 
         UpdateLivePreview();
     }
@@ -184,6 +202,10 @@ public partial class QuickAddDrawer : ComponentBase
     private void SetQParam(string k, string v)
     {
         _quickParams[k] = v;
+        
+        if (k.Equals("ResourceType", StringComparison.OrdinalIgnoreCase))
+            _resourceType = v;
+
         UpdateLivePreview();
     }
 

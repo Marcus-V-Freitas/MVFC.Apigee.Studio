@@ -123,8 +123,29 @@
 .drawer-list {
     border-right: 1px solid var(--color-border);
     overflow-y: auto;
-    padding: var(--space-2) 0;
+    padding: 0;
     background: var(--color-surface-2);
+    display: flex;
+    flex-direction: column;
+}
+
+.drawer-search {
+    padding: var(--space-3);
+    border-bottom: 1px solid var(--color-border);
+    background: var(--color-surface);
+    position: sticky;
+    top: 0;
+    z-index: 5;
+}
+
+.drawer-search-input {
+    background: var(--color-surface-2) !important;
+}
+
+.drawer-group-container {
+    flex: 1;
+    overflow-y: auto;
+    padding: var(--space-2) 0;
 }
 
 .drawer-group { margin-bottom: var(--space-2); }

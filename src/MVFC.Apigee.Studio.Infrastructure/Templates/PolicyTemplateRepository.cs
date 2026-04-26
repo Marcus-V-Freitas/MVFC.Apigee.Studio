@@ -202,7 +202,7 @@ public sealed class PolicyTemplateRepository : IPolicyTemplateRepository
         ["JavaScript"] = p => new XElement("Javascript",
             new XAttribute("name", p["PolicyName"]),
             new XAttribute("timeLimit", "200"),
-            new XElement("ResourceURL", $"jsc://{p["ScriptFile"]}")
+            new XElement("ResourceURL", $"{p["ResourceType"]}://{p["ScriptFile"]}")
         )
     };
 
@@ -230,7 +230,7 @@ public sealed class PolicyTemplateRepository : IPolicyTemplateRepository
         new PolicyTemplate("SpikeArrest", "Throttles request rate to protect backend services.", "Traffic Management", "", ["PolicyName", "Rate"]),
         new PolicyTemplate("Quota", "Limits the number of calls an app can make in a time period.", "Traffic Management", "", ["PolicyName", "AllowCount", "VerifyAPIKeyPolicy", "TimeUnit"]),
         new PolicyTemplate("ConcurrentRateLimit", "Limits concurrent connections to backend target servers.", "Traffic Management", "", ["PolicyName", "MaxConnections"]),
-        new PolicyTemplate("JavaScript", "Executes a JavaScript file as a custom policy step.", "Extension", "", ["PolicyName", "ScriptFile"]),
+        new PolicyTemplate("JavaScript", "Executes a JavaScript file as a custom policy step.", "Extension", "", ["PolicyName", "ResourceType", "ScriptFile"]),
     ];
 
     /// <summary>

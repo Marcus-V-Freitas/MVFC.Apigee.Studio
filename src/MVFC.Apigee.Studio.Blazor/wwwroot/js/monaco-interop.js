@@ -572,6 +572,54 @@ window.monacoInterop = (function () {
                 }
             });
         }
+
+        // ── XML Formatter ───────────────────────────────────────────────────
+        monaco.languages.registerDocumentFormattingEditProvider('xml', {
+            provideDocumentFormattingEdits(model, options, token) {
+                const text = model.getValue();
+                const formatted = _formatXml(text, options.insertSpaces ? options.tabSize : 4);
+                return [
+                    {
+                        range: model.getFullModelRange(),
+                        text: formatted,
+                    },
+                ];
+            },
+        });
+    }
+
+    function _formatXml(xml, tabSize) {
+        console.log('[monacoInterop] Formatting XML with tabSize:', tabSize);
+        let formatted = '';
+        let indent = '';
+        const tab = ' '.repeat(tabSize);
+        
+        // Split by tags, keeping the tags in the result
+        const nodes = xml.split(/(<[^>]+>)/g);
+        
+        nodes.forEach(function (node) {
+            node = node.trim();
+            if (!node) return;
+
+            if (node.startsWith('</')) {
+                // Closing tag: </name>
+                if (indent.length >= tab.length) {
+                    indent = indent.substring(tab.length);
+                }
+                formatted += indent + node + '\r\n';
+            } else if (node.startsWith('<') && !node.startsWith('<?') && !node.startsWith('<!') && !node.match(/\/\s*>$/)) {
+                // Opening tag: <name>
+                formatted += indent + node + '\r\n';
+                indent += tab;
+            } else {
+                // Self-closing tag, comment, PI, or text content
+                formatted += indent + node + '\r\n';
+            }
+        });
+        
+        // Post-processing: collapse tags that only contain text content into a single line
+        // Example: <DisplayName>\n  Value\n</DisplayName>  => <DisplayName>Value</DisplayName>
+        return formatted.trim().replace(/>\r?\n\s*([^<]+?)\r?\n\s*<\//g, '>$1</');
     }
 
     // Cria o editor Monaco no container assim que ele tiver dimensões reais.

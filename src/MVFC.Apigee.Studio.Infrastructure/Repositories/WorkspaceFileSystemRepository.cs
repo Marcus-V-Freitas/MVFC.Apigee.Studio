@@ -10,9 +10,9 @@ public sealed class WorkspaceFileSystemRepository(IConfiguration config) : IWork
 
     private static readonly XmlWriterSettings XmlSettings = new()
     {
-        Indent             = true,
-        IndentChars        = "    ",
-        Encoding           = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false),
+        Indent = true,
+        IndentChars = "    ",
+        Encoding = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false),
         OmitXmlDeclaration = false,
     };
 
@@ -40,7 +40,13 @@ public sealed class WorkspaceFileSystemRepository(IConfiguration config) : IWork
 
         return [.. Directory
             .GetDirectories(WorkspacesRoot)
-            .Select(d => new ApigeeWorkspace(Path.GetFileName(d), d)),];
+            .Select(Path.GetFileName)
+            .Where(name => !string.IsNullOrEmpty(name) &&
+                           !name.StartsWith('.') &&
+                           !name.Equals("bin", StringComparison.OrdinalIgnoreCase) &&
+                           !name.Equals("obj", StringComparison.OrdinalIgnoreCase))
+            .Select(name => new ApigeeWorkspace(name!, Path.Combine(WorkspacesRoot, name!)))
+            .OrderBy(w => w.Name, StringComparer.OrdinalIgnoreCase),];
     }
 
     /// <inheritdoc/>
@@ -80,6 +86,9 @@ public sealed class WorkspaceFileSystemRepository(IConfiguration config) : IWork
         Directory.CreateDirectory(Path.Combine(fullPath, "apiproxies"));
         Directory.CreateDirectory(Path.Combine(fullPath, "sharedflows"));
         Directory.CreateDirectory(Path.Combine(fullPath, "environments"));
+        
+        // Ensure 'local' environment exists on creation
+        EnsureLocalEnvironmentSync(fullPath);
 
         if (initialProxies is { Count: > 0 })
         {
@@ -138,14 +147,66 @@ public sealed class WorkspaceFileSystemRepository(IConfiguration config) : IWork
     /// <param name="ct">A cancellation token.</param>
     public async Task EnsureEnvironmentAsync(ApigeeWorkspace workspace, string envName, CancellationToken ct = default)
     {
-        var envPath = Path.Combine(ApigeeRoot(workspace), "environments", envName);
+        var envsRoot = Path.Combine(ApigeeRoot(workspace), "environments");
+        var envPath = Path.Combine(envsRoot, envName);
         Directory.CreateDirectory(envPath);
 
-        var proxies     = ListApiProxies(workspace).ToList();
+        // Se o ambiente sendo criado não for o 'local', garante que o 'local' também exista como padrão
+        if (!string.Equals(envName, "local", StringComparison.OrdinalIgnoreCase))
+        {
+            var localPath = Path.Combine(envsRoot, "local");
+            if (!Directory.Exists(localPath))
+            {
+                // Criamos o local recursivamente (sem entrar em loop pois agora envName será 'local')
+                await EnsureEnvironmentAsync(workspace, "local", ct);
+            }
+        }
+
+        var proxies = ListApiProxies(workspace).ToList();
         var sharedFlows = ListSharedFlows(workspace).ToList();
 
         var json = BuildDeploymentsJson(proxies, sharedFlows);
         await File.WriteAllTextAsync(Path.Combine(envPath, "deployments.json"), json, Encoding.UTF8, ct);
+
+        // Ensure maps.json, caches.json, targetservers.json and flowhooks.json exist to avoid Datastore Error in emulator
+        var mapsPath = Path.Combine(envPath, "maps.json");
+        if (!File.Exists(mapsPath))
+            await File.WriteAllTextAsync(mapsPath, "[\n  {\n    \"name\": \"my-kvm\",\n    \"scope\": \"environment\",\n    \"encrypted\": false,\n    \"entries\": {}\n  }\n]", Encoding.UTF8, ct);
+
+        var cachesPath = Path.Combine(envPath, "caches.json");
+        if (!File.Exists(cachesPath))
+            await File.WriteAllTextAsync(cachesPath, "[]", Encoding.UTF8, ct);
+
+        var targetsPath = Path.Combine(envPath, "targetservers.json");
+        if (!File.Exists(targetsPath))
+            await File.WriteAllTextAsync(targetsPath, "[]", Encoding.UTF8, ct);
+
+        var flowhooksPath = Path.Combine(envPath, "flowhooks.json");
+        if (!File.Exists(flowhooksPath))
+            await File.WriteAllTextAsync(flowhooksPath, "[]", Encoding.UTF8, ct);
+    }
+
+    private static void EnsureLocalEnvironmentSync(string workspaceRoot)
+    {
+        // For local development structure in the Studio, environments are at the root
+        var envsRoot = Path.Combine(workspaceRoot, "environments");
+        var envPath = Path.Combine(envsRoot, "local");
+        Directory.CreateDirectory(envPath);
+
+        // deployments.json
+        var deployPath = Path.Combine(envPath, "deployments.json");
+        if (!File.Exists(deployPath))
+            File.WriteAllText(deployPath, "{\n  \"proxies\": [],\n  \"sharedFlows\": []\n}", Encoding.UTF8);
+
+        // maps.json
+        var mapsPath = Path.Combine(envPath, "maps.json");
+        if (!File.Exists(mapsPath))
+            File.WriteAllText(mapsPath, "[\n  {\n    \"name\": \"my-kvm\",\n    \"scope\": \"environment\",\n    \"encrypted\": false,\n    \"entries\": {}\n  }\n]", Encoding.UTF8);
+
+        // caches.json, targetservers.json, flowhooks.json
+        File.WriteAllText(Path.Combine(envPath, "caches.json"), "[]", Encoding.UTF8);
+        File.WriteAllText(Path.Combine(envPath, "targetservers.json"), "[]", Encoding.UTF8);
+        File.WriteAllText(Path.Combine(envPath, "flowhooks.json"), "[]", Encoding.UTF8);
     }
 
     /// <summary>
@@ -259,7 +320,7 @@ public sealed class WorkspaceFileSystemRepository(IConfiguration config) : IWork
     {
         foreach (var file in Directory.EnumerateFiles(sourceDir, "*", SearchOption.AllDirectories))
         {
-            var relative  = Path.GetRelativePath(sourceDir, file).Replace(Path.DirectorySeparatorChar, '/');
+            var relative = Path.GetRelativePath(sourceDir, file).Replace(Path.DirectorySeparatorChar, '/');
             var entryName = string.IsNullOrEmpty(zipRoot) ? relative : zipRoot + "/" + relative;
             await archive.CreateEntryFromFileAsync(file, entryName, CompressionLevel.Optimal);
         }
@@ -329,7 +390,7 @@ public sealed class WorkspaceFileSystemRepository(IConfiguration config) : IWork
     /// <returns>A <see cref="WorkspaceItem"/> representing the directory or file.</returns>
     private static WorkspaceItem BuildItem(string path, string rootPath)
     {
-        var rel  = Path.GetRelativePath(rootPath, path);
+        var rel = Path.GetRelativePath(rootPath, path);
         var name = Path.GetFileName(path);
 
         if (File.Exists(path))
@@ -337,8 +398,8 @@ public sealed class WorkspaceFileSystemRepository(IConfiguration config) : IWork
 
         var itemType = name.ToLowerInvariant() switch
         {
-            "apiproxies"   => WorkspaceItemType.ApiProxy,
-            "sharedflows"  => WorkspaceItemType.SharedFlow,
+            "apiproxies" => WorkspaceItemType.ApiProxy,
+            "sharedflows" => WorkspaceItemType.SharedFlow,
             "environments" => WorkspaceItemType.Environment,
             _ => WorkspaceItemType.Directory,
         };

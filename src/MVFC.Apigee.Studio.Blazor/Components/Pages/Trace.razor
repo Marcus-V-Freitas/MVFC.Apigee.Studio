@@ -35,6 +35,16 @@
                 </div>
 
                 <div class="form-field flex-1">
+                    <label>Ambiente</label>
+                    <select class="form-input" @onchange="OnEnvironmentChanged" disabled="@IsWorkspaceNotReady" value="@_envName">
+                        @foreach (var env in _environments)
+                        {
+                            <option value="@env">@env</option>
+                        }
+                    </select>
+                </div>
+
+                <div class="form-field flex-1">
                     <label>Proxy</label>
                     <select class="form-input" @onchange="OnProxyChanged" disabled="@IsWorkspaceNotReady" value="@_proxyName">
                         <option value="">-- Selecione o Proxy --</option>

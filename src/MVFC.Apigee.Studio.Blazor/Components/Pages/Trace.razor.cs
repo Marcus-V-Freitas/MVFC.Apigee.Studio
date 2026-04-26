@@ -22,6 +22,11 @@ public partial class Trace : ComponentBase, IAsyncDisposable
     private string _proxyName = string.Empty;
 
     /// <summary>
+    /// The name of the selected environment for deployment.
+    /// </summary>
+    private string _envName = "local";
+
+    /// <summary>
     /// Indicates if a trace session is currently active.
     /// </summary>
     private bool _isTracing;
@@ -72,6 +77,11 @@ public partial class Trace : ComponentBase, IAsyncDisposable
     private IReadOnlyList<string> _proxies = [];
 
     /// <summary>
+    /// List of available environments for the selected workspace.
+    /// </summary>
+    private List<string> _environments = [];
+
+    /// <summary>
     /// Client for communicating with the Apigee Emulator.
     /// </summary>
     [Inject]
@@ -118,7 +128,9 @@ public partial class Trace : ComponentBase, IAsyncDisposable
         {
             _selectedWorkspacePath = SessionState.Get<string>("trace:workspacePath");
             _proxyName = SessionState.Get<string>("trace:proxyName") ?? string.Empty;
+            _envName = SessionState.Get<string>("trace:envName") ?? "local";
             _proxies = SessionState.Get<List<string>>("trace:proxies") ?? [];
+            _environments = SessionState.Get<List<string>>("trace:environments") ?? [];
             _activeTab = SessionState.Get<string>("trace:activeTab") ?? "trace";
             _transactions = SessionState.Get<List<TraceTransaction>>("trace:transactions") ?? [];
             _session = SessionState.Get<TraceSession>("trace:session");
@@ -146,8 +158,28 @@ public partial class Trace : ComponentBase, IAsyncDisposable
         if (ws is not null)
         {
             _proxies = WorkspaceRepo.ListApiProxies(ws);
+
+            var envPath = Path.Combine(ws.RootPath, "environments");
+            _environments.Clear();
+            if (Directory.Exists(envPath))
+            {
+                _environments.AddRange(Directory.GetDirectories(envPath).Select(Path.GetFileName).OfType<string>());
+            }
+
+            if (!_environments.Contains("local"))
+                _environments.Insert(0, "local");
+
+            if (!_environments.Contains(_envName))
+                _envName = "local";
         }
     }
+
+    /// <summary>
+    /// Handles environment selection changes.
+    /// </summary>
+    /// <param name="e">The change event arguments.</param>
+    private void OnEnvironmentChanged(ChangeEventArgs e) =>
+        _envName = e.Value?.ToString() ?? "local";
 
     /// <summary>
     /// Handles proxy selection changes.
@@ -192,11 +224,11 @@ public partial class Trace : ComponentBase, IAsyncDisposable
                     return;
                 }
 
-                _error = $"Realizando deploy automático de '{_proxyName}'...";
+                _error = $"Realizando deploy automático de '{_proxyName}' em '{_envName}'...";
                 _isError = false;
                 StateHasChanged();
 
-                await DeployUseCase.ExecuteFullAsync(ws, "local", ct);
+                await DeployUseCase.ExecuteFullAsync(ws, _envName, ct);
                 await Task.Delay(500, ct);
                 _error = null;
             }
@@ -287,9 +319,20 @@ public partial class Trace : ComponentBase, IAsyncDisposable
             }
             catch (Exception ex)
             {
-                await InvokeAsync(() =>
+                var isNotFound = ex.Message.Contains("NotFound", StringComparison.OrdinalIgnoreCase);
+
+                await InvokeAsync(async () =>
                 {
-                    _error = "Erro no polling: " + ex.Message;
+                    if (isNotFound)
+                    {
+                        _error = "Sessão de trace expirada ou não encontrada no emulador.";
+                        _isError = true;
+                        await StopTraceInternalAsync();
+                    }
+                    else
+                    {
+                        _error = "Erro no polling: " + ex.Message;
+                    }
                     StateHasChanged();
                 });
                 break;
@@ -336,7 +379,9 @@ public partial class Trace : ComponentBase, IAsyncDisposable
 
         SessionState.Set("trace:workspacePath", _selectedWorkspacePath);
         SessionState.Set("trace:proxyName", _proxyName);
+        SessionState.Set("trace:envName", _envName);
         SessionState.Set("trace:proxies", _proxies.ToList());
+        SessionState.Set("trace:environments", _environments);
         SessionState.Set("trace:activeTab", _activeTab);
         SessionState.Set("trace:transactions", _transactions);
         SessionState.Set("trace:session", _session);
