@@ -738,6 +738,9 @@ window.monacoInterop = (function () {
                             renderLineHighlight: 'line',
                             bracketPairColorization: { enabled: true },
                             guides: { bracketPairs: true, indentation: true },
+                            autoClosingTags: true,
+                            autoClosingBrackets: 'never',
+                            autoClosingQuotes: 'never',
                         });
 
                         // Resize observer manual para garantir que o layout nunca "fuja"
@@ -771,6 +774,58 @@ window.monacoInterop = (function () {
                         editor.onDidChangeModelContent(function () {
                             _dirty[elementId] = true;
                         });
+
+                        // ── Auto-close XML tags ───────────────────────────────
+                        if (language === 'xml') {
+                            // Register configuration only once
+                            _withMonaco(function(m) {
+                                m.languages.setLanguageConfiguration('xml', {
+                                    autoClosingPairs: [
+                                        { open: '"', close: '"', notIn: ['string'] },
+                                        { open: "'", close: "'", notIn: ['string'] },
+                                        { open: '<!--', close: ' -->', notIn: ['comment'] }
+                                    ]
+                                });
+                            });
+
+                            editor.onDidChangeModelContent(function (e) {
+                                if (e.changes.length !== 1) return;
+                                const lastChange = e.changes[0];
+                                if (lastChange.text !== '>') return;
+
+                                const pos = editor.getPosition();
+                                const line = model.getLineContent(pos.lineNumber);
+                                // Pega o texto da linha até a posição do cursor (que está logo após o '>')
+                                const textUntilCursor = line.substring(0, pos.column - 1);
+                                
+                                // O texto antes do '>'
+                                const textBeforeTagEnd = textUntilCursor.substring(0, textUntilCursor.length - 1);
+                                
+                                // Procura o início da tag <NomeTag ... (sem o >)
+                                // O regex captura o nome da tag e ignora se houver um / no final (self-closing)
+                                const match = textBeforeTagEnd.match(/<([a-zA-Z0-9\-:]+)(?:\s+[^>]*)?$/);
+                                
+                                if (match) {
+                                    const tagName = match[1];
+                                    // Se a tag já for auto-contida (termina em /), não faz nada
+                                    if (textBeforeTagEnd.trim().endsWith('/')) return;
+
+                                    const closingTag = '</' + tagName + '>';
+                                    
+                                    // Insere a tag de fechamento
+                                    editor.executeEdits('auto-close-tag', [
+                                        {
+                                            range: new monaco.Range(pos.lineNumber, pos.column, pos.lineNumber, pos.column),
+                                            text: closingTag,
+                                            forceMoveMarkers: true
+                                        }
+                                    ]);
+                                    
+                                    // Mantém o cursor entre as tags
+                                    editor.setPosition(pos);
+                                }
+                            });
+                        }
 
                         _editors[elementId] = editor;
                     });

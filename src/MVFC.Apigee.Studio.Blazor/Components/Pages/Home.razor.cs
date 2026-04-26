@@ -42,20 +42,6 @@ public partial class Home : ComponentBase
     /// </summary>
     private IList<ApigeeWorkspace> _workspaces = [];
 
-    /// <summary>
-    /// Indicates if the import workspace form is visible.
-    /// </summary>
-    private bool _showImport;
-
-    /// <summary>
-    /// The path entered by the user for importing.
-    /// </summary>
-    private string _importPath = string.Empty;
-
-    /// <summary>
-    /// The error message from the last import attempt.
-    /// </summary>
-    private string _importError = string.Empty;
 
     /// <summary>
     /// Repository for workspace operations (list, create, delete).
@@ -144,7 +130,6 @@ public partial class Home : ComponentBase
         else
         {
             _showCreate = true;
-            _showImport = false;
             _newName = _newPath = _createError = string.Empty;
             _proxyEntries = [];
         }
@@ -221,64 +206,4 @@ public partial class Home : ComponentBase
         _pendingDelete = null;
     }
 
-    /// <summary>
-    /// Toggles the import workspace form. Closes the create form if open.
-    /// </summary>
-    private void OpenImportForm()
-    {
-        if (_showImport)
-        {
-            CloseImportForm();
-        }
-        else
-        {
-            _showImport = true;
-            _showCreate = false;
-            _importPath = _importError = string.Empty;
-        }
-    }
-
-    /// <summary>
-    /// Closes the import workspace form.
-    /// </summary>
-    private void CloseImportForm()
-    {
-        _showImport = false;
-        _importError = string.Empty;
-    }
-
-    /// <summary>
-    /// Handles keyboard events in the import form.
-    /// </summary>
-    private async Task HandleImportKey(KeyboardEventArgs e)
-    {
-        if (string.Equals(e.Key, "Enter", StringComparison.OrdinalIgnoreCase)) HandleImport();
-        if (string.Equals(e.Key, "Escape", StringComparison.OrdinalIgnoreCase)) CloseImportForm();
-        await Task.CompletedTask;
-    }
-
-    /// <summary>
-    /// Handles the import of an existing directory as a workspace.
-    /// </summary>
-    private void HandleImport()
-    {
-        _importError = string.Empty;
-
-        if (string.IsNullOrWhiteSpace(_importPath))
-        {
-            _importError = "Informe o caminho da pasta.";
-            return;
-        }
-
-        try
-        {
-            var ws = WorkspaceRepo.RegisterExisting(_importPath);
-            _workspaces.Add(ws);
-            CloseImportForm();
-        }
-        catch (Exception ex)
-        {
-            _importError = ex.Message;
-        }
-    }
 }
