@@ -1,5 +1,7 @@
 namespace MVFC.Apigee.Studio.Domain.Interfaces;
 
+using MVFC.Apigee.Studio.Domain.Entities;
+
 /// <summary>
 /// Contract for managing Apigee workspaces and their contents.
 /// </summary>
@@ -87,4 +89,19 @@ public interface IWorkspaceRepository
     /// Creates it empty if it does not exist.
     /// </summary>
     Task EnsureEnvironmentAsync(ApigeeWorkspace workspace, string envName, CancellationToken ct = default);
+
+    /// <summary>
+    /// Loads the test resources (mock plane) for the workspace.
+    /// </summary>
+    Task<TestResources> GetTestResourcesAsync(ApigeeWorkspace workspace, CancellationToken ct = default);
+
+    /// <summary>
+    /// Saves the test resources (mock plane) for the workspace.
+    /// </summary>
+    Task SaveTestResourcesAsync(ApigeeWorkspace workspace, TestResources resources, CancellationToken ct = default);
+
+    /// <summary>
+    /// Builds a ZIP archive of the test resources bundle (products, developers, apps).
+    /// </summary>
+    Task<string> BuildTestBundleZipAsync(ApigeeWorkspace workspace, CancellationToken ct = default);
 }

@@ -173,6 +173,33 @@ public partial class WorkspaceDetail : ComponentBase, IAsyncDisposable
         {
             EditorState.Reset();
         }
+
+        EditorState.OnTabsChanged += HandleTabsChanged;
+    }
+
+    private async Task RefreshTree()
+    {
+        if (_workspace is not null)
+        {
+            _tree = await WorkspaceRepo.LoadTreeAsync(_workspace);
+            StateHasChanged();
+        }
+    }
+
+    private void HandleTabsChanged()
+    {
+        _ = InvokeAsync(async () =>
+        {
+            if (EditorState.ActiveTab is not null && _editor is not null)
+            {
+                var editorValue = await _editor.GetValue();
+                if (!string.Equals(editorValue, EditorState.ActiveTab.Content, StringComparison.Ordinal))
+                {
+                    await _editor.SetValue(EditorState.ActiveTab.Content, EditorState.ActiveTab.FullPath);
+                }
+            }
+            StateHasChanged();
+        });
     }
 
     /// <summary>
@@ -393,7 +420,7 @@ public partial class WorkspaceDetail : ComponentBase, IAsyncDisposable
     public async ValueTask DisposeAsync()
     {
         GC.SuppressFinalize(this);
-        // MonacoEditor handles its own disposal
+        EditorState.OnTabsChanged -= HandleTabsChanged;
 
         if (EditorState.ActiveTab is not null && _editor is not null)
         {

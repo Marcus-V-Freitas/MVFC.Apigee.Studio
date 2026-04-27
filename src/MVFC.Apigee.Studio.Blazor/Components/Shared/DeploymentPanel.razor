@@ -10,8 +10,13 @@
         </button>
     </div>
 
-    @if (!string.IsNullOrEmpty(_deployMessage))
+    @if (_deployMessages.Any())
     {
-        <p class="@DeployMessageClass">@_deployMessage</p>
+        <div class="deploy-messages">
+            @foreach (var msg in _deployMessages)
+            {
+                <p class="deploy-msg @(msg.Contains("[ERROR]") || msg.Contains("[WARNING]") ? "warn" : "success")">@msg</p>
+            }
+        </div>
     }
 </div>

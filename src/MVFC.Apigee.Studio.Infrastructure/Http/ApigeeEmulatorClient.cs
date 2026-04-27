@@ -55,19 +55,69 @@ public sealed class ApigeeEmulatorClient(
         var url = "/v1/emulator/deploy?environment=" + Uri.EscapeDataString(environment);
         _logger.LogDeployApi(zipPath, url);
 
-        var fs = File.OpenRead(zipPath);
-        await using (fs.ConfigureAwait(false))
-        {
-            using var content = new StreamContent(fs);
-            content.Headers.ContentType = new MediaTypeHeaderValue("application/zip");
+        var bytes = await File.ReadAllBytesAsync(zipPath, ct);
+        using var content = new ByteArrayContent(bytes);
+        content.Headers.ContentType = new MediaTypeHeaderValue("application/zip");
 
-            using var resp = await _http.PostAsync(url, content, ct);
-            if (!resp.IsSuccessStatusCode)
+        using var resp = await _http.PostAsync(url, content, ct);
+        if (!resp.IsSuccessStatusCode)
+        {
+            var body = await resp.Content.ReadAsStringAsync(ct);
+            throw new HttpRequestException($"Deploy falhou ({resp.StatusCode}): {body}");
+        }
+    }
+
+    /// <summary>
+    /// Deploys test resources (products, developers, apps) to the emulator.
+    /// </summary>
+    public async Task DeployTestDataAsync(string zipPath, CancellationToken ct = default)
+    {
+        if (!File.Exists(zipPath))
+            throw new FileNotFoundException("ZIP de dados de teste não encontrado: " + zipPath);
+
+        // Official VS Code extension uses /v1/emulator/setup/tests
+        var urls = new[]
+        {
+            "/v1/emulator/setup/tests"
+        };
+
+        Exception? lastEx = null;
+
+        foreach (var url in urls)
+        {
+            try
             {
+                var bytes = await File.ReadAllBytesAsync(zipPath, ct);
+                using var content = new ByteArrayContent(bytes);
+                // The emulator expects a raw ZIP body for /v1/emulator/setup/tests
+                // Some versions might need Content-Type: zip, but extension doesn't always set it.
+                // We'll set it to be safe for our primary target.
+                if (url.Contains("setup/tests") || url.Contains("deploy"))
+                {
+                    content.Headers.ContentType = new MediaTypeHeaderValue("application/zip");
+                }
+                else
+                {
+                    content.Headers.ContentType = new MediaTypeHeaderValue("application/octet-stream");
+                }
+
+                using var resp = await _http.PostAsync(url, content, ct);
+                if (resp.IsSuccessStatusCode)
+                {
+                    _logger.LogTestDataSuccess(url);
+                    return; // Success!
+                }
+                
                 var body = await resp.Content.ReadAsStringAsync(ct);
-                throw new HttpRequestException($"Deploy falhou ({resp.StatusCode}): {body}");
+                lastEx = new HttpRequestException($"Erro em {url} ({resp.StatusCode}): {body}", null, resp.StatusCode);
+            }
+            catch (Exception ex)
+            {
+                lastEx = ex;
             }
         }
+
+        if (lastEx != null) throw lastEx;
     }
 
     /// <summary>
@@ -193,6 +243,21 @@ public sealed class ApigeeEmulatorClient(
             _logger.LogStopTrace(response.StatusCode, sessionId);
         else
             _logger.LogTraceSessionStopped(sessionId);
+    }
+
+    /// <inheritdoc/>
+    public async Task<IReadOnlyList<DeveloperApp>> GetLiveDeveloperAppsAsync(CancellationToken ct = default)
+    {
+        const string url = "/v1/emulator/test/developerapps";
+        using var response = await _http.GetAsync(url, ct);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            var body = await response.Content.ReadAsStringAsync(ct);
+            throw new HttpRequestException($"GetLiveDeveloperApps falhou ({response.StatusCode}): {body}");
+        }
+
+        return await response.Content.ReadFromJsonAsync<List<DeveloperApp>>(cancellationToken: ct) ?? [];
     }
 
     /// <summary>

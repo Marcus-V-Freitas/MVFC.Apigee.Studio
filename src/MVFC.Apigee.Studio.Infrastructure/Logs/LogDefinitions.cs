@@ -17,6 +17,12 @@ public static partial class LogDefinitions
     [LoggerMessage(LogLevel.Information, "Deploying {Zip} -> {Url}")]
     public static partial void LogDeployApi(this ILogger logger, string zip, string url);
 
+    [LoggerMessage(LogLevel.Information, "Deploying test resources bundle: {ZipPath}")]
+    public static partial void LogDeployTestData(this ILogger logger, string zipPath);
+
+    [LoggerMessage(LogLevel.Warning, "Deploy de dados de teste falhou ({StatusCode}): {Body}")]
+    public static partial void LogDeployTestDataError(this ILogger logger, HttpStatusCode statusCode, string body);
+
     [LoggerMessage(LogLevel.Information, "Starting trace session for proxy '{Proxy}'")]
     public static partial void LogStartTraceSession(this ILogger logger, string proxy);
 
@@ -35,6 +41,12 @@ public static partial class LogDefinitions
     [LoggerMessage(LogLevel.Warning, "Emulator health check failed")]
     public static partial void LogEmulatorNotHealth(this ILogger logger, Exception ex);
     
+    [LoggerMessage(LogLevel.Information, "Dados de teste enviados com sucesso para {Url}")]
+    public static partial void LogTestDataSuccess(this ILogger logger, string url);
+
     [LoggerMessage(LogLevel.Warning, "Erro ao parsear deployments JSON: {Message}")]
     public static partial void LogParseDeploymentsError(this ILogger logger, string message);
+
+    [LoggerMessage(LogLevel.Warning, "Falha ao carregar arquivo de teste {Path}. O conteúdo pode estar mal formatado.")]
+    public static partial void LogLoadTestFileError(this ILogger logger, Exception ex, string path);
 }

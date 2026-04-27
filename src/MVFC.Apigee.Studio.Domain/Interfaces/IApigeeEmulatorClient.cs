@@ -1,5 +1,7 @@
 namespace MVFC.Apigee.Studio.Domain.Interfaces;
 
+using MVFC.Apigee.Studio.Domain.Entities;
+
 /// <summary>
 /// <para>Contract for communication with the Apigee Emulator (local Docker container).</para>
 /// <para>
@@ -22,6 +24,12 @@ public interface IApigeeEmulatorClient
     /// Imports and deploys a bundle (proxy or shared flow).
     /// </summary>
     Task DeployBundleAsync(string environment, string zipPath, CancellationToken ct = default);
+
+    /// <summary>
+    /// Deploys test resources (products, developers, apps) to the emulator.
+    /// POST /v1/emulator/testdata
+    /// </summary>
+    Task DeployTestDataAsync(string zipPath, CancellationToken ct = default);
 
     /// <summary>
     /// Lists available Docker images for the emulator.
@@ -56,4 +64,10 @@ public interface IApigeeEmulatorClient
     /// DELETE /v1/emulator/trace?sessionid={sessionId}
     /// </summary>
     Task StopTraceAsync(string sessionId, CancellationToken ct = default);
+
+    /// <summary>
+    /// Retrieves the list of developer apps currently active in the emulator, including their generated credentials.
+    /// GET /v1/emulator/test/developerapps
+    /// </summary>
+    Task<IReadOnlyList<DeveloperApp>> GetLiveDeveloperAppsAsync(CancellationToken ct = default);
 }

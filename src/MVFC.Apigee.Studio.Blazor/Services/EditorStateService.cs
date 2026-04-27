@@ -117,6 +117,22 @@ public sealed class EditorStateService
     }
 
     /// <summary>
+    /// Synchronizes the content of an open tab with external changes.
+    /// </summary>
+    /// <param name="path">The full path of the file.</param>
+    /// <param name="content">The new content.</param>
+    public void SyncTabContent(string path, string content)
+    {
+        var tab = _openTabs.FirstOrDefault(t => string.Equals(t.FullPath, path, StringComparison.OrdinalIgnoreCase));
+        if (tab is not null)
+        {
+            tab.Content = content;
+            tab.IsDirty = false;
+            OnTabsChanged?.Invoke();
+        }
+    }
+
+    /// <summary>
     /// Closes all tabs except the specified one.
     /// </summary>
     /// <param name="keep">The tab to keep open.</param>

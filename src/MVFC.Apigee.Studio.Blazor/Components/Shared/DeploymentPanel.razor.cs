@@ -17,14 +17,9 @@ public partial class DeploymentPanel : ComponentBase
     private bool _deploying;
 
     /// <summary>
-    /// Message displayed to the user about deployment status.
+    /// Messages displayed to the user about deployment status.
     /// </summary>
-    private string _deployMessage = string.Empty;
-
-    /// <summary>
-    /// Indicates if the last deployment resulted in an error.
-    /// </summary>
-    private bool _deployError;
+    private List<string> _deployMessages = [];
 
     /// <summary>
     /// The workspace to deploy from.
@@ -44,11 +39,6 @@ public partial class DeploymentPanel : ComponentBase
     [Inject]
     public required ToastService Toast { get; set; }
 
-    /// <summary>
-    /// Gets the CSS class for the deployment message (error or success).
-    /// </summary>
-    private string DeployMessageClass => _deployError ? "error-text" : "success-text";
-
 
 
     /// <summary>
@@ -64,24 +54,26 @@ public partial class DeploymentPanel : ComponentBase
     /// Runs the deployment action, updates UI state, and handles success or error feedback.
     /// </summary>
     /// <param name="action">The deployment action to execute.</param>
-    private async Task RunDeploy(Func<Task> action)
+    private async Task RunDeploy(Func<Task<IReadOnlyList<string>>> action)
     {
         _deploying = true;
-        _deployMessage = "Deploying...";
-        _deployError = false;
+        _deployMessages = ["Deploying..."];
         StateHasChanged();
 
         try
         {
-            await action();
-            _deployMessage = "✔ Deploy realizado com sucesso!";
-            Toast.ShowSuccess("Deploy realizado!");
+            var results = await action();
+            _deployMessages = results.ToList();
+            
+            if (results.Any(m => m.Contains("[WARNING]") || m.Contains("[ERROR]")))
+                Toast.ShowWarning("Deploy concluído com avisos.");
+            else
+                Toast.ShowSuccess("Deploy realizado com sucesso!");
         }
         catch (Exception ex)
         {
-            _deployError = true;
-            _deployMessage = "✘ Erro no deploy: " + ex.Message;
-            Toast.ShowError("Erro no deploy.");
+            _deployMessages = [$"✘ Erro fatal no deploy: {ex.Message}"];
+            Toast.ShowError("Erro fatal no deploy.");
         }
         finally
         {

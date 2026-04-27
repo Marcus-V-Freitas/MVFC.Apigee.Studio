@@ -23,13 +23,13 @@ public static class InfrastructureServiceExtensions
         services.AddHttpClient<IApigeeEmulatorClient, ApigeeEmulatorClient>(client =>
         {
             client.BaseAddress = new Uri(managementUrl);
-            client.Timeout     = TimeSpan.FromSeconds(30);
+            client.Timeout     = TimeSpan.FromSeconds(120);
         });
 
         services.AddHttpClient<IApigeeTraceClient, ApigeeTraceClient>(client =>
         {
             client.BaseAddress = new Uri(managementUrl);
-            client.Timeout     = TimeSpan.FromSeconds(30);
+            client.Timeout     = TimeSpan.FromSeconds(120);
         });
 
         return services;

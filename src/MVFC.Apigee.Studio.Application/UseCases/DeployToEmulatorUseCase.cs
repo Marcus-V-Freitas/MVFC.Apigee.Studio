@@ -1,59 +1,64 @@
+using MVFC.Apigee.Studio.Domain.Entities;
+using MVFC.Apigee.Studio.Domain.Interfaces;
+
 namespace MVFC.Apigee.Studio.Application.UseCases;
 
 /// <summary>
-/// Orchestrates deployment to the local Apigee Emulator.
-/// <para>
-/// The emulator endpoint is:
-///   POST /v1/emulator/deploy?environment={env}
-///   Body: ZIP file of the entire workspace with structure src/main/apigee/...
-/// </para>
-/// <para>
-/// The emulator validates that the folder src/main/apigee/environments/{env}/
-/// exists inside the ZIP — if not, it returns 400 InvalidEnvironment.
-/// </para>
+/// Orchestrates the deployment to the Apigee Emulator.
+/// Swaps the order: Proxy first, then Test Resources.
 /// </summary>
 public sealed class DeployToEmulatorUseCase(
-    IWorkspaceRepository workspaceRepository,
-    IApigeeEmulatorClient emulatorClient)
+    IApigeeEmulatorClient emulatorClient,
+    IWorkspaceRepository workspaceRepository)
 {
-
     /// <summary>
-    /// Deploys the entire workspace at once.
-    /// The endpoint /v1/emulator/deploy receives a single ZIP with the full structure
-    /// src/main/apigee/... — not proxy-by-proxy.
+    /// Executes a full deployment of the workspace to the specified environment.
     /// </summary>
-    /// <param name="workspace">The workspace to deploy from.</param>
-    /// <param name="environment">The target environment for deployment.</param>
-    /// <param name="ct">Optional. Cancellation token for the operation.</param>
-    /// <returns>A list of deployed proxies and shared flows.</returns>
-    /// <remarks>
-    /// Example:
-    /// <code>
-    /// var deployed = await useCase.ExecuteFullAsync(workspace, "test");
-    /// </code>
-    /// </remarks>
     public async Task<IReadOnlyList<string>> ExecuteFullAsync(
         ApigeeWorkspace workspace,
         string environment,
         CancellationToken ct = default)
     {
-        // Ensures that the environments/{env}/ folder exists on disk before zipping
+        var messages = new List<string>();
+
+        // 1. Deploy Main Bundle (Proxy/SharedFlow)
         await workspaceRepository.EnsureEnvironmentAsync(workspace, environment, ct);
-        var zipPath = await workspaceRepository.BuildWorkspaceZipAsync(workspace, ct);
+        var fullZipPath = await workspaceRepository.BuildWorkspaceZipAsync(workspace, ct);
         try
         {
-            await emulatorClient.DeployBundleAsync(environment, zipPath, ct);
+            await emulatorClient.DeployBundleAsync(environment, fullZipPath, ct);
         }
         finally
         {
-            if (File.Exists(zipPath))
-                File.Delete(zipPath);
+            if (File.Exists(fullZipPath)) File.Delete(fullZipPath);
         }
 
-        // Returns what was deployed
-        var proxies     = workspaceRepository.ListApiProxies(workspace);
-        var sharedFlows = workspaceRepository.ListSharedFlows(workspace);
+        // Give the emulator a moment to activate the proxy before deploying test resources
+        // that depend on it (API Products validate the proxy list).
+        await Task.Delay(1000, ct);
 
-        return [.. proxies, .. sharedFlows];
+        // 2. Deploy Test Resources (Mock Plane)
+        // Note: Products must be deployed AFTER proxies because the emulator validates the proxy list.
+        var testZipPath = await workspaceRepository.BuildTestBundleZipAsync(workspace, ct);
+        try
+        {
+            Console.WriteLine($"[INFO] Enviando recursos de teste (produtos, desenvolvedores, apps) para o emulador...");
+            await emulatorClient.DeployTestDataAsync(testZipPath, ct);
+            Console.WriteLine($"[SUCCESS] Recursos de teste enviados com sucesso.");
+        }
+        catch (Exception ex)
+        {
+            // If test resources fail, we still want to see the proxy deployment.
+            messages.Add($"[WARNING] Falha ao enviar recursos de teste: {ex.Message}");
+        }
+        finally
+        {
+            if (File.Exists(testZipPath)) File.Delete(testZipPath);
+        }
+
+        // 3. Return active proxies (as a check)
+        // Note: In real scenarios, we would poll for deployment status.
+        messages.Add($"[SUCCESS] Proxy implantado com sucesso em '{environment}'.");
+        return messages;
     }
 }
