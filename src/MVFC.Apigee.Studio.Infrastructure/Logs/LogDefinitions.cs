@@ -47,6 +47,9 @@ public static partial class LogDefinitions
     [LoggerMessage(LogLevel.Warning, "Erro ao parsear deployments JSON: {Message}")]
     public static partial void LogParseDeploymentsError(this ILogger logger, string message);
 
-    [LoggerMessage(LogLevel.Warning, "Falha ao carregar arquivo de teste {Path}. O conteúdo pode estar mal formatado.")]
+    [LoggerMessage(LogLevel.Information, "Falha ao carregar arquivo de teste {Path}. O conteúdo pode estar mal formatado.")]
     public static partial void LogLoadTestFileError(this ILogger logger, Exception ex, string path);
+
+    [LoggerMessage(LogLevel.Information, "Enviando dados de teste para {Url}")]
+    public static partial void LogTestDataSending(this ILogger logger, string url);
 }

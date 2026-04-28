@@ -1,7 +1,5 @@
 namespace MVFC.Apigee.Studio.Domain.Interfaces;
 
-using MVFC.Apigee.Studio.Domain.Entities;
-
 /// <summary>
 /// <para>Contract for communication with the Apigee Emulator (local Docker container).</para>
 /// <para>

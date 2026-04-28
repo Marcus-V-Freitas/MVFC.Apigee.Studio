@@ -210,7 +210,7 @@ public sealed class WorkspaceFileSystemRepository(IConfiguration config, ILogger
 
         var deployPath = Path.Combine(envPath, "deployments.json");
         if (!File.Exists(deployPath))
-            File.WriteAllText(deployPath, "{\n  \"proxies\": [],\n  \"sharedFlows\": []\n}", Encoding.UTF8);
+            File.WriteAllText(deployPath, BuildDeploymentsJson([], []), Encoding.UTF8);
 
         var mapsPath = Path.Combine(envPath, "maps.json");
         if (!File.Exists(mapsPath))
@@ -317,12 +317,6 @@ public sealed class WorkspaceFileSystemRepository(IConfiguration config, ILogger
                     {
                         // Map flat structure ROOT/apiproxy to src/main/apigee/apiproxies/NAME/apiproxy
                         CopyDirectory(source, Path.Combine(targetRoot, "apiproxies", workspace.Name, "apiproxy"));
-                    }
-                    else if (string.Equals(dir, "test", StringComparison.OrdinalIgnoreCase))
-                    {
-                        // Copy to both locations to be safe across emulator versions
-                        CopyDirectory(source, Path.Combine(targetRoot, dir)); // src/main/apigee/test
-                        CopyDirectory(source, Path.Combine(tempDir, dir));   // root/test
                     }
                     else
                     {

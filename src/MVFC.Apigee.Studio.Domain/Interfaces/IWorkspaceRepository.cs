@@ -1,7 +1,5 @@
 namespace MVFC.Apigee.Studio.Domain.Interfaces;
 
-using MVFC.Apigee.Studio.Domain.Entities;
-
 /// <summary>
 /// Contract for managing Apigee workspaces and their contents.
 /// </summary>

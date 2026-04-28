@@ -379,7 +379,7 @@ public partial class TestResourcesPanel
             {
                 var live = liveApps.FirstOrDefault(l => string.Equals(l.Name, localApp.Name, StringComparison.Ordinal));
                 // Keep only the most recent credential (the last one in the list)
-                var lastCred = live?.Credentials is { Count: > 0 } ? live.Credentials[live.Credentials.Count - 1] : null;
+                var lastCred = live?.Credentials is [.., var last] ? last : null;
                 return live != null && lastCred != null 
                     ? localApp with { Credentials = [lastCred], AppId = live.AppId } 
                     : localApp;

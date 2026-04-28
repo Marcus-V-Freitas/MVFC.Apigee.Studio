@@ -23,7 +23,7 @@ public sealed record DeveloperApp(
     [property: JsonPropertyName("callbackUrl")] string CallbackUrl = "",
     [property: JsonPropertyName("expiryType")] string ExpiryType = "never",
     [property: JsonPropertyName("status")] string Status = "approved",
-    [property: JsonPropertyName("credentials")] IReadOnlyList<AppCredential> Credentials = null!)
+    [property: JsonPropertyName("credentials")] IReadOnlyList<AppCredential>? Credentials = null)
 {
     /// <summary>
     /// Initializes a new instance of the <see cref="DeveloperApp"/> record with default values.

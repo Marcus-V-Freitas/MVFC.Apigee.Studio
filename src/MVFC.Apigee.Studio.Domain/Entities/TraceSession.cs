@@ -39,5 +39,5 @@ public sealed class TraceSession
     /// <summary>
     /// UTC date and time when the trace session was started.
     /// </summary>
-    public DateTime StartedAt  { get; init; } = DateTime.UtcNow;
+    public DateTime StartedAt  { get; init; }
 }

@@ -1,5 +1,3 @@
-using System.Text.Json.Serialization;
-
 namespace MVFC.Apigee.Studio.Domain.Entities;
 
 /// <summary>

@@ -1,6 +1,3 @@
-using MVFC.Apigee.Studio.Domain.Entities;
-using MVFC.Apigee.Studio.Domain.Interfaces;
-
 namespace MVFC.Apigee.Studio.Application.UseCases;
 
 /// <summary>
@@ -9,8 +6,10 @@ namespace MVFC.Apigee.Studio.Application.UseCases;
 /// </summary>
 public sealed class DeployToEmulatorUseCase(
     IApigeeEmulatorClient emulatorClient,
-    IWorkspaceRepository workspaceRepository)
+    IWorkspaceRepository workspaceRepository,
+    ILogger<DeployToEmulatorUseCase> logger)
 {
+    private readonly ILogger<DeployToEmulatorUseCase> _logger = logger;
     /// <summary>
     /// Executes a full deployment of the workspace to the specified environment.
     /// </summary>
@@ -42,9 +41,9 @@ public sealed class DeployToEmulatorUseCase(
         var testZipPath = await workspaceRepository.BuildTestBundleZipAsync(workspace, ct);
         try
         {
-            Console.WriteLine($"[INFO] Enviando recursos de teste (produtos, desenvolvedores, apps) para o emulador...");
+            _logger.LogDeployingTestResources();
             await emulatorClient.DeployTestDataAsync(testZipPath, ct);
-            Console.WriteLine($"[SUCCESS] Recursos de teste enviados com sucesso.");
+            _logger.LogTestResourcesDeployed();
         }
         catch (Exception ex)
         {
