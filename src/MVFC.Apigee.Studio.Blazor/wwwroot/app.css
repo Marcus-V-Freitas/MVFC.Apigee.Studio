@@ -483,6 +483,18 @@ h3 {
   background: rgba(86, 193, 114, .2);
 }
 
+.btn-warning {
+  background: transparent;
+  border-color: rgba(229, 192, 123, .3);
+  color: var(--color-warning);
+}
+
+.btn-warning:hover:not(:disabled) {
+  background: var(--color-warning-dim);
+  border-color: rgba(229, 192, 123, .5);
+  color: var(--color-warning);
+}
+
 .btn-sm {
   padding: 0.25rem var(--space-3);
   font-size: var(--text-xs);

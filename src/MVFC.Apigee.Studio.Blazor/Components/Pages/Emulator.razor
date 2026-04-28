@@ -20,7 +20,8 @@
             <label class="hidden-label">Actions</label>
             <div class="emulator-actions-row">
                 <button class="btn btn-primary" @onclick="StartContainer" disabled="@_dockerBusy">&#9654; Start</button>
-                <button class="btn btn-ghost btn-sm btn-danger" @onclick="StopContainer" disabled="@_dockerBusy">&#9632; Stop</button>
+                <button class="btn btn-ghost btn-danger" @onclick="StopContainer" disabled="@_dockerBusy">&#9632; Stop</button>
+                <button class="btn btn-warning" @onclick="RestartContainer" disabled="@_dockerBusy">&#8635; Restart</button>
             </div>
         </div>
     </div>

@@ -213,6 +213,36 @@ public partial class Emulator : ComponentBase, IDisposable
     }
 
     /// <summary>
+    /// Restarts the emulator Docker container (Stops then Starts).
+    /// </summary>
+    private async Task RestartContainer()
+    {
+        _dockerBusy = true;
+        _dockerMessage = string.Empty;
+        _dockerError = false;
+        try
+        {
+            _dockerMessage = "Reiniciando...";
+            StateHasChanged();
+            
+            await EmulatorClient.StopContainerAsync();
+            await EmulatorClient.StartContainerAsync(_image);
+            
+            _dockerMessage = "\u2714 Container reiniciado.";
+            await Check();
+        }
+        catch (Exception ex)
+        {
+            _dockerMessage = "\u2718 Erro ao reiniciar: " + ex.Message;
+            _dockerError = true;
+        }
+        finally
+        {
+            _dockerBusy = false;
+        }
+    }
+
+    /// <summary>
     /// Checks if the emulator is alive and updates the status.
     /// </summary>
     private async Task Check()
