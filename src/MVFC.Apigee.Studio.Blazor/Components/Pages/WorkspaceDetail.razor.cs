@@ -322,6 +322,14 @@ public partial class WorkspaceDetail : ComponentBase, IAsyncDisposable
         }
 
         EditorState.CloseTab(tab);
+        if (EditorState.ActiveTab != null)
+        {
+            RefreshFlowNavigator(EditorState.ActiveTab.FullPath);
+        }
+        else
+        {
+            _currentEndpointStructure = null;
+        }
         StateHasChanged();
     }
 
@@ -345,6 +353,14 @@ public partial class WorkspaceDetail : ComponentBase, IAsyncDisposable
         }
 
         EditorState.CloseOtherTabs(keep);
+        if (EditorState.ActiveTab != null)
+        {
+            RefreshFlowNavigator(EditorState.ActiveTab.FullPath);
+        }
+        else
+        {
+            _currentEndpointStructure = null;
+        }
         StateHasChanged();
     }
 
@@ -367,6 +383,7 @@ public partial class WorkspaceDetail : ComponentBase, IAsyncDisposable
         }
 
         EditorState.CloseAllTabs();
+        _currentEndpointStructure = null;
         StateHasChanged();
     }
 
@@ -403,20 +420,16 @@ public partial class WorkspaceDetail : ComponentBase, IAsyncDisposable
     private void RefreshFlowNavigator(string path)
     {
         _currentEndpointStructure = null;
-        if (_workspace == null)
+        if (_workspace == null || !path.EndsWith(".xml", StringComparison.OrdinalIgnoreCase))
             return;
 
-        var isProxy = path.Contains("apiproxy/proxies", StringComparison.OrdinalIgnoreCase);
-        var isTarget = path.Contains("apiproxy/targets", StringComparison.OrdinalIgnoreCase);
+        var normalizedPath = path.Replace("\\", "/");
+        var isProxy = normalizedPath.Contains("/apiproxy/proxies/", StringComparison.OrdinalIgnoreCase);
+        var isTarget = normalizedPath.Contains("/apiproxy/targets/", StringComparison.OrdinalIgnoreCase);
 
         if (isProxy || isTarget)
         {
-            // Better: find "apiproxies/{proxyName}/apiproxy"
-            var match = Regex.Match(path.Replace("\\", "/", StringComparison.OrdinalIgnoreCase), @"apiproxies/(?<proxyName>[^/]+)/apiproxy", RegexOptions.ExplicitCapture, TimeSpan.FromMilliseconds(100));
-            var proxyName = match.Success ? match.Groups["proxyName"].Value : _workspace.Name;
-
-            var endpointName = Path.GetFileNameWithoutExtension(path);
-            _currentEndpointStructure = FlowReader.ReadEndpointStructure(_workspace.RootPath, proxyName, endpointName, isProxy);
+            _currentEndpointStructure = FlowReader.ReadEndpointStructure(path);
         }
     }
 
@@ -424,14 +437,20 @@ public partial class WorkspaceDetail : ComponentBase, IAsyncDisposable
     {
         if (_workspace == null) return;
 
-        // Find the policy file
-
+        // Find the policy file in the workspace
         var policyFile = Directory.EnumerateFiles(_workspace.RootPath, $"{policyName}.xml", SearchOption.AllDirectories)
-            .FirstOrDefault(p => p.Contains("apiproxy/policies", StringComparison.OrdinalIgnoreCase));
+            .FirstOrDefault(p => {
+                var normalized = p.Replace("\\", "/");
+                return normalized.Contains("/apiproxy/policies/", StringComparison.OrdinalIgnoreCase);
+            });
 
         if (policyFile != null)
         {
             await LoadFile(policyFile);
+        }
+        else
+        {
+            Toast.ShowError($"Não foi possível encontrar o arquivo da política '{policyName}'.");
         }
     }
 

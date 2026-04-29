@@ -28,7 +28,7 @@ public sealed class BundleFlowReader(ILogger<BundleFlowReader> logger) : IBundle
         string workspaceRoot, string proxyName, int statusCode)
     {
         var proxiesDir = Path.Combine(
-            workspaceRoot, "src", "main", "apigee", "apiproxies",
+            workspaceRoot, "apiproxies",
             proxyName, "apiproxy", "proxies");
 
         if (!Directory.Exists(proxiesDir))
@@ -156,23 +156,8 @@ public sealed class BundleFlowReader(ILogger<BundleFlowReader> logger) : IBundle
         }
     }
     /// <inheritdoc/>
-    public EndpointStructure? ReadEndpointStructure(string workspaceRoot, string proxyName, string endpointName, bool isProxyEndpoint)
+    public EndpointStructure? ReadEndpointStructure(string endpointPath)
     {
-        var subDir = isProxyEndpoint ? "proxies" : "targets";
-        var endpointPath = Path.Combine(
-            workspaceRoot, "src", "main", "apigee", "apiproxies",
-            proxyName, "apiproxy", subDir, $"{endpointName}.xml");
-
-        if (!File.Exists(endpointPath))
-        {
-            // Fallback: try to find any XML in the directory if the name doesn't match
-            var dir = Path.GetDirectoryName(endpointPath)!;
-            if (Directory.Exists(dir))
-            {
-                endpointPath = Directory.EnumerateFiles(dir, "*.xml").FirstOrDefault() ?? endpointPath;
-            }
-        }
-
         if (!File.Exists(endpointPath)) return null;
 
         try
@@ -188,6 +173,7 @@ public sealed class BundleFlowReader(ILogger<BundleFlowReader> logger) : IBundle
                 .Select(f => ParseFlow(f, "Flow"))
                 .ToList() ?? [];
 
+            var endpointName = Path.GetFileNameWithoutExtension(endpointPath);
             return new EndpointStructure(
                 Name: root.Attribute("name")?.Value ?? endpointName,
                 PreFlow: preFlow,
