@@ -754,6 +754,7 @@ label {
   overflow: hidden;
   align-items: stretch;
   gap: var(--space-4);
+  margin-bottom: var(--space-4);
 }
 
 .workspace-detail.with-navigator {
@@ -1654,7 +1655,7 @@ label {
   background: var(--color-border);
   margin: 4px 0;
   border: none;
-}@import " css/flow-navigator.css\;
+}
 
 /* Divergence Warning (Emulator) */
 .divergence-warning {

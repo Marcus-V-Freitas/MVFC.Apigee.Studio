@@ -17,16 +17,22 @@
 
         <div class="flow-container">
             @* PreFlow *@
-            <FlowBlock Flow="@Endpoint.PreFlow" OnStepClick="OnStepClick" />
+            @if (Endpoint.PreFlow != null)
+            {
+                <FlowBlock Flow="@Endpoint.PreFlow" OnStepClick="OnStepClick" />
+            }
 
-            @* Conditional Flows *@
+            @* Conditional Flows / Shared Flow Steps *@
             @foreach (var flow in Endpoint.Flows)
             {
                 <FlowBlock Flow="@flow" OnStepClick="OnStepClick" />
             }
 
             @* PostFlow *@
-            <FlowBlock Flow="@Endpoint.PostFlow" OnStepClick="OnStepClick" />
+            @if (Endpoint.PostFlow != null)
+            {
+                <FlowBlock Flow="@Endpoint.PostFlow" OnStepClick="OnStepClick" />
+            }
         </div>
     }
 </div>

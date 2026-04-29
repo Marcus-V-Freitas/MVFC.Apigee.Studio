@@ -166,6 +166,31 @@ public sealed class BundleFlowReader(ILogger<BundleFlowReader> logger) : IBundle
             var root = doc.Root;
             if (root is null) return null;
 
+            var endpointName = Path.GetFileNameWithoutExtension(endpointPath);
+
+            if (string.Equals(root.Name.LocalName, "SharedFlow", StringComparison.OrdinalIgnoreCase))
+            {
+                var steps = root.Elements("Step")
+                    .Select(ParseStep)
+                    .Where(s => s != null)
+                    .Cast<FlowStep>()
+                    .ToList();
+                
+                var sharedFlow = new FlowStructure(
+                    Name: root.Attribute("name")?.Value ?? endpointName,
+                    Type: "SharedFlow",
+                    RequestSteps: steps,
+                    ResponseSteps: []
+                );
+
+                return new EndpointStructure(
+                    Name: sharedFlow.Name,
+                    PreFlow: null,
+                    Flows: [sharedFlow],
+                    PostFlow: null
+                );
+            }
+
             var preFlow = ParseFlow(root.Element("PreFlow"), "PreFlow");
             var postFlow = ParseFlow(root.Element("PostFlow"), "PostFlow");
             
@@ -173,7 +198,6 @@ public sealed class BundleFlowReader(ILogger<BundleFlowReader> logger) : IBundle
                 .Select(f => ParseFlow(f, "Flow"))
                 .ToList() ?? [];
 
-            var endpointName = Path.GetFileNameWithoutExtension(endpointPath);
             return new EndpointStructure(
                 Name: root.Attribute("name")?.Value ?? endpointName,
                 PreFlow: preFlow,

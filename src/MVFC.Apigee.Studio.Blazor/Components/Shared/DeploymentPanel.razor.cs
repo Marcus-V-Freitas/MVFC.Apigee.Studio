@@ -49,6 +49,11 @@ public partial class DeploymentPanel : ComponentBase
     private LintResult? _structuralLint;
     private IList<ApigeeLintResult>? _deepLint;
 
+    /// <summary>
+    /// Total number of files in the workspace.
+    /// </summary>
+    private int _totalFiles;
+
     protected override async Task OnParametersSetAsync()
     {
         await RefreshDiff();
@@ -58,6 +63,16 @@ public partial class DeploymentPanel : ComponentBase
     {
         if (Workspace is null) return;
         _diff = await DeployUseCase.GetPreviewDiffAsync(Workspace);
+        
+        try
+        {
+            if (Directory.Exists(Workspace.RootPath))
+            {
+                _totalFiles = Directory.GetFiles(Workspace.RootPath, "*.*", SearchOption.AllDirectories)
+                    .Count(f => !f.Contains(".git") && !f.Contains(".vs"));
+            }
+        }
+        catch { _totalFiles = 0; }
     }
 
 

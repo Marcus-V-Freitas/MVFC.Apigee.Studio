@@ -1,33 +1,37 @@
 <div class="deploy-panel card">
     <h3>Deploy to Emulator</h3>
-    <div class="deploy-form">
-        <div class="form-field">
+    <div class="deploy-form-grid">
+        <div class="form-field env-field">
             <label>Environment</label>
             <input class="input" @bind="_deployEnv" placeholder="local" />
         </div>
 
-        @if (_diff != null && _diff.HasChanges)
-        {
-            <div class="deploy-diff-summary">
-                <span class="diff-title">Pendências de Deploy:</span>
-                <div class="diff-counts">
-                    @if (_diff.AddedFiles.Any()) { <span class="diff-add">+@_diff.AddedFiles.Count Novo</span> }
-                    @if (_diff.ModifiedFiles.Any()) { <span class="diff-mod">~@_diff.ModifiedFiles.Count Modificado</span> }
-                    @if (_diff.RemovedFiles.Any()) { <span class="diff-del">-@_diff.RemovedFiles.Count Removido</span> }
+        <div class="deploy-status-area">
+            @if (_diff != null && _diff.HasChanges)
+            {
+                <div class="deploy-diff-summary">                   
+                    <div class="diff-counts">
+                        <span class="diff-pending">
+                            @(_diff.AddedFiles.Count + _diff.ModifiedFiles.Count + _diff.RemovedFiles.Count) pendências
+                        </span>
+                        <span class="diff-total">em @_totalFiles arquivos</span>
+                    </div>
                 </div>
-            </div>
-        }
-        else if (_diff != null && !_diff.HasChanges)
-        {
-            <div class="deploy-diff-empty">
-                <i data-lucide="check-circle"></i>
-                <span>Sem alterações desde o último deploy.</span>
-            </div>
-        }
+            }
+            else if (_diff != null && !_diff.HasChanges)
+            {
+                <div class="deploy-diff-empty">
+                    <i data-lucide="check-circle"></i>
+                    <span>Sincronizado</span>
+                </div>
+            }
+        </div>
 
-        <button class="btn btn-primary" @onclick="DeployFull" disabled="@_deploying">
-            @(_deploying ? "Deploying..." : "Deploy Workspace")
-        </button>
+        <div class="deploy-actions">
+            <button class="btn btn-primary" @onclick="DeployFull" disabled="@_deploying">
+                @(_deploying ? "Deploying..." : "Deploy Workspace")
+            </button>
+        </div>
     </div>
 
     @if (_deployMessages.Any())

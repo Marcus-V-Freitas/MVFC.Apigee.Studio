@@ -426,8 +426,9 @@ public partial class WorkspaceDetail : ComponentBase, IAsyncDisposable
         var normalizedPath = path.Replace("\\", "/");
         var isProxy = normalizedPath.Contains("/apiproxy/proxies/", StringComparison.OrdinalIgnoreCase);
         var isTarget = normalizedPath.Contains("/apiproxy/targets/", StringComparison.OrdinalIgnoreCase);
+        var isSharedFlow = normalizedPath.Contains("/sharedflowbundle/sharedflows/", StringComparison.OrdinalIgnoreCase);
 
-        if (isProxy || isTarget)
+        if (isProxy || isTarget || isSharedFlow)
         {
             _currentEndpointStructure = FlowReader.ReadEndpointStructure(path);
         }
@@ -441,7 +442,8 @@ public partial class WorkspaceDetail : ComponentBase, IAsyncDisposable
         var policyFile = Directory.EnumerateFiles(_workspace.RootPath, $"{policyName}.xml", SearchOption.AllDirectories)
             .FirstOrDefault(p => {
                 var normalized = p.Replace("\\", "/");
-                return normalized.Contains("/apiproxy/policies/", StringComparison.OrdinalIgnoreCase);
+                return normalized.Contains("/apiproxy/policies/", StringComparison.OrdinalIgnoreCase) ||
+                       normalized.Contains("/sharedflowbundle/policies/", StringComparison.OrdinalIgnoreCase);
             });
 
         if (policyFile != null)

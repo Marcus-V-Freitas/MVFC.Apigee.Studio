@@ -9,7 +9,7 @@ namespace MVFC.Apigee.Studio.Domain.Entities;
 /// <param name="PostFlow">The PostFlow structure.</param>
 public sealed record EndpointStructure(
     string Name,
-    FlowStructure PreFlow,
+    FlowStructure? PreFlow,
     IReadOnlyList<FlowStructure> Flows,
-    FlowStructure PostFlow
+    FlowStructure? PostFlow
 );
