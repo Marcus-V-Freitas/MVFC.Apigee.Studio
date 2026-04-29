@@ -1,0 +1,58 @@
+<div class="help-card p-4 rounded-lg shadow-sm border border-opacity-10 mt-4">
+    <div class="flex justify-between items-center mb-3">
+        <div class="flex items-center gap-2">
+            <i class="fas fa-info-circle text-primary"></i>
+            <h4 class="text-sm font-semibold mb-0">Como instalar o apigeelint</h4>
+        </div>
+        @if (!_installing)
+        {
+            <button class="btn btn-xs btn-primary" @onclick="InstallNow">
+                <i class="fas fa-download me-1"></i> Instalar Agora
+            </button>
+        }
+    </div>
+    
+    <div class="text-xs text-muted">
+        @if (_installing)
+        {
+            <div class="install-progress mb-3">
+                <div class="spinner-border spinner-border-sm text-primary me-2" role="status"></div>
+                <span>Instalando apigeelint... acompanhe abaixo:</span>
+                <div class="output-console mt-2">
+                    @foreach(var line in _outputLines.TakeLast(5))
+                    {
+                        <div>@line</div>
+                    }
+                </div>
+            </div>
+        }
+        else if (_installFinished)
+        {
+            <div class="alert alert-success py-1 px-2 mb-3">
+                <i class="fas fa-check-circle me-1"></i> Instalação concluída! Reinicie o app para aplicar.
+            </div>
+        }
+        else
+        {
+            <p class="mb-2">O <code>apigeelint</code> é uma ferramenta essencial para validar as melhores práticas do Apigee.</p>
+            
+            <div class="mb-3">
+                <span class="badge badge-outline-secondary mb-1">Pré-requisitos</span>
+                <p>Node.js e npm instalados.</p>
+            </div>
+
+            <div class="grid grid-cols-2 gap-3">
+                <div>
+                    <span class="badge badge-outline-primary mb-1">Windows</span>
+                    <pre class="code-box">npm install -g apigeelint</pre>
+                </div>
+                <div>
+                    <span class="badge badge-outline-info mb-1">Linux / macOS</span>
+                    <pre class="code-box">sudo npm install -g apigeelint</pre>
+                </div>
+            </div>
+        }
+        
+        <p class="mb-0 text-opacity-50 mt-2">Após instalar, reinicie o Apigee Studio para garantir que o caminho seja reconhecido.</p>
+    </div>
+</div>

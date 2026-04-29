@@ -13,7 +13,7 @@
 }
 else
 {
-    <div class="workspace-detail">
+    <div class="workspace-detail @(_currentEndpointStructure != null ? "with-navigator" : "")">
         <FileExplorer Tree="_tree" 
                       SelectedFilePath="@EditorState.ActiveTab?.FullPath"
                       @bind-SearchQuery="_searchQuery"
@@ -69,6 +69,11 @@ else
                 <div class="empty-state">Selecione ou crie um arquivo para editar.</div>
             }
         </section>
+
+        @if (_currentEndpointStructure != null)
+        {
+            <FlowNavigator Endpoint="_currentEndpointStructure" OnStepClick="HandleStepClick" />
+        }
     </div>
 
     <QuickAddDrawer IsOpen="_quickAddOpen"
@@ -130,7 +135,41 @@ else
                 <button class="context-menu-btn" @onclick="() => ContextAdd(true)">New Folder</button>
                 <hr class="context-menu-sep" />
             }
+
+            @if (IsPolicyFile(_contextMenuItem))
+            {
+                <button class="context-menu-btn" @onclick="OpenRenameDialog">✏️ Rename Policy</button>
+                <hr class="context-menu-sep" />
+            }
+
             <button class="context-menu-btn btn-danger" @onclick="ContextDelete">Delete</button>
+        </div>
+    }
+
+    @if (_showRename)
+    {
+        <div class="modal-backdrop new-item-backdrop" @onclick="() => _showRename = false">
+            <div class="card new-item-modal" @onclick:stopPropagation>
+                <div class="card-header">
+                    <h3 class="card-title">Renomear Policy</h3>
+                </div>
+                <div class="card-body">
+                    <p style="font-size: var(--text-sm); color: var(--color-text-muted); margin-bottom: var(--space-2);">
+                        Isso irá renomear o arquivo e atualizar todas as referências em Endpoints.
+                    </p>
+                    <div class="form-field">
+                        <label style="font-size: var(--text-xs); font-weight: 600; color: var(--color-text-muted); text-transform: uppercase;">Novo Nome</label>
+                        <input class="input new-item-input" @bind="_renameNewName"
+                               placeholder="Nome da policy..."
+                               @onkeydown="HandleRenameKey" 
+                               @ref="_renameInput" />
+                    </div>
+                </div>
+                <div class="card-footer modal-footer-actions">
+                    <button class="btn btn-ghost" @onclick="() => _showRename = false">Cancelar</button>
+                    <button class="btn btn-primary" @onclick="ConfirmRename">Renomear</button>
+                </div>
+            </div>
         </div>
     }
 }

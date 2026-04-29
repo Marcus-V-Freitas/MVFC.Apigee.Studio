@@ -80,6 +80,11 @@ public partial class Emulator : ComponentBase, IDisposable
     private bool _dockerError;
 
     /// <summary>
+    /// The Docker image currently running in the container.
+    /// </summary>
+    private string? _runningImage;
+
+    /// <summary>
     /// Client for communicating with the Apigee Emulator.
     /// </summary>
     [Inject]
@@ -253,10 +258,19 @@ public partial class Emulator : ComponentBase, IDisposable
         try
         {
             _alive = await EmulatorClient.IsAliveAsync();
+            if (_alive)
+            {
+                _runningImage = await EmulatorClient.GetRunningImageAsync();
+            }
+            else
+            {
+                _runningImage = null;
+            }
         }
         catch (Exception ex)
         {
             _alive = false;
+            _runningImage = null;
             _statusError = "Não foi possível conectar: " + ex.Message;
         }
         finally

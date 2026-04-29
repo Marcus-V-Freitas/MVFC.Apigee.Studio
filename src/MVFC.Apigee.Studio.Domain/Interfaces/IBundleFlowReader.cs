@@ -15,4 +15,13 @@ public interface IBundleFlowReader
     /// <param name="proxyName">API proxy name (e.g., ola-mundo)</param>
     /// <param name="statusCode">Response status code — used to infer Executed and Error</param>
     IReadOnlyList<TracePoint> ReadFlowPoints(string workspaceRoot, string proxyName, int statusCode);
+
+    /// <summary>
+    /// Reads the static structure of a specific endpoint (Proxy or Target).
+    /// </summary>
+    /// <param name="workspaceRoot">Workspace root path.</param>
+    /// <param name="proxyName">Proxy name.</param>
+    /// <param name="endpointName">Endpoint XML file name (without extension).</param>
+    /// <param name="isProxyEndpoint">True for ProxyEndpoint, false for TargetEndpoint.</param>
+    EndpointStructure? ReadEndpointStructure(string workspaceRoot, string proxyName, string endpointName, bool isProxyEndpoint);
 }

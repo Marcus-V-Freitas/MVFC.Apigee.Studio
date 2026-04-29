@@ -26,6 +26,17 @@
         </div>
     </div>
 
+    @if (_alive && !string.IsNullOrEmpty(_runningImage) && !string.Equals(_image, _runningImage, StringComparison.OrdinalIgnoreCase))
+    {
+        <div class="divergence-warning mt-4">
+            <i data-lucide="alert-triangle"></i>
+            <span>
+                A imagem selecionada (<code>@_image</code>) é diferente da que está rodando (<code>@_runningImage</code>). 
+                Clique em <strong>Restart</strong> para sincronizar.
+            </span>
+        </div>
+    }
+
     <datalist id="emulator-images">
         @foreach (var img in _images)
         {

@@ -1,0 +1,58 @@
+<div class="flow-block @Flow.Type.ToLower()">
+    <div class="flow-block-header">
+        <span class="flow-type">@Flow.Type</span>
+        <span class="flow-name">@Flow.Name</span>
+        @if (!string.IsNullOrEmpty(Flow.Condition))
+        {
+            <div class="flow-condition" title="@Flow.Condition">
+                <i data-lucide="filter"></i>
+            </div>
+        }
+    </div>
+
+    <div class="flow-phases">
+        @* Request Phase *@
+        <div class="flow-phase request">
+            <div class="phase-label">Request</div>
+            <div class="step-list">
+                @if (!Flow.RequestSteps.Any())
+                {
+                    <div class="step-empty">Vazio</div>
+                }
+                @foreach (var step in Flow.RequestSteps)
+                {
+                    <div class="flow-step" @onclick="() => OnStepClick.InvokeAsync(step.Name)">
+                        <i data-lucide="zap"></i>
+                        <span class="step-name">@step.Name</span>
+                        @if (!string.IsNullOrEmpty(step.Condition))
+                        {
+                            <i data-lucide="help-circle" class="step-cond-icon" title="@step.Condition"></i>
+                        }
+                    </div>
+                }
+            </div>
+        </div>
+
+        @* Response Phase *@
+        <div class="flow-phase response">
+            <div class="phase-label">Response</div>
+            <div class="step-list">
+                @if (!Flow.ResponseSteps.Any())
+                {
+                    <div class="step-empty">Vazio</div>
+                }
+                @foreach (var step in Flow.ResponseSteps)
+                {
+                    <div class="flow-step" @onclick="() => OnStepClick.InvokeAsync(step.Name)">
+                        <i data-lucide="zap"></i>
+                        <span class="step-name">@step.Name</span>
+                        @if (!string.IsNullOrEmpty(step.Condition))
+                        {
+                            <i data-lucide="help-circle" class="step-cond-icon" title="@step.Condition"></i>
+                        }
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+</div>

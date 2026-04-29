@@ -68,4 +68,10 @@ public interface IApigeeEmulatorClient
     /// GET /v1/emulator/test/developerapps
     /// </summary>
     Task<IReadOnlyList<DeveloperApp>> GetLiveDeveloperAppsAsync(CancellationToken ct = default);
+
+    /// <summary>
+    /// Returns the name:tag of the image currently running in the emulator container.
+    /// Returns null if the container is not running.
+    /// </summary>
+    Task<string?> GetRunningImageAsync(CancellationToken ct = default);
 }

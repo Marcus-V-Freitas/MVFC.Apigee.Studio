@@ -32,6 +32,7 @@ builder.Services.AddHttpClient("ApiClient", client =>
 builder.Services.AddTransient<CreateWorkspaceUseCase>();
 builder.Services.AddTransient<DeployToEmulatorUseCase>();
 builder.Services.AddTransient<GeneratePolicyUseCase>();
+builder.Services.AddTransient<RenamePolicyUseCase>();
 
 /// <summary>
 /// Registers UI and linting services for dependency injection.

@@ -1,0 +1,111 @@
+<div class="modal-backdrop" @onclick="OnCancel">
+    <div class="card deploy-preview-modal" @onclick:stopPropagation>
+        <div class="card-header">
+            <h3 class="card-title">Análise Pré-Implantação</h3>
+        </div>
+        <div class="card-body" style="max-height: 70vh; overflow-y: auto;">
+            <section class="preview-section">
+                <h4 class="section-title">🔍 Validação do Bundle</h4>
+                
+                @if (StructuralLint is not null && StructuralLint.Issues.Count > 0)
+                {
+                    <div class="lint-group">
+                        <h5 class="lint-group-title">Problemas Estruturais</h5>
+                        <ul class="lint-list">
+                            @foreach (var issue in StructuralLint.Issues)
+                            {
+                                <li class="lint-item lint-@issue.Severity.ToLower()">
+                                    <span class="lint-badge">@issue.Severity.ToUpper()</span>
+                                    <span class="lint-file">@issue.File</span>
+                                    <span class="lint-msg">@issue.Message</span>
+                                </li>
+                            }
+                        </ul>
+                    </div>
+                }
+
+                @if (DeepLint is not null && DeepLint.Any(r => r.Messages.Any()))
+                {
+                    <div class="lint-group">
+                        <h5 class="lint-group-title">Alertas do apigeelint</h5>
+                        <ul class="lint-list">
+                            @foreach (var result in DeepLint.Where(r => r.Messages.Any()))
+                            {
+                                @foreach (var msg in result.Messages)
+                                {
+                                    <li class="lint-item lint-@(msg.Severity == 2 ? "error" : "warning")">
+                                        <span class="lint-badge">@(msg.Severity == 2 ? "ERROR" : "WARNING")</span>
+                                        <span class="lint-file">@Path.GetFileName(result.FilePath)</span>
+                                        <span class="lint-msg">[@msg.Line:@msg.Column] @msg.Message</span>
+                                    </li>
+                                }
+                            }
+                        </ul>
+                    </div>
+
+                    @if (IsApigeeLintMissing)
+                    {
+                        <ExternalToolsHelp />
+                    }
+                }
+
+                @if ((StructuralLint is null || !StructuralLint.Issues.Any()) && (DeepLint is null || !DeepLint.Any(r => r.Messages.Any())))
+                {
+                    <div class="empty-state-mini">✔ Nenhuma falha detectada no bundle.</div>
+                }
+            </section>
+
+            @* DIFF RESULTS *@
+            <section class="preview-section">
+                <h4 class="section-title">📄 Alterações no Bundle</h4>
+                
+                @if (Diff is not null && Diff.HasChanges)
+                {
+                    <div class="diff-summary">
+                        @if (Diff.AddedFiles.Any())
+                        {
+                            <div class="diff-group">
+                                <h5 class="diff-group-title text-success">➕ Adicionados (@Diff.AddedFiles.Count)</h5>
+                                <ul class="diff-list">
+                                    @foreach (var f in Diff.AddedFiles.Take(10)) { <li>@f</li> }
+                                    @if (Diff.AddedFiles.Count > 10) { <li class="text-muted">...e mais @(Diff.AddedFiles.Count - 10)</li> }
+                                </ul>
+                            </div>
+                        }
+                        @if (Diff.ModifiedFiles.Any())
+                        {
+                            <div class="diff-group">
+                                <h5 class="diff-group-title text-warning">✏️ Modificados (@Diff.ModifiedFiles.Count)</h5>
+                                <ul class="diff-list">
+                                    @foreach (var f in Diff.ModifiedFiles.Take(10)) { <li>@f</li> }
+                                    @if (Diff.ModifiedFiles.Count > 10) { <li class="text-muted">...e mais @(Diff.ModifiedFiles.Count - 10)</li> }
+                                </ul>
+                            </div>
+                        }
+                        @if (Diff.RemovedFiles.Any())
+                        {
+                            <div class="diff-group">
+                                <h5 class="diff-group-title text-danger">🗑️ Removidos (@Diff.RemovedFiles.Count)</h5>
+                                <ul class="diff-list">
+                                    @foreach (var f in Diff.RemovedFiles.Take(10)) { <li>@f</li> }
+                                    @if (Diff.RemovedFiles.Count > 10) { <li class="text-muted">...e mais @(Diff.RemovedFiles.Count - 10)</li> }
+                                </ul>
+                            </div>
+                        }
+                    </div>
+                }
+                else
+                {
+                    <div class="empty-state-mini">Nenhuma alteração detectada desde o último deploy.</div>
+                }
+            </section>
+        </div>
+
+        <div class="card-footer modal-footer-actions">
+            <button class="btn btn-ghost" @onclick="OnCancel">Cancelar</button>
+            <button class="btn btn-primary" @onclick="OnConfirm" disabled="@IsDeployBlocked">
+                🚀 Confirmar e Implantar
+            </button>
+        </div>
+    </div>
+</div>

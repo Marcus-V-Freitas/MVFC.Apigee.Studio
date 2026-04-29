@@ -92,16 +92,16 @@ public partial class TestResourcesPanel
         }
 
         await WorkspaceRepository.SaveTestResourcesAsync(Workspace, Resources);
-        
+
         // Sync open editor tabs
         var options = new JsonSerializerOptions { WriteIndented = true };
         var testDir = Path.Combine(Workspace.RootPath, "test");
-        
-        EditorService.SyncTabContent(Path.Combine(testDir, "products.json"), 
+
+        EditorService.SyncTabContent(Path.Combine(testDir, "products.json"),
             JsonSerializer.Serialize(Resources.Products, options));
-        EditorService.SyncTabContent(Path.Combine(testDir, "developers.json"), 
+        EditorService.SyncTabContent(Path.Combine(testDir, "developers.json"),
             JsonSerializer.Serialize(Resources.Developers, options));
-        EditorService.SyncTabContent(Path.Combine(testDir, "developerapps.json"), 
+        EditorService.SyncTabContent(Path.Combine(testDir, "developerapps.json"),
             JsonSerializer.Serialize(Resources.Apps, options));
 
         await OnResourcesChanged.InvokeAsync();
@@ -123,7 +123,7 @@ public partial class TestResourcesPanel
         EditingProduct = null;
         ProductName = "";
         ProductDisplayName = "";
-        SelectedProxies = WorkspaceRepository.ListApiProxies(Workspace!).ToList();
+        SelectedProxies = [.. WorkspaceRepository.ListApiProxies(Workspace!)];
         ShowProductModal = true;
     }
 
@@ -164,12 +164,12 @@ public partial class TestResourcesPanel
 
         var displayName = string.IsNullOrWhiteSpace(ProductDisplayName) ? ProductName : ProductDisplayName;
         var newProduct = new ApiProduct(ProductName, displayName, "Test Product", "auto", ["local"], [.. SelectedProxies]);
-        
+
         if (EditingProduct != null)
         {
-            Resources = Resources with 
-            { 
-                Products = Resources.Products.Select(p => string.Equals(p.Name, EditingProduct.Name, StringComparison.Ordinal) ? newProduct : p).ToList() 
+            Resources = Resources with
+            {
+                Products = [.. Resources.Products.Select(p => string.Equals(p.Name, EditingProduct.Name, StringComparison.Ordinal) ? newProduct : p)],
             };
         }
         else
@@ -188,9 +188,9 @@ public partial class TestResourcesPanel
     /// <param name="prod">The product to delete.</param>
     private async Task DeleteProduct(ApiProduct prod)
     {
-        Resources = Resources with 
-        { 
-            Products = Resources.Products.Where(p => p != prod).ToList() 
+        Resources = Resources with
+        {
+            Products = [.. Resources.Products.Where(p => p != prod)],
         };
         await SaveResources();
         ToastService.ShowInfo($"Produto '{prod.Name}' removido.");
@@ -232,12 +232,12 @@ public partial class TestResourcesPanel
         }
 
         var newDev = new Developer(DeveloperEmail, DeveloperFirstName, DeveloperLastName, DeveloperEmail);
-        
+
         if (EditingDeveloper != null)
         {
-            Resources = Resources with 
-            { 
-                Developers = Resources.Developers.Select(d => d == EditingDeveloper ? newDev : d).ToList() 
+            Resources = Resources with
+            {
+                Developers = [.. Resources.Developers.Select(d => d == EditingDeveloper ? newDev : d)],
             };
         }
         else
@@ -256,9 +256,9 @@ public partial class TestResourcesPanel
     /// <param name="dev">The developer to delete.</param>
     private async Task DeleteDeveloper(Developer dev)
     {
-        Resources = Resources with 
-        { 
-            Developers = Resources.Developers.Where(d => d != dev).ToList() 
+        Resources = Resources with
+        {
+            Developers = [.. Resources.Developers.Where(d => d != dev)],
         };
         await SaveResources();
         ToastService.ShowInfo($"Desenvolvedor '{dev.Email}' removido.");
@@ -311,7 +311,7 @@ public partial class TestResourcesPanel
         EditingApp = app;
         AppName = app.Name;
         AppDeveloperEmail = app.DeveloperId;
-        SelectedProducts = app.ApiProducts.ToList();
+        SelectedProducts = [.. app.ApiProducts];
         ShowDevDropdown = false;
         ShowAppModal = true;
     }
@@ -333,19 +333,19 @@ public partial class TestResourcesPanel
     /// </summary>
     private async Task SaveApp()
     {
-        if (string.IsNullOrWhiteSpace(AppName) || 
+        if (string.IsNullOrWhiteSpace(AppName) ||
             string.IsNullOrWhiteSpace(AppDeveloperEmail))
         {
             return;
         }
 
         var newApp = new DeveloperApp(AppName, AppName, AppDeveloperEmail, AppDeveloperEmail, [.. SelectedProducts]);
-        
+
         if (EditingApp != null)
         {
-            Resources = Resources with 
-            { 
-                Apps = Resources.Apps.Select(a => string.Equals(a.Name, EditingApp.Name, StringComparison.Ordinal) ? newApp : a).ToList() 
+            Resources = Resources with
+            {
+                Apps = [.. Resources.Apps.Select(a => string.Equals(a.Name, EditingApp.Name, StringComparison.Ordinal) ? newApp : a)],
             };
         }
         else
@@ -375,13 +375,13 @@ public partial class TestResourcesPanel
             }
 
             // Merge live credentials into local apps
-            var updatedApps = Resources.Apps.Select(localApp => 
+            var updatedApps = Resources.Apps.Select(localApp =>
             {
                 var live = liveApps.FirstOrDefault(l => string.Equals(l.Name, localApp.Name, StringComparison.Ordinal));
                 // Keep only the most recent credential (the last one in the list)
                 var lastCred = live?.Credentials is [.., var last] ? last : null;
-                return live != null && lastCred != null 
-                    ? localApp with { Credentials = [lastCred], AppId = live.AppId } 
+                return live != null && lastCred != null
+                    ? localApp with { Credentials = [lastCred], AppId = live.AppId }
                     : localApp;
             }).ToList();
 
@@ -405,9 +405,9 @@ public partial class TestResourcesPanel
     /// <param name="app">The app to delete.</param>
     private async Task DeleteApp(DeveloperApp app)
     {
-        Resources = Resources with 
-        { 
-            Apps = Resources.Apps.Where(a => a != app).ToList() 
+        Resources = Resources with
+        {
+            Apps = [.. Resources.Apps.Where(a => a != app)],
         };
         await SaveResources();
         ToastService.ShowInfo($"App '{app.Name}' removido.");

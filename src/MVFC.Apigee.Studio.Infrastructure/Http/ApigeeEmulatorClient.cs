@@ -233,6 +233,33 @@ public sealed class ApigeeEmulatorClient(
         return await response.Content.ReadFromJsonAsync<List<DeveloperApp>>(cancellationToken: ct) ?? [];
     }
 
+    /// <inheritdoc/>
+    public async Task<string?> GetRunningImageAsync(CancellationToken ct = default)
+    {
+        try
+        {
+            var psi = new ProcessStartInfo("docker", $"inspect {DefaultContainerName} --format \"{{{{.Config.Image}}}}\"")
+            {
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                CreateNoWindow = true,
+            };
+
+            using var proc = Process.Start(psi);
+            if (proc is null) return null;
+
+            var output = await proc.StandardOutput.ReadToEndAsync(ct);
+            await proc.WaitForExitAsync(ct);
+
+            return proc.ExitCode == 0 ? output.Trim() : null;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
     /// <summary>
     /// Runs a Docker command. Throws <see cref="InvalidOperationException"/> on non-zero exit.
     /// </summary>

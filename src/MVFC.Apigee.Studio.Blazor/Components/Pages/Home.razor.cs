@@ -88,21 +88,21 @@ public partial class Home : ComponentBase
         try
         {
             var appSettingsPath = Path.Combine(Directory.GetCurrentDirectory(), "appsettings.json");
-            System.Text.Json.Nodes.JsonObject root;
+            JsonObject root;
 
             if (File.Exists(appSettingsPath))
             {
                 var json = await File.ReadAllTextAsync(appSettingsPath);
-                root = System.Text.Json.Nodes.JsonNode.Parse(json) as System.Text.Json.Nodes.JsonObject ?? new System.Text.Json.Nodes.JsonObject();
+                root = JsonNode.Parse(json) as JsonObject ?? [];
             }
             else
             {
-                root = new System.Text.Json.Nodes.JsonObject();
+                root = [];
             }
 
             root["WorkspacesRoot"] = _workspacesRoot;
 
-            var options = new System.Text.Json.JsonSerializerOptions { WriteIndented = true };
+            var options = new JsonSerializerOptions { WriteIndented = true };
             await File.WriteAllTextAsync(appSettingsPath, root.ToJsonString(options));
 
             // Wait briefly for IConfiguration file watcher to catch the change

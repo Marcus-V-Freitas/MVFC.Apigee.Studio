@@ -5,6 +5,26 @@
             <label>Environment</label>
             <input class="input" @bind="_deployEnv" placeholder="local" />
         </div>
+
+        @if (_diff != null && _diff.HasChanges)
+        {
+            <div class="deploy-diff-summary">
+                <span class="diff-title">Pendências de Deploy:</span>
+                <div class="diff-counts">
+                    @if (_diff.AddedFiles.Any()) { <span class="diff-add">+@_diff.AddedFiles.Count Novo</span> }
+                    @if (_diff.ModifiedFiles.Any()) { <span class="diff-mod">~@_diff.ModifiedFiles.Count Modificado</span> }
+                    @if (_diff.RemovedFiles.Any()) { <span class="diff-del">-@_diff.RemovedFiles.Count Removido</span> }
+                </div>
+            </div>
+        }
+        else if (_diff != null && !_diff.HasChanges)
+        {
+            <div class="deploy-diff-empty">
+                <i data-lucide="check-circle"></i>
+                <span>Sem alterações desde o último deploy.</span>
+            </div>
+        }
+
         <button class="btn btn-primary" @onclick="DeployFull" disabled="@_deploying">
             @(_deploying ? "Deploying..." : "Deploy Workspace")
         </button>
@@ -20,3 +40,12 @@
         </div>
     }
 </div>
+
+@if (_showPreview)
+{
+    <DeployPreviewDialog StructuralLint="_structuralLint"
+                         DeepLint="_deepLint"
+                         Diff="_diff"
+                         OnConfirm="ConfirmDeployment"
+                         OnCancel="CancelDeployment" />
+}

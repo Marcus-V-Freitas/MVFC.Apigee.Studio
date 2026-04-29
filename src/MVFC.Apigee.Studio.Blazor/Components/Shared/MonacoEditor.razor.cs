@@ -105,6 +105,12 @@ public partial class MonacoEditor : ComponentBase, IAsyncDisposable
         await JS.InvokeVoidAsync("monacoInterop.setMarkers", Id, markers);
 
     /// <summary>
+    /// Clears all diagnostic markers from the editor.
+    /// </summary>
+    public async Task ClearMarkers() =>
+        await JS.InvokeVoidAsync("monacoInterop.clearMarkers", Id);
+
+    /// <summary>
     /// Disposes the Monaco editor instance and releases resources.
     /// </summary>
     public async ValueTask DisposeAsync()

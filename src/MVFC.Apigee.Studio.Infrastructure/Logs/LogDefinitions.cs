@@ -52,4 +52,7 @@ public static partial class LogDefinitions
 
     [LoggerMessage(LogLevel.Information, "Enviando dados de teste para {Url}")]
     public static partial void LogTestDataSending(this ILogger logger, string url);
+
+    [LoggerMessage(LogLevel.Error, "Erro ao criar pacote ZIP para o workspace {WorkspaceName}")]
+    public static partial void LogBuildZipError(this ILogger logger, Exception ex, string workspaceName);
 }

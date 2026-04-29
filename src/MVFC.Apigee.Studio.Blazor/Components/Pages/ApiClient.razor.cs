@@ -130,10 +130,10 @@ public partial class ApiClient : ComponentBase, IDisposable
     /// <returns>A configured <see cref="JsonSerializerOptions"/> instance.</returns>
     private static JsonSerializerOptions CreateOptions()
     {
-        var options = new JsonSerializerOptions 
-        { 
+        var options = new JsonSerializerOptions
+        {
             WriteIndented = true,
-            Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+            Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
         };
         options.Converters.Add(new JsonStringEnumConverter());
         return options;

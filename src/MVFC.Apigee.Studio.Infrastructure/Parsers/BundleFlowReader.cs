@@ -155,4 +155,84 @@ public sealed class BundleFlowReader(ILogger<BundleFlowReader> logger) : IBundle
             }
         }
     }
+    /// <inheritdoc/>
+    public EndpointStructure? ReadEndpointStructure(string workspaceRoot, string proxyName, string endpointName, bool isProxyEndpoint)
+    {
+        var subDir = isProxyEndpoint ? "proxies" : "targets";
+        var endpointPath = Path.Combine(
+            workspaceRoot, "src", "main", "apigee", "apiproxies",
+            proxyName, "apiproxy", subDir, $"{endpointName}.xml");
+
+        if (!File.Exists(endpointPath))
+        {
+            // Fallback: try to find any XML in the directory if the name doesn't match
+            var dir = Path.GetDirectoryName(endpointPath)!;
+            if (Directory.Exists(dir))
+            {
+                endpointPath = Directory.EnumerateFiles(dir, "*.xml").FirstOrDefault() ?? endpointPath;
+            }
+        }
+
+        if (!File.Exists(endpointPath)) return null;
+
+        try
+        {
+            var doc = XDocument.Load(endpointPath);
+            var root = doc.Root;
+            if (root is null) return null;
+
+            var preFlow = ParseFlow(root.Element("PreFlow"), "PreFlow");
+            var postFlow = ParseFlow(root.Element("PostFlow"), "PostFlow");
+            
+            var flows = root.Element("Flows")?.Elements("Flow")
+                .Select(f => ParseFlow(f, "Flow"))
+                .ToList() ?? [];
+
+            return new EndpointStructure(
+                Name: root.Attribute("name")?.Value ?? endpointName,
+                PreFlow: preFlow,
+                Flows: flows,
+                PostFlow: postFlow
+            );
+        }
+        catch (Exception ex)
+        {
+            _logger.LogErrorParsingProxyEndpointXml(ex, endpointPath);
+            return null;
+        }
+    }
+
+    private static FlowStructure ParseFlow(XElement? flowElement, string defaultType)
+    {
+        if (flowElement == null)
+            return new FlowStructure(defaultType, defaultType, [], []);
+
+        var name = flowElement.Attribute("name")?.Value ?? defaultType;
+        var condition = flowElement.Element("Condition")?.Value;
+        
+        var requestSteps = flowElement.Element("Request")?.Elements("Step")
+            .Select(ParseStep)
+            .Where(s => s != null)
+            .Cast<FlowStep>()
+            .ToList() ?? [];
+
+        var responseSteps = flowElement.Element("Response")?.Elements("Step")
+            .Select(ParseStep)
+            .Where(s => s != null)
+            .Cast<FlowStep>()
+            .ToList() ?? [];
+
+        return new FlowStructure(name, defaultType, requestSteps, responseSteps, condition);
+    }
+
+    private static FlowStep? ParseStep(XElement stepElement)
+    {
+        var name = stepElement.Element("Name")?.Value;
+        if (string.IsNullOrWhiteSpace(name)) return null;
+
+        return new FlowStep(
+            Name: name,
+            Condition: stepElement.Element("Condition")?.Value
+        );
+    }
 }

@@ -1,0 +1,40 @@
+{
+  "AssignMessage": {
+    "attributes": ["name", "enabled", "continueOnError", "async"],
+    "children": {
+      "AssignMessage": ["DisplayName", "Description", "Add", "Copy", "Remove", "Set", "AssignTo", "AssignVariable", "IgnoreUnresolvedVariables"],
+      "Set": ["Headers", "QueryParams", "FormParams", "Payload", "Path", "StatusCode", "ReasonPhrase", "Verb", "Version"],
+      "Add": ["Headers", "QueryParams", "FormParams"],
+      "Copy": ["Source", "Headers", "QueryParams", "FormParams", "Payload", "Verb", "Path", "StatusCode", "ReasonPhrase"],
+      "Remove": ["Headers", "QueryParams", "FormParams", "Payload"],
+      "AssignVariable": ["Name", "Value", "Ref", "Template", "ResourceURL"],
+      "Headers": ["Header"],
+      "QueryParams": ["QueryParam"],
+      "FormParams": ["FormParam"]
+    }
+  },
+  "VerifyAPIKey": {
+    "attributes": ["name", "enabled", "continueOnError", "async"],
+    "children": {
+      "VerifyAPIKey": ["DisplayName", "Description", "APIKey"],
+      "APIKey": []
+    }
+  },
+  "ExtractVariables": {
+    "attributes": ["name", "enabled", "continueOnError", "async"],
+    "children": {
+      "ExtractVariables": ["DisplayName", "Description", "Source", "VariablePrefix", "IgnoreUnresolvedVariables", "JSONPayload", "XMLPayload", "FormParam", "Header", "QueryParam", "URIPath"],
+      "JSONPayload": ["Variable"],
+      "XMLPayload": ["Namespaces", "Variable"],
+      "Namespaces": ["Namespace"],
+      "Variable": ["JSONPath", "XPath"]
+    }
+  },
+  "RaiseFault": {
+    "attributes": ["name", "enabled", "continueOnError", "async"],
+    "children": {
+      "RaiseFault": ["DisplayName", "Description", "FaultResponse", "IgnoreUnresolvedVariables"],
+      "FaultResponse": ["Copy", "Set", "Add", "Remove"]
+    }
+  }
+}

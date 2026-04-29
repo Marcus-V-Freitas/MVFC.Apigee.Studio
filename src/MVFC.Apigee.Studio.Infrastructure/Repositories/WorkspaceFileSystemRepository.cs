@@ -64,7 +64,7 @@ public sealed class WorkspaceFileSystemRepository(IConfiguration config, ILogger
         }
 
         // Check for flat structure ROOT/apiproxy
-        if (Directory.Exists(Path.Combine(ApigeeRoot(workspace), "apiproxy")) && 
+        if (Directory.Exists(Path.Combine(ApigeeRoot(workspace), "apiproxy")) &&
             !proxies.Contains(workspace.Name))
         {
             proxies.Add(workspace.Name);
@@ -85,7 +85,7 @@ public sealed class WorkspaceFileSystemRepository(IConfiguration config, ILogger
         }
 
         // Check for flat structure ROOT/sharedflowbundle
-        if (Directory.Exists(Path.Combine(ApigeeRoot(workspace), "sharedflowbundle")) && 
+        if (Directory.Exists(Path.Combine(ApigeeRoot(workspace), "sharedflowbundle")) &&
             !flows.Contains(workspace.Name))
         {
             flows.Add(workspace.Name);
@@ -106,7 +106,7 @@ public sealed class WorkspaceFileSystemRepository(IConfiguration config, ILogger
         Directory.CreateDirectory(Path.Combine(fullPath, "sharedflows"));
         Directory.CreateDirectory(Path.Combine(fullPath, "environments"));
         Directory.CreateDirectory(Path.Combine(fullPath, "test"));
-        
+
         // Ensure 'local' environment exists on creation
         EnsureLocalEnvironmentSync(fullPath);
 
@@ -147,7 +147,7 @@ public sealed class WorkspaceFileSystemRepository(IConfiguration config, ILogger
         if (Directory.Exists(linkPath))
         {
             var counter = 2;
-            while (Directory.Exists(linkPath + "-" + counter))
+            while (Directory.Exists(linkPath + "-" + counter.ToString(CultureInfo.InvariantCulture)))
                 counter++;
             name += string.Create(CultureInfo.InvariantCulture, $"-{counter}");
             linkPath = Path.Combine(WorkspacesRoot, name);
@@ -299,71 +299,63 @@ public sealed class WorkspaceFileSystemRepository(IConfiguration config, ILogger
     public async Task<string> BuildWorkspaceZipAsync(ApigeeWorkspace workspace, CancellationToken ct = default)
     {
         var timestamp = DateTime.UtcNow.ToString("yyyyMMddHHmmss", CultureInfo.InvariantCulture);
-        var tempDir = Path.Combine(Path.GetTempPath(), $"apigee_build_{workspace.Name}_{timestamp}");
         var zipPath = Path.Combine(Path.GetTempPath(), $"{workspace.Name}_full_{timestamp}.zip");
 
         try
         {
-            var targetRoot = Path.Combine(tempDir, "src", "main", "apigee");
-            Directory.CreateDirectory(targetRoot);
-
-            // Copy essential folders
-            foreach (var dir in new[] { "apiproxies", "sharedflows", "environments", "test", "apiproxy" })
+            await using var fs = new FileStream(zipPath, FileMode.Create, FileAccess.Write, FileShare.None);
+            using (var archive = new ZipArchive(fs, ZipArchiveMode.Create))
             {
-                var source = Path.Combine(workspace.RootPath, dir);
-                if (Directory.Exists(source))
+                // List of folders to include in the bundle
+                var foldersToProcess = new[] { "apiproxies", "sharedflows", "environments", "test", "apiproxy" };
+
+                foreach (var folderName in foldersToProcess)
                 {
-                    if (string.Equals(dir, "apiproxy", StringComparison.OrdinalIgnoreCase))
-                    {
-                        // Map flat structure ROOT/apiproxy to src/main/apigee/apiproxies/NAME/apiproxy
-                        CopyDirectory(source, Path.Combine(targetRoot, "apiproxies", workspace.Name, "apiproxy"));
-                    }
-                    else
-                    {
-                        CopyDirectory(source, Path.Combine(targetRoot, dir));
-                    }
+                    var sourcePath = Path.Combine(workspace.RootPath, folderName);
+                    if (!Directory.Exists(sourcePath))
+                        continue;
+
+                    // Map folders to their expected location in the Apigee bundle
+                    var baseInZip = folderName.Equals("apiproxy", StringComparison.OrdinalIgnoreCase)
+                        ? $"src/main/apigee/apiproxies/{workspace.Name}/apiproxy"
+                        : $"src/main/apigee/{folderName}";
+
+                    AddDirectoryToArchive(archive, sourcePath, baseInZip);
                 }
             }
 
-            // Create ZIP from the temp directory
-            if (File.Exists(zipPath)) File.Delete(zipPath);
-            await Task.Run(() => ZipFile.CreateFromDirectory(tempDir, zipPath, CompressionLevel.Optimal, false), ct);
-
             return zipPath;
         }
-        finally
+        catch (Exception ex)
         {
-            if (Directory.Exists(tempDir))
-                Directory.Delete(tempDir, true);
+            _logger.LogBuildZipError(ex, workspace.Name);
+            if (File.Exists(zipPath))
+                File.Delete(zipPath);
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// Recursively adds files from a source directory to a ZIP archive.
+    /// </summary>
+    /// <param name="archive">The target ZIP archive.</param>
+    /// <param name="sourceDir">The physical source directory.</param>
+    /// <param name="entryPathInZip">The base path within the ZIP archive.</param>
+    private static void AddDirectoryToArchive(ZipArchive archive, string sourceDir, string entryPathInZip)
+    {
+        foreach (var file in Directory.EnumerateFiles(sourceDir, "*", SearchOption.AllDirectories))
+        {
+            if (IsExcluded(file))
+                continue;
+
+            var relativePath = Path.GetRelativePath(sourceDir, file);
+            var entryName = Path.Combine(entryPathInZip, relativePath).Replace('\\', '/');
+
+            archive.CreateEntryFromFile(file, entryName, CompressionLevel.Optimal);
         }
     }
 
     private static readonly char[] PathSeparators = ['/', '\\'];
-
-    /// <summary>
-    /// Recursively copies a directory from source to destination, excluding specified folders.
-    /// </summary>
-    /// <param name="sourceDir">The source directory path.</param>
-    /// <param name="destinationDir">The destination directory path.</param>
-    private static void CopyDirectory(string sourceDir, string destinationDir)
-    {
-        Directory.CreateDirectory(destinationDir);
-
-        foreach (var file in Directory.EnumerateFiles(sourceDir))
-        {
-            if (IsExcluded(file)) continue;
-            var destFile = Path.Combine(destinationDir, Path.GetFileName(file));
-            File.Copy(file, destFile, true);
-        }
-
-        foreach (var dir in Directory.EnumerateDirectories(sourceDir))
-        {
-            var name = Path.GetFileName(dir);
-            if (IsExcluded(dir)) continue;
-
-            CopyDirectory(dir, Path.Combine(destinationDir, name));
-        }
-    }
 
     /// <summary>
     /// Checks if a path should be excluded based on the predefined excluded folders list.
@@ -428,10 +420,10 @@ public sealed class WorkspaceFileSystemRepository(IConfiguration config, ILogger
         var testDir = Path.Combine(workspace.RootPath, "test");
         Directory.CreateDirectory(testDir);
 
-        var options = new JsonSerializerOptions 
-        { 
+        var options = new JsonSerializerOptions
+        {
             WriteIndented = true,
-            DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
+            DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
         };
 
         await File.WriteAllTextAsync(Path.Combine(testDir, "products.json"), JsonSerializer.Serialize(resources.Products, options), ct);
@@ -448,26 +440,25 @@ public sealed class WorkspaceFileSystemRepository(IConfiguration config, ILogger
         var resources = await GetTestResourcesAsync(workspace, ct);
         var zipPath = GetTempZipPath(workspace.Name);
 
-        await Task.Run(() =>
+        await using var zipStream = new FileStream(zipPath, FileMode.Create, FileAccess.Write, FileShare.None);
+        await using var archive = new ZipArchive(zipStream, ZipArchiveMode.Create);
+        var options = CreateJsonOptions();
+
+        AddJsonEntry(archive, "products.json", resources.Products, options);
+        AddJsonEntry(archive, "developers.json", resources.Developers, options);
+
+        var cleanedApps = resources.Apps.Select(a => new
         {
-            using (var zipStream = new FileStream(zipPath, FileMode.Create, FileAccess.Write, FileShare.None))
-            {
-                using (var archive = new ZipArchive(zipStream, ZipArchiveMode.Create))
-                {
-                    var options = CreateJsonOptions();
-
-                    AddJsonEntry(archive, "products.json", resources.Products, options);
-                    AddJsonEntry(archive, "developers.json", resources.Developers, options);
-
-                    var cleanedApps = resources.Apps.Select(a => new
-                    {
-                        a.Name, a.DisplayName, a.DeveloperEmail, a.DeveloperId,
-                        a.ApiProducts, a.CallbackUrl, a.ExpiryType, a.Status
-                    }).ToList();
-                    AddJsonEntry(archive, "developerapps.json", cleanedApps, options);
-                }
-            }
-        }, ct);
+            a.Name,
+            a.DisplayName,
+            a.DeveloperEmail,
+            a.DeveloperId,
+            a.ApiProducts,
+            a.CallbackUrl,
+            a.ExpiryType,
+            a.Status,
+        }).ToList();
+        AddJsonEntry(archive, "developerapps.json", cleanedApps, options);
 
         return zipPath;
     }
@@ -484,7 +475,7 @@ public sealed class WorkspaceFileSystemRepository(IConfiguration config, ILogger
     private static string GetTempZipPath(string workspaceName)
     {
         var path = Path.Combine(Path.GetTempPath(),
-            $"{workspaceName}_testdata_{DateTime.UtcNow:yyyyMMddHHmmss}.zip");
+            $"{workspaceName}_testdata_{DateTime.UtcNow.ToString("yyyyMMddHHmmss", CultureInfo.InvariantCulture)}.zip");
         if (File.Exists(path)) File.Delete(path);
         return path;
     }
@@ -493,7 +484,7 @@ public sealed class WorkspaceFileSystemRepository(IConfiguration config, ILogger
     {
         WriteIndented = true,
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
     };
 
     private static void AddJsonEntry<T>(ZipArchive archive, string entryName, T data, JsonSerializerOptions options)

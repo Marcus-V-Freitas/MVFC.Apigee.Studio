@@ -914,21 +914,29 @@ window.monacoInterop = (function () {
                     if (!model) return;
 
                     const monacoMarkers = markersData.map(function (m) {
+                        let severity = monaco.MarkerSeverity.Error;
+                        if (m.severity === 'warning' || m.severity === 1) severity = monaco.MarkerSeverity.Warning;
+                        if (m.severity === 'info') severity = monaco.MarkerSeverity.Info;
+
                         return {
                             startLineNumber: m.line,
                             endLineNumber: m.line,
                             startColumn: m.column,
-                            endColumn: m.column + 5, // aprox
+                            endColumn: m.column + 10,
                             message: m.message,
-                            severity: m.severity === 1 ? monaco.MarkerSeverity.Warning : monaco.MarkerSeverity.Error
+                            severity: severity
                         };
                     });
 
-                    monaco.editor.setModelMarkers(model, "apigeelint", monacoMarkers);
+                    monaco.editor.setModelMarkers(model, "apigee-validator", monacoMarkers);
                 });
             } catch (e) {
                 console.error('[monacoInterop] setMarkers failed:', e);
             }
+        },
+
+        clearMarkers(elementId) {
+            this.setMarkers(elementId, []);
         }
     };
 })();

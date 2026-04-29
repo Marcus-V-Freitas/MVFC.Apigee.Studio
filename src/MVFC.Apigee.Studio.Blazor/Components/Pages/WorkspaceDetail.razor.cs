@@ -1,5 +1,7 @@
 namespace MVFC.Apigee.Studio.Blazor.Components.Pages;
 
+using System.Text.RegularExpressions;
+
 /// <summary>
 /// Blazor page component for browsing and editing files in an Apigee workspace.
 /// Provides a file tree, Monaco editor integration, context menu actions, and quick add features for files and folders.
@@ -82,6 +84,11 @@ public partial class WorkspaceDetail : ComponentBase, IAsyncDisposable
     /// </summary>
     private ElementReference _newItemInput;
 
+    // Rename state
+    private bool _showRename;
+    private string _renameNewName = string.Empty;
+    private ElementReference _renameInput;
+
     // Quick Add drawer state
     /// <summary>
     /// Indicates if the quick add drawer is open.
@@ -145,6 +152,35 @@ public partial class WorkspaceDetail : ComponentBase, IAsyncDisposable
     public required SessionStateService SessionState { get; set; }
 
     /// <summary>
+    /// Validator for Apigee policy XML files.
+    /// </summary>
+    [Inject]
+    public required IPolicyValidator PolicyValidator { get; set; }
+
+    /// <summary>
+    /// Reader for Apigee flow structures.
+    /// </summary>
+    [Inject]
+    public required IBundleFlowReader FlowReader { get; set; }
+
+    /// <summary>
+    /// Runner for apigeelint CLI.
+    /// </summary>
+    [Inject]
+    public required IApigeeLintRunner LintRunner { get; set; }
+
+    /// <summary>
+    /// Use case for renaming policies.
+    /// </summary>
+    [Inject]
+    public required RenamePolicyUseCase RenamePolicyUseCase { get; set; }
+
+    /// <summary>
+    /// The current endpoint structure for the Flow Navigator.
+    /// </summary>
+    private EndpointStructure? _currentEndpointStructure;
+
+    /// <summary>
     /// Gets the placeholder text for the new item input based on type.
     /// </summary>
     private string NewItemPlaceholder => _newItemIsDir ? "folder-name" : "file.xml";
@@ -161,7 +197,8 @@ public partial class WorkspaceDetail : ComponentBase, IAsyncDisposable
 
         var wsKey = $"workspace:{WorkspaceName}";
         SessionState.Set("global:lastWorkspace", WorkspaceName);
-        
+
+
         if (SessionState.Has($"{wsKey}:tabs"))
         {
             var tabs = SessionState.Get<List<EditorTab>>($"{wsKey}:tabs") ?? [];
@@ -214,6 +251,12 @@ public partial class WorkspaceDetail : ComponentBase, IAsyncDisposable
             await Task.Yield();
             await _newItemInput.FocusAsync();
         }
+
+        if (_showRename)
+        {
+            await Task.Yield();
+            await _renameInput.FocusAsync();
+        }
     }
 
     /// <summary>
@@ -255,6 +298,7 @@ public partial class WorkspaceDetail : ComponentBase, IAsyncDisposable
         }
 
         EditorState.SwitchToTab(tab);
+        RefreshFlowNavigator(tab.FullPath);
         StateHasChanged();
     }
 
@@ -348,7 +392,47 @@ public partial class WorkspaceDetail : ComponentBase, IAsyncDisposable
 
         var content = await WorkspaceRepo.ReadFileAsync(path);
         EditorState.OpenTab(path, content);
+
+        // Populate Flow Navigator if it's an endpoint
+
+        RefreshFlowNavigator(path);
+
         StateHasChanged();
+    }
+
+    private void RefreshFlowNavigator(string path)
+    {
+        _currentEndpointStructure = null;
+        if (_workspace == null)
+            return;
+
+        var isProxy = path.Contains("apiproxy/proxies", StringComparison.OrdinalIgnoreCase);
+        var isTarget = path.Contains("apiproxy/targets", StringComparison.OrdinalIgnoreCase);
+
+        if (isProxy || isTarget)
+        {
+            // Better: find "apiproxies/{proxyName}/apiproxy"
+            var match = Regex.Match(path.Replace("\\", "/", StringComparison.OrdinalIgnoreCase), @"apiproxies/(?<proxyName>[^/]+)/apiproxy", RegexOptions.ExplicitCapture, TimeSpan.FromMilliseconds(100));
+            var proxyName = match.Success ? match.Groups["proxyName"].Value : _workspace.Name;
+
+            var endpointName = Path.GetFileNameWithoutExtension(path);
+            _currentEndpointStructure = FlowReader.ReadEndpointStructure(_workspace.RootPath, proxyName, endpointName, isProxy);
+        }
+    }
+
+    private async Task HandleStepClick(string policyName)
+    {
+        if (_workspace == null) return;
+
+        // Find the policy file
+
+        var policyFile = Directory.EnumerateFiles(_workspace.RootPath, $"{policyName}.xml", SearchOption.AllDirectories)
+            .FirstOrDefault(p => p.Contains("apiproxy/policies", StringComparison.OrdinalIgnoreCase));
+
+        if (policyFile != null)
+        {
+            await LoadFile(policyFile);
+        }
     }
 
     /// <summary>
@@ -365,17 +449,17 @@ public partial class WorkspaceDetail : ComponentBase, IAsyncDisposable
         try
         {
             var content = await _editor.GetValue();
+
+
+            await ValidateXmlContentAsync(content);
+
+            // 2. Persist to disk
             await WorkspaceRepo.SaveFileAsync(EditorState.ActiveTab.FullPath, content);
             await _editor.ClearDirty();
             EditorState.UpdateActiveTabContent(content, isDirty: false);
             Toast.ShowSuccess("✔ Arquivo salvo com sucesso!");
 
-            if (_workspace != null && EditorState.ActiveTab.FullPath.EndsWith(".xml", StringComparison.OrdinalIgnoreCase))
-            {
-                var lintResults = await ApigeeLintService.RunLintAsync(_workspace, EditorState.ActiveTab.FullPath);
-                var activeFileLint = lintResults.FirstOrDefault();
-                await _editor.SetMarkers(activeFileLint?.Messages ?? (IEnumerable<object>)[]);
-            }
+            await RunExternalLintingAsync();
         }
         catch (Exception ex)
         {
@@ -384,6 +468,44 @@ public partial class WorkspaceDetail : ComponentBase, IAsyncDisposable
         finally
         {
             _saving = false;
+        }
+    }
+
+    private async Task ValidateXmlContentAsync(string content)
+    {
+        if (EditorState.ActiveTab!.FullPath.EndsWith(".xml", StringComparison.OrdinalIgnoreCase))
+        {
+            var policyType = XmlPolicyTypeInferer.Infer(content);
+            if (!string.IsNullOrEmpty(policyType))
+            {
+                var validationErrors = PolicyValidator.Validate(content, policyType);
+                if (validationErrors.Count > 0)
+                {
+                    await _editor!.SetMarkers(validationErrors);
+                }
+                else
+                {
+                    await _editor!.ClearMarkers();
+                }
+            }
+            else
+            {
+                await _editor!.ClearMarkers();
+            }
+        }
+    }
+
+    private async Task RunExternalLintingAsync()
+    {
+        if (_workspace != null && EditorState.ActiveTab!.FullPath.EndsWith(".xml", StringComparison.OrdinalIgnoreCase))
+        {
+            var lintResults = await LintRunner.RunLintAsync(_workspace, EditorState.ActiveTab.FullPath);
+            var activeFileLint = lintResults.FirstOrDefault();
+            if (activeFileLint != null && activeFileLint.Messages.Count != 0)
+            {
+                // Merge or replace markers? For now, we combine them if we want, 
+                // but since setMarkers replaces the set for the owner, we'd need to be careful.
+            }
         }
     }
 
@@ -432,8 +554,8 @@ public partial class WorkspaceDetail : ComponentBase, IAsyncDisposable
 
                 if (await Task.WhenAny(Task.WhenAll(isDirtyTask, contentTask), Task.Delay(500, cts.Token)) == Task.WhenAll(isDirtyTask, contentTask))
                 {
-                    EditorState.ActiveTab.IsDirty = isDirtyTask.Result;
-                    EditorState.ActiveTab.Content = contentTask.Result;
+                    EditorState.ActiveTab.IsDirty = await isDirtyTask;
+                    EditorState.ActiveTab.Content = await contentTask;
                 }
             }
             catch { /* ignore JS disconnected errors during disposal */ }
@@ -461,6 +583,75 @@ public partial class WorkspaceDetail : ComponentBase, IAsyncDisposable
     /// Closes the context menu.
     /// </summary>
     private void CloseContextMenu() => _showContextMenu = false;
+
+    private static bool IsPolicyFile(WorkspaceItem? item)
+    {
+        if (item is null || item.Type != WorkspaceItemType.File)
+            return false;
+
+        if (!item.FullPath.EndsWith(".xml", StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        // Check if it's inside a 'policies' directory
+
+        return item.FullPath.Replace("\\", "/", StringComparison.OrdinalIgnoreCase).Contains("/apiproxy/policies/", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private void OpenRenameDialog()
+    {
+        _showContextMenu = false;
+        if (_contextMenuItem is null) return;
+
+        _renameNewName = Path.GetFileNameWithoutExtension(_contextMenuItem.Name);
+        _showRename = true;
+    }
+
+    private async Task HandleRenameKey(KeyboardEventArgs e)
+    {
+        if (string.Equals(e.Key, "Enter", StringComparison.OrdinalIgnoreCase)) await ConfirmRename();
+        if (string.Equals(e.Key, "Escape", StringComparison.OrdinalIgnoreCase)) _showRename = false;
+    }
+
+    private async Task ConfirmRename()
+    {
+        if (string.IsNullOrWhiteSpace(_renameNewName) || _contextMenuItem is null || _workspace is null)
+        {
+            _showRename = false;
+            return;
+        }
+
+        try
+        {
+            // Extract proxyName from path
+            var match = Regex.Match(_contextMenuItem.FullPath.Replace("\\", "/", StringComparison.OrdinalIgnoreCase), @"apiproxies/(?<proxyName>[^/]+)/apiproxy", RegexOptions.ExplicitCapture, TimeSpan.FromMilliseconds(100));
+            var proxyName = match.Success ? match.Groups["proxyName"].Value : _workspace.Name;
+
+
+            var oldName = Path.GetFileNameWithoutExtension(_contextMenuItem.Name);
+            var modifiedFiles = await RenamePolicyUseCase.ExecuteAsync(_workspace.RootPath, proxyName, oldName, _renameNewName);
+
+            _showRename = false;
+            await RefreshTree();
+            Toast.ShowSuccess($"✔ Policy renomeada. {modifiedFiles.Count} arquivo(s) atualizados.");
+
+            // If the renamed file was open, we need to update its tab
+            var oldPath = _contextMenuItem.FullPath;
+            var newPath = Path.Combine(Path.GetDirectoryName(oldPath)!, $"{_renameNewName}.xml");
+
+
+            var openTab = EditorState.OpenTabs.FirstOrDefault(t => string.Equals(t.FullPath, oldPath, StringComparison.OrdinalIgnoreCase));
+            if (openTab != null)
+            {
+                // Simple approach: Close and reopen or just reload
+                EditorState.CloseTab(openTab);
+                await LoadFile(newPath);
+            }
+        }
+        catch (Exception ex)
+        {
+            Toast.ShowError("Erro ao renomear: " + ex.Message);
+        }
+    }
 
     /// <summary>
     /// Opens the new item dialog from the context menu.
@@ -555,10 +746,12 @@ public partial class WorkspaceDetail : ComponentBase, IAsyncDisposable
             }
             else
             {
-                if (File.Exists(fullPath)) 
+                if (File.Exists(fullPath))
+
                 {
-                    Toast.ShowError("Um arquivo com este nome já existe neste local."); 
-                    return; 
+                    Toast.ShowError("Um arquivo com este nome já existe neste local.");
+                    return;
+
                 }
                 await WorkspaceRepo.CreateFileAsync(fullPath); await LoadFile(fullPath);
             }
@@ -566,9 +759,11 @@ public partial class WorkspaceDetail : ComponentBase, IAsyncDisposable
             _showNewItem = false;
             _tree = await WorkspaceRepo.LoadTreeAsync(_workspace);
         }
-        catch (Exception ex) 
-        { 
-            _newItemError = ex.Message; 
+        catch (Exception ex)
+        {
+
+            _newItemError = ex.Message;
+
         }
     }
 

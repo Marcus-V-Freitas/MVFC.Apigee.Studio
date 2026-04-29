@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" version="1.0">
+  <xs:element name="SpikeArrest" type="spikeArrestBean"/>
+  <xs:complexType name="stepDefinitionBean" abstract="true">
+    <xs:sequence>
+      <xs:element name="DisplayName" type="xs:string" minOccurs="0"/>
+    </xs:sequence>
+    <xs:attribute name="name" type="xs:string" use="required"/>
+    <xs:attribute name="async" type="xs:string"/>
+    <xs:attribute name="continueOnError" type="xs:string"/>
+    <xs:attribute name="enabled" type="xs:string"/>
+  </xs:complexType>
+  <xs:complexType name="spikeArrestBean">
+    <xs:complexContent>
+      <xs:extension base="stepDefinitionBean">
+        <xs:sequence>
+          <xs:element name="Rate" minOccurs="1">
+            <xs:complexType>
+              <xs:simpleContent>
+                <xs:extension base="xs:string">
+                  <xs:attribute name="ref" type="xs:string"/>
+                </xs:extension>
+              </xs:simpleContent>
+            </xs:complexType>
+          </xs:element>
+          <xs:element name="UseEffectiveCount" type="xs:boolean" minOccurs="0"/>
+          <xs:element name="Identifier" minOccurs="0">
+            <xs:complexType>
+              <xs:attribute name="ref" type="xs:string"/>
+            </xs:complexType>
+          </xs:element>
+        </xs:sequence>
+      </xs:extension>
+    </xs:complexContent>
+  </xs:complexType>
+</xs:schema>

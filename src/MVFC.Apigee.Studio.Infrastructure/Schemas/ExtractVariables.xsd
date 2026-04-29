@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" version="1.0">
+  <xs:element name="ExtractVariables" type="extractVariablesBean"/>
+  <xs:complexType name="stepDefinitionBean" abstract="true">
+    <xs:sequence>
+      <xs:element name="DisplayName" type="xs:string" minOccurs="0"/>
+    </xs:sequence>
+    <xs:attribute name="name" type="xs:string" use="required"/>
+    <xs:attribute name="async" type="xs:string"/>
+    <xs:attribute name="continueOnError" type="xs:string"/>
+    <xs:attribute name="enabled" type="xs:string"/>
+  </xs:complexType>
+  <xs:complexType name="extractVariablesBean">
+    <xs:complexContent>
+      <xs:extension base="stepDefinitionBean">
+        <xs:sequence>
+          <xs:element name="Source" type="xs:string" minOccurs="0"/>
+          <xs:element name="VariablePrefix" type="xs:string" minOccurs="0"/>
+          <xs:element name="IgnoreUnresolvedVariables" type="xs:boolean" minOccurs="0"/>
+          <xs:element name="JSONPayload" minOccurs="0">
+            <xs:complexType>
+              <xs:sequence>
+                <xs:element name="Variable" minOccurs="0" maxOccurs="unbounded">
+                  <xs:complexType>
+                    <xs:sequence>
+                      <xs:element name="JSONPath" type="xs:string"/>
+                    </xs:sequence>
+                    <xs:attribute name="name" type="xs:string" use="required"/>
+                  </xs:complexType>
+                </xs:element>
+              </xs:sequence>
+            </xs:complexType>
+          </xs:element>
+          <xs:element name="Header" minOccurs="0" maxOccurs="unbounded">
+             <xs:complexType>
+               <xs:sequence>
+                 <xs:element name="Pattern" type="xs:string" maxOccurs="unbounded"/>
+               </xs:sequence>
+               <xs:attribute name="name" type="xs:string" use="required"/>
+             </xs:complexType>
+          </xs:element>
+          <xs:element name="QueryParam" minOccurs="0" maxOccurs="unbounded">
+             <xs:complexType>
+               <xs:sequence>
+                 <xs:element name="Pattern" type="xs:string" maxOccurs="unbounded"/>
+               </xs:sequence>
+               <xs:attribute name="name" type="xs:string" use="required"/>
+             </xs:complexType>
+          </xs:element>
+        </xs:sequence>
+      </xs:extension>
+    </xs:complexContent>
+  </xs:complexType>
+</xs:schema>

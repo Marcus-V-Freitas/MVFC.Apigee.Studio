@@ -45,7 +45,7 @@ public partial class QuickAddDrawer : ComponentBase
     /// Custom subfolder name when "custom" is selected.
     /// </summary>
     private string _customSubfolder = string.Empty;
-    
+
     /// <summary>
     /// Filter for policy templates.
     /// </summary>
@@ -176,7 +176,7 @@ public partial class QuickAddDrawer : ComponentBase
 
         if (_quickParams.ContainsKey("PolicyName"))
             _quickParams["PolicyName"] = t.Name + "Policy";
-        
+
         if (_quickParams.ContainsKey("ResourceType"))
         {
             _resourceType = "jsc";
@@ -202,7 +202,7 @@ public partial class QuickAddDrawer : ComponentBase
     private void SetQParam(string k, string v)
     {
         _quickParams[k] = v;
-        
+
         if (k.Equals("ResourceType", StringComparison.OrdinalIgnoreCase))
             _resourceType = v;
 
@@ -289,7 +289,7 @@ public partial class QuickAddDrawer : ComponentBase
                     Toast.ShowError("Um arquivo com este nome já existe neste local.");
                     return;
                 }
-                
+
                 await WorkspaceRepo.CreateFileAsync(fullPath);
                 await OnItemCreated.InvokeAsync(fullPath);
                 await Close();
@@ -322,7 +322,7 @@ public partial class QuickAddDrawer : ComponentBase
                 Toast.ShowError("Um Shared Flow com este nome já existe.");
                 return;
             }
-            
+
             var polDir = Path.Combine(sfDir, "policies");
             var resDir = Path.Combine(sfDir, "sharedflows");
 
@@ -368,7 +368,7 @@ public partial class QuickAddDrawer : ComponentBase
                 Toast.ShowError("Um Environment com este nome já existe.");
                 return;
             }
-            
+
             await WorkspaceRepo.CreateDirectoryAsync(envDir);
 
             await WorkspaceRepo.SaveFileAsync(Path.Combine(envDir, "deployments.json"), SkeletonTemplateService.GetDeploymentsJson());
@@ -406,7 +406,7 @@ public partial class QuickAddDrawer : ComponentBase
             Toast.ShowError("Um API Proxy com este nome já existe.");
             return;
         }
-        
+
         var policiesDir = Path.Combine(apiproxyDir, "policies");
         var proxiesDir = Path.Combine(apiproxyDir, "proxies");
         var resourcesDir = Path.Combine(apiproxyDir, "resources");

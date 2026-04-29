@@ -1,0 +1,70 @@
+﻿.deploy-preview-modal {
+    width: 600px;
+    max-width: 90vw;
+}
+
+.preview-section {
+    margin-bottom: var(--space-4);
+}
+
+.section-title {
+    font-size: var(--text-sm);
+    font-weight: 700;
+    margin-bottom: var(--space-2);
+    color: var(--color-text-emphasis);
+    border-bottom: 1px solid var(--color-border);
+    padding-bottom: var(--space-1);
+}
+
+.lint-group-title, .diff-group-title {
+    font-size: var(--text-xs);
+    font-weight: 600;
+    text-transform: uppercase;
+    margin: var(--space-2) 0 var(--space-1) 0;
+}
+
+.lint-list, .diff-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+}
+
+.lint-item {
+    padding: var(--space-1) var(--space-2);
+    border-radius: var(--radius-sm);
+    margin-bottom: 2px;
+    display: flex;
+    gap: var(--space-2);
+    align-items: flex-start;
+}
+
+.lint-error {
+    background: rgba(239, 68, 68, 0.1);
+    color: #f87171;
+}
+
+.lint-warning {
+    background: rgba(245, 158, 11, 0.1);
+    color: #fbbf24;
+}
+
+.lint-badge {
+    font-weight: 700;
+    min-width: 60px;
+}
+
+.lint-file {
+    font-weight: 600;
+    opacity: 0.8;
+}
+
+.empty-state-mini {
+    font-size: var(--text-sm);
+    color: var(--color-text-muted);
+    padding: var(--space-2);
+    text-align: center;
+    background: var(--color-bg-secondary);
+    border-radius: var(--radius-md);
+}

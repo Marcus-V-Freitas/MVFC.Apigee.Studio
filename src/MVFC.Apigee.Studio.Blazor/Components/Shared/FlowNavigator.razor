@@ -1,0 +1,32 @@
+@using MVFC.Apigee.Studio.Domain.Entities
+@inject IBundleFlowReader FlowReader
+
+<div class="flow-navigator">
+    @if (Endpoint is null)
+    {
+        <div class="flow-empty">
+            <i data-lucide="info"></i>
+            <span>Selecione um ProxyEndpoint ou TargetEndpoint para visualizar o fluxo.</span>
+        </div>
+    }
+    else
+    {
+        <div class="flow-header">
+            <h3>Fluxo de @Endpoint.Name</h3>
+        </div>
+
+        <div class="flow-container">
+            @* PreFlow *@
+            <FlowBlock Flow="@Endpoint.PreFlow" OnStepClick="OnStepClick" />
+
+            @* Conditional Flows *@
+            @foreach (var flow in Endpoint.Flows)
+            {
+                <FlowBlock Flow="@flow" OnStepClick="OnStepClick" />
+            }
+
+            @* PostFlow *@
+            <FlowBlock Flow="@Endpoint.PostFlow" OnStepClick="OnStepClick" />
+        </div>
+    }
+</div>

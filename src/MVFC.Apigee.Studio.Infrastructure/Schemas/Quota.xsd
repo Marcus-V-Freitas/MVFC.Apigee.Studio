@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" version="1.0">
+  <xs:element name="Quota" type="quotaBean"/>
+  <xs:complexType name="stepDefinitionBean" abstract="true">
+    <xs:sequence>
+      <xs:element name="DisplayName" type="xs:string" minOccurs="0"/>
+    </xs:sequence>
+    <xs:attribute name="name" type="xs:string" use="required"/>
+    <xs:attribute name="async" type="xs:string"/>
+    <xs:attribute name="continueOnError" type="xs:string"/>
+    <xs:attribute name="enabled" type="xs:string"/>
+  </xs:complexType>
+  <xs:complexType name="quotaBean">
+    <xs:complexContent>
+      <xs:extension base="stepDefinitionBean">
+        <xs:sequence>
+          <xs:element name="Allow" minOccurs="0">
+            <xs:complexType>
+              <xs:attribute name="count" type="xs:string" use="required"/>
+              <xs:attribute name="countRef" type="xs:string"/>
+            </xs:complexType>
+          </xs:element>
+          <xs:element name="Interval" minOccurs="0">
+            <xs:complexType>
+              <xs:simpleContent>
+                <xs:extension base="xs:string">
+                  <xs:attribute name="ref" type="xs:string"/>
+                </xs:extension>
+              </xs:simpleContent>
+            </xs:complexType>
+          </xs:element>
+          <xs:element name="TimeUnit" minOccurs="0">
+            <xs:complexType>
+              <xs:simpleContent>
+                <xs:extension base="xs:string">
+                  <xs:attribute name="ref" type="xs:string"/>
+                </xs:extension>
+              </xs:simpleContent>
+            </xs:complexType>
+          </xs:element>
+          <xs:element name="Distributed" type="xs:boolean" minOccurs="0"/>
+          <xs:element name="Synchronous" type="xs:boolean" minOccurs="0"/>
+          <xs:element name="Identifier" minOccurs="0">
+            <xs:complexType>
+              <xs:attribute name="ref" type="xs:string"/>
+            </xs:complexType>
+          </xs:element>
+        </xs:sequence>
+        <xs:attribute name="type" type="xs:string"/>
+      </xs:extension>
+    </xs:complexContent>
+  </xs:complexType>
+</xs:schema>
