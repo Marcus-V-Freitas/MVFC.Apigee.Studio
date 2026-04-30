@@ -55,4 +55,9 @@ public static partial class LogDefinitions
 
     [LoggerMessage(LogLevel.Error, "Erro ao criar pacote ZIP para o workspace {WorkspaceName}")]
     public static partial void LogBuildZipError(this ILogger logger, Exception ex, string workspaceName);
+
+
+
+    [LoggerMessage(LogLevel.Error, "Erro ao exportar trace {MessageId}")]
+    public static partial void LogTraceExportError(this ILogger logger, string messageId, Exception ex);
 }

@@ -17,10 +17,13 @@
 <body data-enhance-nav="false">
     <Routes @rendermode="@(new InteractiveServerRenderMode(prerender: false))" />
     <script src="js/lucide.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="js/loader.min.js"></script>
     <script src="_framework/blazor.web.js"></script>
     <script src="js/monaco-interop.js?v=4"></script>
     <script src="js/monaco-apigee-completions.js"></script>
+    <script src="js/download-helper.js"></script>
+    <script src="js/chart-interop.js"></script>
     <script>
         window.initLucide = function() {
             if (typeof lucide !== 'undefined') {

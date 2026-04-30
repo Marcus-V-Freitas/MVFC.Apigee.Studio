@@ -48,6 +48,11 @@
                         var selectedPt = GetSelectedPoint(tx.MessageId);
 
                         <div class="trace-flow-container">
+                            <div class="trace-flow-toolbar" style="display: flex; justify-content: flex-end; padding: 4px 12px; border-bottom: 1px solid var(--vscode-panel-border); background: var(--vscode-editor-background);">
+                                <button class="btn btn-ghost btn-sm" @onclick="() => DownloadTrace(tx)" style="font-size: 10px; color: var(--vscode-textSeparator-foreground);">
+                                    <i data-lucide="download" class="icon-xs mr-1"></i> Export Trace
+                                </button>
+                            </div>
                             @* ── Horizontal Flow Pipeline ── *@
                             <div class="trace-pipeline">
                                 <div class="pipeline-scroll">
@@ -70,14 +75,16 @@
                                                     var stepClass = pt.PointType switch
                                                     {
                                                         "Condition" => "step-condition",
-                                                        "Execution" => pt.HasError ? "step-error" : "step-execution",
+                                                        "Step" or "Execution" => pt.HasError ? "step-error" : "step-execution",
+                                                        "Flow" or "FlowInfo" => "step-flow",
                                                         _           => "step-state"
                                                     };
                                                     var stepIcon = pt.PointType switch
                                                     {
                                                         "Condition" => pt.Description?.Equals("true", StringComparison.OrdinalIgnoreCase) == true
                                                             ? "check-circle-2" : "x-circle",
-                                                        "Execution" => pt.HasError ? "alert-circle" : "circle-dot",
+                                                        "Step" or "Execution" => pt.HasError ? "alert-circle" : "circle-dot",
+                                                        "Flow" or "FlowInfo" => "navigation",
                                                         _           => "chevrons-right"
                                                     };
 
@@ -125,8 +132,15 @@
                                                 };
                                             }
                                             <i data-lucide="@detailIcon" class="detail-icon @detailTypeClass"></i>
-                                            <span class="detail-name">@selectedPt.PolicyName</span>
-                                            <span class="detail-type-badge">@selectedPt.PointType</span>
+                                            <div class="detail-name">@selectedPt.PolicyName</div>
+                                            @if (!string.IsNullOrEmpty(selectedPt.StepType))
+                                            {
+                                                <span class="detail-type-badge">@selectedPt.StepType</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="detail-type-badge">@selectedPt.PointType</span>
+                                            }
                                         </div>
                                         <button class="btn btn-ghost btn-sm" @onclick="() => ClearSelection(tx.MessageId)"
                                                 @onclick:stopPropagation="true">
@@ -165,9 +179,16 @@
                                                         <span class="prop-key">Status</span>
                                                         <span class="prop-val prop-val-error">
                                                             <i data-lucide="alert-triangle" class="icon-xs"></i>
-                                                            Error
+                                                            @((!string.IsNullOrEmpty(selectedPt.ErrorCode)) ? selectedPt.ErrorCode : "Error")
                                                         </span>
                                                     </div>
+                                                    @if (!string.IsNullOrEmpty(selectedPt.ErrorMessage))
+                                                    {
+                                                        <div class="detail-prop detail-prop-error">
+                                                            <span class="prop-key">Message</span>
+                                                            <span class="prop-val">@selectedPt.ErrorMessage</span>
+                                                        </div>
+                                                    }
                                                 }
                                                 @if (selectedPt.PointType == "Condition")
                                                 {
@@ -181,6 +202,53 @@
                                                 }
                                             </div>
                                         </div>
+
+                                        @* ── Request Message Info ── *@
+                                        @if (!string.IsNullOrWhiteSpace(selectedPt.RequestUri))
+                                        {
+                                            <div class="detail-section">
+                                                <div class="detail-section-header">
+                                                    <i data-lucide="globe" class="icon-xs"></i>
+                                                    <span>Request URL</span>
+                                                </div>
+                                                <div class="detail-prop">
+                                                    <span class="prop-key">@selectedPt.RequestVerb</span>
+                                                    <span class="prop-val" style="word-break: break-all;">@selectedPt.RequestUri</span>
+                                                </div>
+                                            </div>
+                                        }
+
+                                        @if (selectedPt.MessageHeaders.Any())
+                                        {
+                                            <div class="detail-section">
+                                                <div class="detail-section-header">
+                                                    <i data-lucide="list" class="icon-xs"></i>
+                                                    <span>Message Headers (@selectedPt.MessageHeaders.Count)</span>
+                                                </div>
+                                                <div class="detail-vars">
+                                                    @foreach (var kv in selectedPt.MessageHeaders)
+                                                    {
+                                                        <div class="var-row">
+                                                            <span class="var-key">@kv.Key</span>
+                                                            <span class="var-val">@kv.Value</span>
+                                                        </div>
+                                                    }
+                                                </div>
+                                            </div>
+                                        }
+
+                                        @if (!string.IsNullOrWhiteSpace(selectedPt.MessageContent))
+                                        {
+                                            <div class="detail-section">
+                                                <div class="detail-section-header">
+                                                    <i data-lucide="file-text" class="icon-xs"></i>
+                                                    <span>Message Content</span>
+                                                </div>
+                                                <div class="detail-payload" style="background: var(--vscode-editor-background); padding: 8px; border-radius: 4px; overflow-x: auto; font-family: monospace; font-size: 11px;">
+                                                    <pre style="margin: 0;"><code>@selectedPt.MessageContent</code></pre>
+                                                </div>
+                                            </div>
+                                        }
 
                                         @* ── Headers & Variables ── *@
                                         @if (selectedPt.Variables.Any())
@@ -253,12 +321,69 @@
                                                 }
                                             }
 
+                                            if (selectedPt.VariablesRead.Any())
+                                            {
+                                                <div class="detail-section">
+                                                    <div class="detail-section-header">
+                                                        <i data-lucide="eye" class="icon-xs"></i>
+                                                        <span>Variables Read (@selectedPt.VariablesRead.Count)</span>
+                                                    </div>
+                                                    <div class="detail-vars">
+                                                        @foreach (var kv in selectedPt.VariablesRead)
+                                                        {
+                                                            <div class="var-row">
+                                                                <span class="var-key">@kv.Name</span>
+                                                                <span class="var-val">@kv.Value</span>
+                                                            </div>
+                                                        }
+                                                    </div>
+                                                </div>
+                                            }
+
+                                            if (selectedPt.VariablesSet.Any())
+                                            {
+                                                <div class="detail-section">
+                                                    <div class="detail-section-header">
+                                                        <i data-lucide="edit-3" class="icon-xs"></i>
+                                                        <span>Variables Set (@selectedPt.VariablesSet.Count)</span>
+                                                    </div>
+                                                    <div class="detail-vars">
+                                                        @foreach (var kv in selectedPt.VariablesSet)
+                                                        {
+                                                            <div class="var-row">
+                                                                <span class="var-key">@kv.Name</span>
+                                                                <span class="var-val @(!kv.Success ? "text-error" : "")">@kv.Value</span>
+                                                            </div>
+                                                        }
+                                                    </div>
+                                                </div>
+                                            }
+
+                                            if (selectedPt.VariablesRemoved.Any())
+                                            {
+                                                <div class="detail-section">
+                                                    <div class="detail-section-header">
+                                                        <i data-lucide="trash-2" class="icon-xs"></i>
+                                                        <span>Variables Removed (@selectedPt.VariablesRemoved.Count)</span>
+                                                    </div>
+                                                    <div class="detail-vars">
+                                                        @foreach (var kv in selectedPt.VariablesRemoved)
+                                                        {
+                                                            <div class="var-row">
+                                                                <span class="var-key @(!kv.Success ? "text-error" : "")">@kv.Name</span>
+                                                                <span class="var-val">@(kv.Success ? "Removed" : "Failed")</span>
+                                                            </div>
+                                                        }
+                                                    </div>
+                                                </div>
+                                            }
+
                                             if (otherVars.Any())
                                             {
                                                 <div class="detail-section">
                                                     <div class="detail-section-header">
-                                                        <i data-lucide="braces" class="icon-xs"></i>
-                                                        <span>Properties & Variables (@otherVars.Count)</span>
+                                                        <i data-lucide="variable" class="icon-xs"></i>
+                                                        <span>Other Variables (@otherVars.Count)</span>
                                                     </div>
                                                     <div class="detail-vars">
                                                         @foreach (var kv in otherVars)
@@ -271,6 +396,25 @@
                                                     </div>
                                                 </div>
                                             }
+                                        }
+
+                                        @if (selectedPt.Properties.Any())
+                                        {
+                                            <div class="detail-section">
+                                                <div class="detail-section-header">
+                                                    <i data-lucide="settings" class="icon-xs"></i>
+                                                    <span>Technical Properties (@selectedPt.Properties.Count)</span>
+                                                </div>
+                                                <div class="detail-vars">
+                                                    @foreach (var kv in selectedPt.Properties.OrderBy(p => p.Key))
+                                                    {
+                                                        <div class="var-row">
+                                                            <span class="var-key">@kv.Key</span>
+                                                            <span class="var-val">@kv.Value</span>
+                                                        </div>
+                                                    }
+                                                </div>
+                                            </div>
                                         }
                                     </div>
                                 </div>

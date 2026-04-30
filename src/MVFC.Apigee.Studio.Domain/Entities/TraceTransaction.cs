@@ -12,6 +12,11 @@ public sealed class TraceTransaction
     public string MessageId     { get; init; } = string.Empty;
 
     /// <summary>
+    /// Name of the API proxy associated with this transaction.
+    /// </summary>
+    public string Application  { get; init; } = string.Empty;
+
+    /// <summary>
     /// HTTP method of the request (e.g., GET, POST).
     /// </summary>
     public string RequestMethod { get; init; } = string.Empty;

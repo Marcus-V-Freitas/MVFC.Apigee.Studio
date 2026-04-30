@@ -1,0 +1,57 @@
+@using MVFC.Apigee.Studio.Domain.Interfaces
+@inject IApigeeEmulatorClient EmulatorClient
+
+<div class="card emulator-logs mt-lg">
+    <div class="card-header flex justify-between items-center mb-4">
+        <h3 class="text-lg font-semibold">Container Logs</h3>
+        <div class="flex gap-2">
+            <button class="btn btn-ghost btn-sm" @onclick="FetchLogs" disabled="@_loading">
+                @(_loading ? "..." : "Refresh")
+            </button>
+            <button class="btn btn-ghost btn-sm" @onclick="ClearLogs">Clear View</button>
+        </div>
+    </div>
+
+    <div class="logs-container" style="background: #0d1117; color: #e6edf3; padding: 12px; border-radius: 6px; font-family: 'Cascadia Code', 'Fira Code', monospace; font-size: 12px; height: 300px; overflow-y: auto; border: 1px solid #30363d;">
+        @if (_loading && string.IsNullOrEmpty(_logs))
+        {
+            <div class="text-slate-500 italic">Carregando logs...</div>
+        }
+        else if (string.IsNullOrEmpty(_logs))
+        {
+            <div class="text-slate-500 italic">Nenhum log disponível ou container offline.</div>
+        }
+        else
+        {
+            <pre style="margin: 0; white-space: pre-wrap; word-break: break-all;">@_logs</pre>
+        }
+    </div>
+</div>
+
+@code {
+    private string _logs = string.Empty;
+    private bool _loading;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await FetchLogs();
+    }
+
+    private async Task FetchLogs()
+    {
+        _loading = true;
+        try
+        {
+            _logs = await EmulatorClient.GetContainerLogsAsync();
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private void ClearLogs()
+    {
+        _logs = string.Empty;
+    }
+}

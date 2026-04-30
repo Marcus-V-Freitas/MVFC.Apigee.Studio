@@ -18,6 +18,14 @@ public partial class TraceViewer : ComponentBase
     [Inject]
     public required IJSRuntime JSRuntime { get; set; }
 
+
+
+    [Inject]
+    public required ToastService Toast { get; set; }
+
+    [Inject]
+    public required ILogger<TraceViewer> Logger { get; set; }
+
     /// <summary>
     /// Set of expanded transaction message IDs.
     /// </summary>
@@ -27,6 +35,8 @@ public partial class TraceViewer : ComponentBase
     /// Dictionary of selected trace points per transaction message ID.
     /// </summary>
     private readonly Dictionary<string, TracePoint> _selectedPoints = [];
+
+    private static readonly JsonSerializerOptions _jsonOptions = new() { WriteIndented = true };
 
     /// <summary>
     /// Returns a CSS class representing the HTTP response status code category.
@@ -122,7 +132,8 @@ public partial class TraceViewer : ComponentBase
 
         foreach (var pt in points)
         {
-            if (string.Equals(pt.PointType, "StateChange", StringComparison.OrdinalIgnoreCase))
+            if (string.Equals(pt.PointType, "State", StringComparison.OrdinalIgnoreCase) || 
+                string.Equals(pt.PointType, "StateChange", StringComparison.OrdinalIgnoreCase))
             {
                 current = new PhaseGroup(pt.PolicyName, []);
                 groups.Add(current);
@@ -133,7 +144,6 @@ public partial class TraceViewer : ComponentBase
             }
             else
             {
-                // Points before any StateChange → fallback group
                 current = new PhaseGroup("START", [pt]);
                 groups.Add(current);
             }
@@ -217,4 +227,25 @@ public partial class TraceViewer : ComponentBase
         "DEBUG_SESSION" => "bug",
         _ => "activity",
     };
+
+    /// <summary>
+    /// Serializes the given transaction to JSON and triggers a browser download.
+    /// </summary>
+    /// <param name="tx">The transaction to export.</param>
+    private async Task DownloadTrace(TraceTransaction tx)
+    {
+        try
+        {
+            var json = System.Text.Json.JsonSerializer.Serialize(tx, _jsonOptions);
+            var fileName = $"trace_{tx.MessageId}_{DateTime.Now:yyyyMMdd_HHmmss}.json";
+            await JSRuntime.InvokeVoidAsync("downloadFile", fileName, json);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogTraceExportError(tx.MessageId, ex);
+            Toast.ShowError("Falha ao exportar arquivo de trace.");
+        }
+    }
+
+
 }

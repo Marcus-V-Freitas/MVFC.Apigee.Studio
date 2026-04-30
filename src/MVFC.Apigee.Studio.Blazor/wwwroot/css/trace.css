@@ -272,6 +272,7 @@
 .step-execution .step-icon { color: var(--color-primary); }
 .step-error     .step-icon { color: var(--color-error); }
 .step-condition .step-icon { color: var(--color-warning); }
+.step-flow      .step-icon { color: #61afef; }
 .step-state     .step-icon { color: var(--color-text-faint); }
 
 .step-name {
@@ -378,6 +379,8 @@
     overflow: hidden;
     text-overflow: ellipsis;
 }
+
+
 
 .detail-type-badge {
     display: inline-flex;

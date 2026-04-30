@@ -284,4 +284,105 @@ public sealed class ApigeeEmulatorClient(
             throw new InvalidOperationException($"docker {args} falhou: {err}");
         }
     }
+
+    /// <inheritdoc/>
+    public async Task ResetAsync(CancellationToken ct = default)
+    {
+        const string url = "/v1/emulator/reset";
+        using var content = new StringContent(string.Empty, Encoding.UTF8, "application/x-www-form-urlencoded");
+        using var response = await _http.PostAsync(url, content, ct);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            var body = await response.Content.ReadAsStringAsync(ct);
+            throw new HttpRequestException($"Reset falhou ({response.StatusCode}): {body}");
+        }
+    }
+
+    /// <inheritdoc/>
+    public async Task<System.Text.Json.Nodes.JsonNode?> GetDeploymentsAsync(CancellationToken ct = default)
+    {
+        const string url = "/v1/emulator/tree";
+        using var response = await _http.GetAsync(url, ct);
+        return await ReadJsonSafeAsync<System.Text.Json.Nodes.JsonNode>(response, ct);
+    }
+
+    /// <inheritdoc/>
+    public async Task<System.Text.Json.Nodes.JsonArray?> GetProductsAsync(CancellationToken ct = default)
+    {
+        const string url = "/v1/emulator/test/products";
+        using var response = await _http.GetAsync(url, ct);
+        return await ReadJsonSafeAsync<System.Text.Json.Nodes.JsonArray>(response, ct);
+    }
+
+    /// <inheritdoc/>
+    public async Task<System.Text.Json.Nodes.JsonArray?> GetDevelopersAsync(CancellationToken ct = default)
+    {
+        const string url = "/v1/emulator/test/developers";
+        using var response = await _http.GetAsync(url, ct);
+        return await ReadJsonSafeAsync<System.Text.Json.Nodes.JsonArray>(response, ct);
+    }
+
+    /// <inheritdoc/>
+    public async Task<System.Text.Json.Nodes.JsonArray?> GetKeyValueMapsAsync(CancellationToken ct = default)
+    {
+        const string url = "/v1/emulator/test/maps";
+        using var response = await _http.GetAsync(url, ct);
+        return await ReadJsonSafeAsync<System.Text.Json.Nodes.JsonArray>(response, ct);
+    }
+
+    /// <inheritdoc/>
+    public async Task<System.Text.Json.Nodes.JsonArray?> GetAnalyticsAsync(CancellationToken ct = default)
+    {
+        const string url = "/v1/emulator/analytics";
+        using var response = await _http.GetAsync(url, ct);
+        return await ReadJsonSafeAsync<System.Text.Json.Nodes.JsonArray>(response, ct);
+    }
+
+    private static async Task<T?> ReadJsonSafeAsync<T>(HttpResponseMessage response, CancellationToken ct) where T : class
+    {
+        if (!response.IsSuccessStatusCode) return null;
+        var content = await response.Content.ReadAsStringAsync(ct);
+        if (string.IsNullOrWhiteSpace(content)) return null;
+        try
+        {
+            return System.Text.Json.JsonSerializer.Deserialize<T>(content);
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            return null;
+        }
+    }
+
+    /// <inheritdoc/>
+    public async Task<string> GetContainerLogsAsync(CancellationToken ct = default)
+    {
+        try
+        {
+            var psi = new ProcessStartInfo("docker", $"logs --tail 200 {DefaultContainerName}")
+            {
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                CreateNoWindow = true,
+            };
+
+            using var proc = Process.Start(psi);
+            if (proc is null) return "Erro ao iniciar processo do Docker.";
+
+            var outputTask = proc.StandardOutput.ReadToEndAsync(ct);
+            var errorTask = proc.StandardError.ReadToEndAsync(ct);
+
+            await proc.WaitForExitAsync(ct);
+
+            var output = await outputTask;
+            var error = await errorTask;
+
+            return string.IsNullOrEmpty(error) ? output : $"{output}\n--- ERROS ---\n{error}";
+        }
+        catch (Exception ex)
+        {
+            return $"Erro ao buscar logs: {ex.Message}";
+        }
+    }
 }

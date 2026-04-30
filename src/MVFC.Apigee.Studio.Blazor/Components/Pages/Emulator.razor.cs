@@ -280,6 +280,30 @@ public partial class Emulator : ComponentBase, IDisposable
     }
 
     /// <summary>
+    /// Resets the Apigee Emulator context.
+    /// </summary>
+    private async Task ResetEmulator()
+    {
+        _checking = true;
+        _statusError = null;
+        try
+        {
+            await EmulatorClient.ResetAsync();
+            _statusError = "Emulator resetado com sucesso."; // Using error field to show success briefly, or a specific msg var
+            // Actually, let's just clear errors and maybe refresh status.
+            await Check();
+        }
+        catch (Exception ex)
+        {
+            _statusError = "Erro no reset: " + ex.Message;
+        }
+        finally
+        {
+            _checking = false;
+        }
+    }
+
+    /// <summary>
     /// Deploys a bundle ZIP to the emulator in the selected environment.
     /// </summary>
     private async Task QuickDeploy()

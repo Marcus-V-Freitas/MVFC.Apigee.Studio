@@ -57,7 +57,10 @@
             <span class="status-dot @(_alive ? "dot-green" : "dot-red")"></span>
             <span>@GetStatusText()</span>
         </div>
-        <button class="btn btn-ghost btn-sm" @onclick="Check" disabled="@_checking">&#8635; Refresh</button>
+        <div style="display:flex; gap:8px;">
+            <button class="btn btn-ghost btn-sm" @onclick="Check" disabled="@_checking">&#8635; Refresh</button>
+            <button class="btn btn-danger btn-sm" @onclick="ResetEmulator" disabled="@_checking" title="Limpar dados do Emulador">Reset Data</button>
+        </div>
     </div>
 
     @if (_statusError is not null)
@@ -100,3 +103,9 @@
         <p class="mt-2 @(_isError ? "error-text" : "success-text")">@_message</p>
     }
 </div>
+
+@if (_alive)
+{
+    <MVFC.Apigee.Studio.Blazor.Components.Shared.EmulatorStateViewer />
+    <MVFC.Apigee.Studio.Blazor.Components.Shared.EmulatorLogs />
+}

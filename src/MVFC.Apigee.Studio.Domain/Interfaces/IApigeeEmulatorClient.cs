@@ -70,8 +70,46 @@ public interface IApigeeEmulatorClient
     Task<IReadOnlyList<DeveloperApp>> GetLiveDeveloperAppsAsync(CancellationToken ct = default);
 
     /// <summary>
-    /// Returns the name:tag of the image currently running in the emulator container.
-    /// Returns null if the container is not running.
-    /// </summary>
     Task<string?> GetRunningImageAsync(CancellationToken ct = default);
+
+    /// <summary>
+    /// Resets the emulator state.
+    /// POST /v1/emulator/reset
+    /// </summary>
+    Task ResetAsync(CancellationToken ct = default);
+
+    /// <summary>
+    /// Gets the deployment tree.
+    /// GET /v1/emulator/tree
+    /// </summary>
+    Task<System.Text.Json.Nodes.JsonNode?> GetDeploymentsAsync(CancellationToken ct = default);
+
+    /// <summary>
+    /// Gets the list of active API products in the emulator.
+    /// GET /v1/emulator/test/products
+    /// </summary>
+    Task<System.Text.Json.Nodes.JsonArray?> GetProductsAsync(CancellationToken ct = default);
+
+    /// <summary>
+    /// Gets the list of active Developers in the emulator.
+    /// GET /v1/emulator/test/developers
+    /// </summary>
+    Task<System.Text.Json.Nodes.JsonArray?> GetDevelopersAsync(CancellationToken ct = default);
+
+    /// <summary>
+    /// Gets the list of KeyValueMaps in the emulator.
+    /// GET /v1/emulator/test/maps
+    /// </summary>
+    Task<System.Text.Json.Nodes.JsonArray?> GetKeyValueMapsAsync(CancellationToken ct = default);
+
+    /// <summary>
+    /// Gets the analytics data.
+    /// GET /v1/emulator/analytics
+    /// </summary>
+    Task<System.Text.Json.Nodes.JsonArray?> GetAnalyticsAsync(CancellationToken ct = default);
+
+    /// <summary>
+    /// Gets the stdout/stderr logs from the emulator container.
+    /// </summary>
+    Task<string> GetContainerLogsAsync(CancellationToken ct = default);
 }

@@ -136,6 +136,8 @@ public partial class Trace : ComponentBase, IAsyncDisposable
             _session = SessionState.Get<TraceSession>("trace:session");
             _isTracing = SessionState.Get<bool>("trace:isTracing");
 
+
+
             if (_isTracing && _session != null)
             {
                 _pollCts = new CancellationTokenSource();
@@ -143,6 +145,8 @@ public partial class Trace : ComponentBase, IAsyncDisposable
             }
         }
     }
+
+
 
     /// <summary>
     /// Handles workspace selection changes and loads proxies for the selected workspace.

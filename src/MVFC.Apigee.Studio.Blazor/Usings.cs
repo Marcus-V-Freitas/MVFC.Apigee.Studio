@@ -12,6 +12,7 @@ global using MVFC.Apigee.Studio.Domain.Enums;
 global using MVFC.Apigee.Studio.Domain.Interfaces;
 global using MVFC.Apigee.Studio.Domain.Services;
 global using MVFC.Apigee.Studio.Infrastructure.Extensions;
+global using MVFC.Apigee.Studio.Infrastructure.Logs;
 global using System;
 global using System.Collections.Generic;
 global using System.Diagnostics;

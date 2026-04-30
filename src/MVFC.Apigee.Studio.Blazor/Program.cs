@@ -17,14 +17,14 @@ var runtimeUrl = builder.Configuration["EmulatorRuntime:BaseUrl"] ?? new UriBuil
 builder.Services.AddHttpClient("EmulatorRuntime", client =>
 {
     client.BaseAddress = new Uri(runtimeUrl);
-    client.Timeout     = TimeSpan.FromSeconds(30);
+    client.Timeout = TimeSpan.FromSeconds(30);
 });
 
 builder.Services.AddHttpClient("ApiClient", client =>
     client.Timeout = TimeSpan.FromSeconds(60)).ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler
-{
-    AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate | DecompressionMethods.Brotli,
-});
+    {
+        AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate | DecompressionMethods.Brotli,
+    });
 
 /// <summary>
 /// Registers application use cases for dependency injection.
